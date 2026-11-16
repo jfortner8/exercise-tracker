@@ -204,13 +204,13 @@ function Legend() {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
       <span className="flex items-center gap-1.5">
-        <span className="h-3 w-5 rounded bg-orange-500" /> Done
+        <span className="h-3 w-5 rounded bg-green-500" /> Done
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="h-3 w-5 rounded border border-dashed border-orange-500" /> Planned
+        <span className="h-3 w-5 rounded border border-dashed border-green-500 bg-green-50" /> Planned
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="h-3 w-5 rounded border border-dashed border-orange-500 bg-warn/15" />
+        <span className="h-3 w-5 rounded border border-dashed border-warn bg-warn/15" />
         <span className="size-1.5 rounded-full bg-warn" /> Needs review
       </span>
       <span className="flex items-center gap-1.5">
@@ -248,6 +248,19 @@ function DayCell({
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const isToday = date === today;
   const d = parseISO(date);
+  const dayLabel = (
+    <span className="flex shrink-0 items-center gap-1">
+      <span
+        className={cx(
+          "grid size-6 place-items-center rounded-full text-xs font-medium",
+          isToday && "bg-today font-semibold text-accent-fg",
+        )}
+      >
+        {format(d, "d")}
+      </span>
+      {view === "week" && <span className="text-xs opacity-80 md:hidden">{format(d, "EEE")}</span>}
+    </span>
+  );
   return (
     <div
       ref={setNodeRef}
@@ -257,47 +270,55 @@ function DayCell({
       aria-label={`${format(d, "EEEE, MMMM d")}${workouts.length ? `, ${workouts.length} workout${workouts.length === 1 ? "" : "s"}` : ""}`}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen()}
       className={cx(
-        "group relative flex cursor-pointer flex-col gap-1 border-r border-border p-1 text-left outline-none transition-colors hover:bg-surface-2/60 focus-visible:bg-surface-2 md:p-1.5",
+        "group relative flex cursor-pointer flex-col border-r border-border text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
         view === "month" ? "min-h-20 md:min-h-28" : "min-h-40 md:min-h-[26rem]",
         outside && "bg-surface-2/40 text-muted",
         injured && "injury-stripe",
-        isOver && "bg-accent/10 ring-2 ring-inset ring-accent",
+        isOver && "ring-2 ring-inset ring-accent",
       )}
     >
-      <div className="flex items-center gap-1">
-        <span
-          className={cx(
-            "grid size-6 place-items-center rounded-full text-xs font-medium",
-            isToday && "bg-today font-semibold text-accent-fg",
-          )}
-        >
-          {format(d, "d")}
-        </span>
-        {view === "week" && <span className="text-xs text-muted md:hidden">{format(d, "EEE")}</span>}
-      </div>
-      <div className="flex flex-col gap-1">
-        {workouts.map((w) => (
-          <Chip key={w.id} workout={w} today={today} detailed={view === "week"} />
-        ))}
+      {/* Workouts fill the tile down to the footer: one = whole area, two = halves, three = thirds. */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {workouts.length === 0 ? (
+          <div className="flex-1 p-1 transition-colors group-hover:bg-surface-2/60 md:p-1.5">{dayLabel}</div>
+        ) : (
+          workouts.map((w, i) => (
+            <Block key={w.id} workout={w} today={today} detailed={view === "week"} dayLabel={i === 0 ? dayLabel : null} />
+          ))
+        )}
       </div>
       <DayFooter date={date} today={today} log={log} trackDrinks={trackDrinks} />
     </div>
   );
 }
 
-/** Bottom strip of a day tile: note preview on the left, drink count on the right. */
+/** Drink count background: green at 0 through intense red at 6+. Classes listed in full for Tailwind. */
+const DRINK_COLORS = [
+  "bg-green-500 text-white",
+  "bg-green-200 text-green-900",
+  "bg-yellow-200 text-yellow-900",
+  "bg-yellow-400 text-yellow-950",
+  "bg-orange-400 text-orange-950",
+  "bg-red-500 text-white",
+  "bg-red-700 text-white",
+];
+
+/** Bottom strip of a day tile, split down the middle: note preview on the left, drink count on the right. */
 function DayFooter({ date, today, log, trackDrinks }: { date: string; today: string; log?: DayLog; trackDrinks: boolean }) {
   const note = log?.notes?.trim();
   // Future days stay blank; from the day itself onward an unlogged day counts as 0.
   const drinks = today && date <= today ? (log?.drinks ?? 0) : null;
   return (
-    <div className="mt-auto flex h-5 items-stretch overflow-hidden rounded border border-border text-[10px] leading-none text-muted md:h-7 md:text-[11px]">
-      <span className="flex min-w-0 flex-1 items-center px-1" title={note}>
+    <div className="flex h-5 shrink-0 border-t border-border text-[10px] leading-none md:h-7 md:text-[11px]">
+      <span className="flex min-w-0 flex-1 items-center bg-surface px-1 text-muted" title={note}>
         {note && <span className="truncate">{note}</span>}
       </span>
       {trackDrinks && (
         <span
-          className="flex flex-1 items-center justify-center border-l border-border tabular-nums"
+          className={cx(
+            "flex flex-1 items-center justify-center border-l border-border font-semibold tabular-nums",
+            drinks == null ? "bg-surface" : DRINK_COLORS[Math.min(drinks, DRINK_COLORS.length - 1)],
+          )}
           title={drinks != null ? `${drinks} drink${drinks === 1 ? "" : "s"}` : undefined}
         >
           {drinks}
@@ -307,7 +328,17 @@ function DayFooter({ date, today, log, trackDrinks }: { date: string; today: str
   );
 }
 
-function Chip({ workout: w, today, detailed }: { workout: Workout; today: string; detailed: boolean }) {
+function Block({
+  workout: w,
+  today,
+  detailed,
+  dayLabel,
+}: {
+  workout: Workout;
+  today: string;
+  detailed: boolean;
+  dayLabel: React.ReactNode;
+}) {
   const status = today ? displayStatus(w, today) : w.status;
   const draggable = w.status === "planned";
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -327,22 +358,25 @@ function Chip({ workout: w, today, detailed }: { workout: Workout; today: string
       {...attributes}
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined}
       className={cx(
-        "relative rounded-md px-1.5 py-0.5 text-[11px] leading-tight md:text-xs",
-        done && meta.solid,
-        status === "planned" && cx("border border-dashed bg-surface", meta.outline),
-        status === "needs_review" && cx("border border-dashed bg-warn/10", meta.outline),
-        dropped && "bg-surface-2 text-muted line-through",
+        "relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden px-1 py-0.5 text-[11px] leading-tight transition-[filter] group-hover:brightness-95 md:px-1.5 md:py-1 md:text-xs",
+        !dayLabel && "border-t border-surface",
+        done && "bg-green-500 text-white",
+        status === "planned" &&
+          "border border-dashed border-green-500 bg-green-50 text-green-800 dark:bg-green-500/10 dark:text-green-300",
+        status === "needs_review" && "border border-dashed border-warn bg-warn/15 text-text",
+        dropped && "bg-surface-2 text-muted",
         draggable && "cursor-grab touch-none active:cursor-grabbing",
         isDragging && "z-20 opacity-80 shadow-lg",
       )}
       title={`${meta.label}: ${w.title}`}
     >
-      {status === "needs_review" && (
-        <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warn ring-2 ring-surface" />
-      )}
-      <span className="line-clamp-2 font-medium md:truncate">{w.title}</span>
+      {status === "needs_review" && <span className="absolute right-1 top-1 size-2 rounded-full bg-warn" />}
+      <div className="flex min-w-0 items-center gap-1">
+        {dayLabel}
+        <span className={cx("truncate font-medium", dropped && "line-through")}>{w.title}</span>
+      </div>
       {detailed && (
-        <span className="mt-0.5 block opacity-80">
+        <span className="block opacity-80">
           {meta.label}
           {dur ? ` · ${Math.round(dur / 60)} min` : ""}
           {w.originalDate ? ` · moved from ${format(parseISO(w.originalDate), "EEE")}` : ""}
