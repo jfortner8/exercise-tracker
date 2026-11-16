@@ -97,23 +97,31 @@ export const KM = 1000;
 export const MILE = 1609.344;
 export const LB = 0.45359237;
 
+/** Accepts the current {distance, weight} shape or the old "imperial"/"metric" string. */
+export function normalizeUnits(raw: unknown): Units {
+  if (raw === "metric") return { distance: "km", weight: "kg" };
+  if (raw === "imperial") return { distance: "mi", weight: "lb" };
+  const r = (raw ?? {}) as Partial<Units>;
+  return { distance: r.distance === "km" ? "km" : "mi", weight: r.weight === "kg" ? "kg" : "lb" };
+}
+
 export function distanceUnit(units: Units) {
-  return units === "imperial" ? "mi" : "km";
+  return units.distance;
 }
 export function metersToDisplay(m: number, units: Units) {
-  return m / (units === "imperial" ? MILE : KM);
+  return m / (units.distance === "mi" ? MILE : KM);
 }
 export function displayToMeters(v: number, units: Units) {
-  return v * (units === "imperial" ? MILE : KM);
+  return v * (units.distance === "mi" ? MILE : KM);
 }
 export function weightUnit(units: Units) {
-  return units === "imperial" ? "lb" : "kg";
+  return units.weight;
 }
 export function kgToDisplay(kg: number, units: Units) {
-  return units === "imperial" ? kg / LB : kg;
+  return units.weight === "lb" ? kg / LB : kg;
 }
 export function displayToKg(v: number, units: Units) {
-  return units === "imperial" ? v * LB : v;
+  return units.weight === "lb" ? v * LB : v;
 }
 export function formatDistance(m: number, units: Units) {
   const v = metersToDisplay(m, units);

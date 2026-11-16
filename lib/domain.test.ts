@@ -85,3 +85,14 @@ describe("month grid", () => {
     expect(ymd(start)).toBe("2026-11-01");
   });
 });
+
+describe("units", () => {
+  it("migrates the old single setting and allows mixed units", async () => {
+    const { normalizeUnits, formatDistance, kgToDisplay } = await import("./domain");
+    expect(normalizeUnits("imperial")).toEqual({ distance: "mi", weight: "lb" });
+    expect(normalizeUnits("metric")).toEqual({ distance: "km", weight: "kg" });
+    const mixed = normalizeUnits({ distance: "km", weight: "lb" });
+    expect(formatDistance(5000, mixed)).toBe("5.00 km");
+    expect(Math.round(kgToDisplay(100, mixed))).toBe(220);
+  });
+});

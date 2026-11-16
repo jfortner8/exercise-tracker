@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { saveProfileAction } from "@/lib/actions";
-import type { Profile } from "@/lib/types";
+import type { DistanceUnit, Profile, WeightUnit } from "@/lib/types";
 import { Button, Card, Field, Input, Select, cx } from "./ui";
 
 export function SettingsForm({ profile }: { profile: Profile }) {
@@ -34,11 +34,23 @@ export function SettingsForm({ profile }: { profile: Profile }) {
           <Field label="Email">
             <Input value={p.email} disabled />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Units">
-              <Select value={p.units} onChange={(e) => setP({ ...p, units: e.target.value as Profile["units"] })}>
-                <option value="imperial">Miles · lb</option>
-                <option value="metric">Kilometers · kg</option>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Field label="Distance">
+              <Select
+                value={p.units.distance}
+                onChange={(e) => setP({ ...p, units: { ...p.units, distance: e.target.value as DistanceUnit } })}
+              >
+                <option value="km">Kilometers</option>
+                <option value="mi">Miles</option>
+              </Select>
+            </Field>
+            <Field label="Weight">
+              <Select
+                value={p.units.weight}
+                onChange={(e) => setP({ ...p, units: { ...p.units, weight: e.target.value as WeightUnit } })}
+              >
+                <option value="lb">Pounds (lb)</option>
+                <option value="kg">Kilograms (kg)</option>
               </Select>
             </Field>
             <Field label="Week starts on">
