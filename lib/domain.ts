@@ -70,6 +70,36 @@ export function parseClock(input: string): number {
   return parts.reduce((acc, p) => acc * 60 + Number(p), 0);
 }
 
+/**
+ * A duration typed into a minutes field. Plain numbers are minutes ("45", "87.5");
+ * clock style is minutes:seconds or hours:minutes:seconds ("87:45", "1:27:45", 44'12").
+ * Returns seconds, undefined when empty, or NaN when it can't be read.
+ */
+export function parseMinutesInput(input: string): number | undefined {
+  const t = input.trim().replace(/["”]/g, "").replace(/['’]/g, ":").replace(/:$/, "");
+  if (!t) return undefined;
+  if (/^\d+(\.\d+)?$/.test(t)) return Math.round(Number(t) * 60);
+  const parts = t.split(":");
+  if (parts.length > 3 || parts.some((p) => !/^\d+(\.\d+)?$/.test(p))) return NaN;
+  if (parts.slice(1).some((p) => Number(p) >= 60)) return NaN; // seconds/minutes after the first part must be < 60
+  return Math.round(parts.reduce((acc, p) => acc * 60 + Number(p), 0));
+}
+
+/** Seconds back into a minutes field: whole minutes as "45", otherwise "87:45". */
+export function formatMinutesInput(sec?: number): string {
+  if (!sec) return "";
+  const s = Math.round(sec);
+  return s % 60 === 0 ? String(s / 60) : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** Plain-language duration for previews: 5265 -> "1 h 27 min 45 s". */
+export function describeDuration(sec: number): string {
+  const s = Math.round(sec);
+  const [h, m, r] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60];
+  const out = [h && `${h} h`, m && `${m} min`, r && `${r} s`].filter(Boolean).join(" ");
+  return out || "0 min";
+}
+
 // ---------- Intervals ----------
 export function intervalTotalSec(iv?: Intervals): number | undefined {
   if (!iv) return undefined;

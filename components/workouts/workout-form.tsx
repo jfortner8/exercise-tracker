@@ -3,11 +3,14 @@
 import { useState, useTransition } from "react";
 import { saveWorkoutAction, type WorkoutInput } from "@/lib/actions";
 import {
+  describeDuration,
   displayToMeters,
   distanceUnit,
   formatDuration,
+  formatMinutesInput,
   intervalTotalSec,
   metersToDisplay,
+  parseMinutesInput,
 } from "@/lib/domain";
 import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
 import { STATUS_LABEL, TYPE_META } from "@/lib/workout-types";
@@ -30,35 +33,82 @@ const str = (n?: number, digits = 2) => (n == null ? "" : String(Math.round(n * 
 
 function toDraft(d: WorkoutDetails | undefined, units: Units): DetailsDraft {
   return {
-    durationMin: d?.durationSec ? str(d.durationSec / 60, 1) : "",
+    durationMin: formatMinutesInput(d?.durationSec),
     distance: d?.distanceM ? str(metersToDisplay(d.distanceM, units)) : "",
     reps: str(d?.intervals?.reps, 0),
     workSec: str(d?.intervals?.workSec, 0),
     restSec: str(d?.intervals?.restSec, 0),
-    warmupMin: d?.intervals?.warmupSec ? str(d.intervals.warmupSec / 60, 1) : "",
-    cooldownMin: d?.intervals?.cooldownSec ? str(d.intervals.cooldownSec / 60, 1) : "",
+    warmupMin: formatMinutesInput(d?.intervals?.warmupSec),
+    cooldownMin: formatMinutesInput(d?.intervals?.cooldownSec),
     description: d?.description ?? "",
   };
 }
 
+/** Seconds from a minutes field, or undefined when it's empty or unreadable. */
+const minutesField = (s: string) => {
+  const v = parseMinutesInput(s);
+  return v == null || Number.isNaN(v) ? undefined : v;
+};
+
+/** Labels of minutes fields whose text can't be read as a duration. */
+function unreadableDurations(d: DetailsDraft): string[] {
+  const fields: [string, string][] = [
+    ["Duration", d.durationMin],
+    ["Warm-up", d.warmupMin],
+    ["Cool-down", d.cooldownMin],
+  ];
+  return fields.filter(([, v]) => Number.isNaN(parseMinutesInput(v))).map(([label]) => label);
+}
+
 function fromDraft(d: DetailsDraft, units: Units): WorkoutDetails | undefined {
-  const min = num(d.durationMin);
+  const durationSec = minutesField(d.durationMin);
   const dist = num(d.distance);
   const intervals = {
     reps: num(d.reps),
     workSec: num(d.workSec),
     restSec: num(d.restSec),
-    warmupSec: num(d.warmupMin) != null ? num(d.warmupMin)! * 60 : undefined,
-    cooldownSec: num(d.cooldownMin) != null ? num(d.cooldownMin)! * 60 : undefined,
+    warmupSec: minutesField(d.warmupMin),
+    cooldownSec: minutesField(d.cooldownMin),
   };
   const hasIntervals = Object.values(intervals).some((v) => v != null);
   const out: WorkoutDetails = {
-    durationSec: min != null ? Math.round(min * 60) : undefined,
+    durationSec,
     distanceM: dist != null ? Math.round(displayToMeters(dist, units)) : undefined,
     intervals: hasIntervals ? intervals : undefined,
     description: d.description.trim() || undefined,
   };
   return Object.values(out).some((v) => v != null) ? out : undefined;
+}
+
+/** Minutes field that also takes 87:45 / 1:27:45, with a live preview of how it was read. */
+function MinutesInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (e: { target: { value: string } }) => void;
+  placeholder?: string;
+}) {
+  const sec = parseMinutesInput(value);
+  const bad = sec != null && Number.isNaN(sec);
+  return (
+    <>
+      <Input
+        inputMode="text"
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        aria-invalid={bad || undefined}
+        className={bad ? "border-danger focus:border-danger" : undefined}
+      />
+      {sec != null && (
+        <span className={cx("text-xs", bad ? "text-danger" : "text-muted")} aria-live="polite">
+          {bad ? "Can't read that. Try 45, 87:45 or 1:27:45" : `= ${describeDuration(sec)}`}
+        </span>
+      )}
+    </>
+  );
 }
 
 const INTERVAL_TYPES = new Set(["run", "walk", "swim", "bike"]);
@@ -82,7 +132,11 @@ function DetailsFields({
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <Field label="Duration (min)">
-          <Input inputMode="decimal" value={value.durationMin} onChange={set("durationMin")} placeholder={total ? String(Math.round(total / 60)) : ""} />
+          <MinutesInput
+            value={value.durationMin}
+            onChange={set("durationMin")}
+            placeholder={total ? formatMinutesInput(total) : "45 or 87:45"}
+          />
         </Field>
         <Field label={`Distance (${distanceUnit(units)})`}>
           <Input inputMode="decimal" value={value.distance} onChange={set("distance")} />
@@ -112,10 +166,10 @@ function DetailsFields({
                 <Input inputMode="numeric" value={value.restSec} onChange={set("restSec")} placeholder="30" />
               </Field>
               <Field label="Warm-up (min)">
-                <Input inputMode="decimal" value={value.warmupMin} onChange={set("warmupMin")} />
+                <MinutesInput value={value.warmupMin} onChange={set("warmupMin")} />
               </Field>
               <Field label="Cool-down (min)">
-                <Input inputMode="decimal" value={value.cooldownMin} onChange={set("cooldownMin")} />
+                <MinutesInput value={value.cooldownMin} onChange={set("cooldownMin")} />
               </Field>
             </div>
           )}
@@ -170,6 +224,11 @@ export function WorkoutForm({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const bad = [...unreadableDurations(planned), ...(showActual ? unreadableDurations(actual) : [])];
+    if (bad.length) {
+      setError(`Can't read ${[...new Set(bad)].join(", ").toLowerCase()}. Use minutes (45) or a time (87:45, 1:27:45).`);
+      return;
+    }
     const input: WorkoutInput = {
       id: workout?.id,
       originalDate: workout?.date,

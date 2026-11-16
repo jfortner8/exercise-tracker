@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Workout } from "./types";
 import {
+  describeDuration,
   displayStatus,
+  formatMinutesInput,
+  parseMinutesInput,
   isMissedDay,
   weekAdherence,
   epley1RM,
@@ -154,5 +157,32 @@ describe("intentional days", () => {
       skipped: 1,
       missed: 1,
     });
+  });
+});
+
+describe("minutes input", () => {
+  it("reads plain minutes and clock styles", () => {
+    expect(parseMinutesInput("45")).toBe(45 * 60);
+    expect(parseMinutesInput("87.5")).toBe(87 * 60 + 30);
+    expect(parseMinutesInput("87:45")).toBe(87 * 60 + 45);
+    expect(parseMinutesInput("1:27:45")).toBe(5265);
+    expect(parseMinutesInput(`44'12"`)).toBe(44 * 60 + 12);
+    expect(parseMinutesInput("1:30")).toBe(90); // two parts = minutes:seconds
+    expect(parseMinutesInput("  ")).toBeUndefined();
+  });
+
+  it("rejects what it can't read instead of guessing", () => {
+    expect(parseMinutesInput("87:75")).toBeNaN();
+    expect(parseMinutesInput("abc")).toBeNaN();
+    expect(parseMinutesInput("1:2:3:4")).toBeNaN();
+  });
+
+  it("formats back and describes", () => {
+    expect(formatMinutesInput(45 * 60)).toBe("45");
+    expect(formatMinutesInput(5265)).toBe("87:45");
+    expect(formatMinutesInput(undefined)).toBe("");
+    expect(describeDuration(5265)).toBe("1 h 27 min 45 s");
+    expect(describeDuration(90)).toBe("1 min 30 s");
+    expect(describeDuration(45 * 60)).toBe("45 min");
   });
 });
