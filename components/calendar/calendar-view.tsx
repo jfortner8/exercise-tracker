@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { addDays, format, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, NotebookPen, Wine } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Wine } from "lucide-react";
 import Link from "next/link";
 import { useId, useMemo, useOptimistic, useState, useSyncExternalStore, useTransition } from "react";
 import { moveWorkoutAction } from "@/lib/actions";
@@ -274,21 +274,35 @@ function DayCell({
           {format(d, "d")}
         </span>
         {view === "week" && <span className="text-xs text-muted md:hidden">{format(d, "EEE")}</span>}
-        <span className="ml-auto flex items-center gap-1 text-muted">
-          {log?.notes && <NotebookPen className="size-3" aria-label="Has note" />}
-          {trackDrinks && !!log?.drinks && (
-            <span className="flex items-center text-[10px]" title={`${log.drinks} drinks`}>
-              <Wine className="size-3" />
-              {log.drinks}
-            </span>
-          )}
-        </span>
       </div>
       <div className="flex flex-col gap-1">
         {workouts.map((w) => (
           <Chip key={w.id} workout={w} today={today} detailed={view === "week"} />
         ))}
       </div>
+      <DayFooter date={date} today={today} log={log} trackDrinks={trackDrinks} />
+    </div>
+  );
+}
+
+/** Bottom strip of a day tile: note preview on the left, drink count on the right. */
+function DayFooter({ date, today, log, trackDrinks }: { date: string; today: string; log?: DayLog; trackDrinks: boolean }) {
+  const note = log?.notes?.trim();
+  // Future days stay blank; from the day itself onward an unlogged day counts as 0.
+  const drinks = today && date <= today ? (log?.drinks ?? 0) : null;
+  return (
+    <div className="mt-auto flex h-5 items-stretch overflow-hidden rounded border border-border text-[10px] leading-none text-muted md:h-7 md:text-[11px]">
+      <span className="flex min-w-0 flex-1 items-center px-1" title={note}>
+        {note && <span className="truncate">{note}</span>}
+      </span>
+      {trackDrinks && (
+        <span
+          className="flex flex-1 items-center justify-center border-l border-border tabular-nums"
+          title={drinks != null ? `${drinks} drink${drinks === 1 ? "" : "s"}` : undefined}
+        >
+          {drinks}
+        </span>
+      )}
     </div>
   );
 }
