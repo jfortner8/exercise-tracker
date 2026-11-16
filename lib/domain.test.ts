@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Workout } from "./types";
 import {
   describeDuration,
+  describeIntervals,
   displayStatus,
   formatMinutesInput,
   parseMinutesInput,
@@ -184,5 +185,14 @@ describe("minutes input", () => {
     expect(describeDuration(5265)).toBe("1 h 27 min 45 s");
     expect(describeDuration(90)).toBe("1 min 30 s");
     expect(describeDuration(45 * 60)).toBe("45 min");
+  });
+});
+
+describe("describeIntervals", () => {
+  it("keeps seconds on warm-up and cool-down instead of rounding", () => {
+    expect(describeIntervals({ reps: 20, workSec: 180, restSec: 60, cooldownSec: 465 })).toBe(`20× 180/60 + 7'45" CD`);
+    expect(describeIntervals({ reps: 6, workSec: 126, restSec: 60, warmupSec: 300, cooldownSec: 300 })).toBe(
+      "5′ WU + 6× 126/60 + 5′ CD",
+    );
   });
 });

@@ -127,6 +127,9 @@ function DetailsFields({
   const set = (k: keyof DetailsDraft) => (e: { target: { value: string } }) => onChange({ ...value, [k]: e.target.value });
   const [showIntervals, setShowIntervals] = useState(!!(value.reps || value.workSec));
   const total = intervalTotalSec(fromDraft(value, units)?.intervals);
+  const duration = minutesField(value.durationMin);
+  // Duration is the whole session; intervals are the structure inside it. Show any gap rather than forcing a match.
+  const gap = total && duration ? duration - total : 0;
 
   return (
     <div className="space-y-3">
@@ -154,6 +157,32 @@ function DetailsFields({
               {total ? `${formatDuration(total)} total` : showIntervals ? "Hide" : "Add"}
             </span>
           </button>
+          {total && duration ? (
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              {gap > 0 ? (
+                <>
+                  <span className="text-muted">
+                    {formatDuration(total)} of intervals · {formatDuration(gap)} outside them
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-1.5 text-xs text-accent"
+                    onClick={() =>
+                      onChange({ ...value, cooldownMin: formatMinutesInput((minutesField(value.cooldownMin) ?? 0) + gap) })
+                    }
+                  >
+                    Count as cool-down
+                  </Button>
+                </>
+              ) : gap < 0 ? (
+                <span className="text-warn">Intervals add up to more than the duration ({formatDuration(duration)})</span>
+              ) : (
+                <span className="text-muted">Matches duration ✓</span>
+              )}
+            </div>
+          ) : null}
           {showIntervals && (
             <div className="mt-3 grid grid-cols-3 gap-2">
               <Field label="Reps">

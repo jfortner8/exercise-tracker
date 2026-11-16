@@ -117,8 +117,10 @@ export function detailsDurationSec(d?: WorkoutDetails): number | undefined {
 export function describeIntervals(iv?: Intervals): string | undefined {
   if (!iv?.reps || !iv.workSec) return undefined;
   const core = `${iv.reps}× ${iv.workSec}/${iv.restSec ?? 0}`;
-  const wu = iv.warmupSec ? `${Math.round(iv.warmupSec / 60)}′ WU + ` : "";
-  const cd = iv.cooldownSec ? ` + ${Math.round(iv.cooldownSec / 60)}′ CD` : "";
+  // Whole minutes read as 5′; anything else keeps its seconds (7'45") instead of rounding.
+  const span = (sec: number) => (sec % 60 === 0 ? `${sec / 60}′` : formatDuration(sec));
+  const wu = iv.warmupSec ? `${span(iv.warmupSec)} WU + ` : "";
+  const cd = iv.cooldownSec ? ` + ${span(iv.cooldownSec)} CD` : "";
   return `${wu}${core}${cd}`;
 }
 
