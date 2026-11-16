@@ -129,3 +129,11 @@ export interface BenchmarkResult {
   workoutId?: string;
   notes?: string;
 }
+
+/** A benchmark result as shown on the calendar, flagged if it set a new PB at the time. */
+export interface DayResult extends BenchmarkResult {
+  benchmarkName: string;
+  metricKind: MetricKind;
+  unit?: string;
+  isPb: boolean;
+}

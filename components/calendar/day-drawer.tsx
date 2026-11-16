@@ -1,7 +1,7 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Ban, Check, HeartPulse, MapPin, Minus, Moon, Repeat, X, Pencil, Plus, Trash2, Trophy, Wine } from "lucide-react";
+import { Ban, Check, HeartPulse, MapPin, Minus, Moon, Repeat, Star, X, Pencil, Plus, Trash2, Trophy, Wine } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
@@ -13,8 +13,8 @@ import {
   saveDayAction,
 } from "@/lib/actions";
 import { parseValue, valueLabel } from "@/lib/benchmarks/input";
-import { describeIntervals, detailsDurationSec, displayStatus, formatDistance, formatDuration } from "@/lib/domain";
-import type { BenchmarkDef, DayLog, Injury, Profile, Workout, WorkoutDetails } from "@/lib/types";
+import { describeIntervals, detailsDurationSec, displayStatus, formatDistance, formatDuration, formatResult } from "@/lib/domain";
+import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Workout, WorkoutDetails } from "@/lib/types";
 import { STATUS_LABEL, TYPE_META } from "@/lib/workout-types";
 import { Sheet } from "../sheet";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
@@ -45,6 +45,7 @@ export function DayDrawer({
   activeInjuries,
   missed,
   benchmarks,
+  results,
   profile,
   onClose,
 }: {
@@ -57,6 +58,8 @@ export function DayDrawer({
   /** Empty past day that counts as a miss. */
   missed: boolean;
   benchmarks: BenchmarkDef[];
+  /** This day's benchmark results. */
+  results: DayResult[];
   profile: Profile;
   onClose: () => void;
 }) {
@@ -157,6 +160,7 @@ export function DayDrawer({
                           </div>
                         )}
                         {w.notes && <div className="whitespace-pre-wrap text-muted">{w.notes}</div>}
+                        <ResultList results={results.filter((r) => r.workoutId === w.id)} profile={profile} />
                       </div>
                     </div>
                   </div>
@@ -266,6 +270,11 @@ export function DayDrawer({
               </Button>
             )}
           </section>
+
+          <DayResults
+            results={results.filter((r) => !r.workoutId || !workouts.some((w) => w.id === r.workoutId))}
+            profile={profile}
+          />
 
           {benchmarks.length > 0 && <QuickBenchmark date={date} benchmarks={benchmarks} profile={profile} workouts={workouts} />}
         </div>
@@ -407,6 +416,43 @@ function QuickBenchmark({
           Save result
         </Button>
       </div>
+    </section>
+  );
+}
+
+/** Benchmark results as compact rows; PBs get a gold star. */
+function ResultList({ results, profile }: { results: DayResult[]; profile: Profile }) {
+  if (!results.length) return null;
+  return (
+    <ul className="space-y-1">
+      {results.map((r) => (
+        <li key={r.id}>
+          <Link
+            href={`/benchmarks/${r.benchmarkId}`}
+            className="flex items-center gap-1.5 rounded-md text-sm hover:underline"
+          >
+            <Star className={cx("size-3.5 shrink-0", r.isPb ? "fill-amber-400 text-amber-500" : "text-muted")} />
+            <span className="font-medium">{r.benchmarkName}</span>
+            <span className="tabular-nums">{formatResult(r, r, profile.units)}</span>
+            {r.isPb && (
+              <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                New PB
+              </span>
+            )}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Results logged for this day that aren't attached to one of its workouts (e.g. from the Benchmarks tab). */
+function DayResults({ results, profile }: { results: DayResult[]; profile: Profile }) {
+  if (!results.length) return null;
+  return (
+    <section className="space-y-2 border-t border-border pt-5">
+      <h3 className="text-sm font-semibold">Benchmarks</h3>
+      <ResultList results={results} profile={profile} />
     </section>
   );
 }

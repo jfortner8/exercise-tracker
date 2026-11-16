@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { addDays, format, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, Moon, Wine } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Moon, Star, Wine } from "lucide-react";
 import Link from "next/link";
 import { useId, useMemo, useOptimistic, useState, useSyncExternalStore, useTransition } from "react";
 import { moveWorkoutAction, swapDaysAction } from "@/lib/actions";
@@ -25,7 +25,7 @@ import {
   weekAdherence,
   ymd,
 } from "@/lib/domain";
-import type { BenchmarkDef, DayLog, Injury, Profile, Workout } from "@/lib/types";
+import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Workout } from "@/lib/types";
 import { TYPE_META } from "@/lib/workout-types";
 import { Button, cx } from "../ui";
 import { Sheet } from "../sheet";
@@ -47,6 +47,8 @@ export interface CalendarProps {
   profile: Profile;
   /** Earliest workout/day-log date; empty days before it are never "missed". */
   startDate: string | null;
+  /** Benchmark results in view, flagged if they set a PB at the time. */
+  results: DayResult[];
 }
 
 /** Local "today" (browser timezone), stable across renders; empty during SSR. */
@@ -84,6 +86,13 @@ export function CalendarView(props: CalendarProps) {
     return map;
   }, [workouts]);
   const logByDay = useMemo(() => new Map(props.dayLogs.map((d) => [d.date, d])), [props.dayLogs]);
+  const resultsByDay = useMemo(() => {
+    const map = new Map<string, DayResult[]>();
+    for (const r of props.results) map.set(r.date, [...(map.get(r.date) ?? []), r]);
+    return map;
+  }, [props.results]);
+  // A logged benchmark result means the day wasn't missed, even with no workout.
+  const activityOn = (d: string) => [...(byDay.get(d) ?? []), ...(resultsByDay.get(d) ?? [])];
   const injuriesOn = (d: string) =>
     injuries.filter((i) => i.startDate <= d && (i.endDate ? d <= i.endDate : i.status !== "healed" && !!today && d <= today));
 
@@ -176,8 +185,9 @@ export function CalendarView(props: CalendarProps) {
                   workouts={byDay.get(d) ?? []}
                   log={logByDay.get(d)}
                   injured={injuriesOn(d).length > 0}
-                  missed={isMissedDay(d, today, props.startDate, byDay.get(d) ?? [], injuriesOn(d).length > 0)}
+                  missed={isMissedDay(d, today, props.startDate, activityOn(d), injuriesOn(d).length > 0)}
                   trackDrinks={profile.trackDrinks}
+                  pb={(resultsByDay.get(d) ?? []).some((r) => r.isPb)}
                   onOpen={() => setSelected(d)}
                 />
               ))}
@@ -189,6 +199,7 @@ export function CalendarView(props: CalendarProps) {
                 today={today}
                 startDate={props.startDate}
                 isInjured={(d) => injuriesOn(d).length > 0}
+                hasResult={(d) => resultsByDay.has(d)}
                 onCopy={() => setCopyFrom(week[0])}
               />
             </div>
@@ -205,8 +216,9 @@ export function CalendarView(props: CalendarProps) {
           log={logByDay.get(selected)}
           injuries={injuries}
           activeInjuries={injuriesOn(selected)}
-          missed={isMissedDay(selected, today, props.startDate, byDay.get(selected) ?? [], injuriesOn(selected).length > 0)}
+          missed={isMissedDay(selected, today, props.startDate, activityOn(selected), injuriesOn(selected).length > 0)}
           benchmarks={props.benchmarks}
+          results={resultsByDay.get(selected) ?? []}
           profile={profile}
           onClose={() => setSelected(null)}
         />
@@ -257,6 +269,9 @@ function Legend() {
       <span className="flex items-center gap-1.5">
         <span className="injury-stripe h-3 w-5 rounded border border-border" /> Injured
       </span>
+      <span className="flex items-center gap-1.5">
+        <Star className="size-3.5 fill-amber-400 text-amber-500" /> New PB
+      </span>
       <span className="ml-auto hidden md:inline">Drag planned workouts to reschedule</span>
     </div>
   );
@@ -272,6 +287,7 @@ function DayCell({
   injured,
   missed,
   trackDrinks,
+  pb,
   onOpen,
 }: {
   date: string;
@@ -283,6 +299,8 @@ function DayCell({
   injured: boolean;
   missed: boolean;
   trackDrinks: boolean;
+  /** A benchmark result on this day set a new PB. */
+  pb: boolean;
   onOpen: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
@@ -317,6 +335,12 @@ function DayCell({
         isOver && "ring-2 ring-inset ring-accent",
       )}
     >
+      {pb && (
+        <Star
+          className="absolute right-1 top-1 z-10 size-3.5 fill-amber-400 text-amber-500 drop-shadow-sm md:size-4"
+          aria-label="New personal best"
+        />
+      )}
       {/* Workouts fill the tile down to the footer: one = whole area, two = halves, three = thirds. */}
       <div className="flex min-h-0 flex-1 flex-col">
         {workouts.length === 0 && missed ? (
@@ -330,7 +354,14 @@ function DayCell({
           <div className="flex-1 p-1 transition-colors group-hover:bg-surface-2/60 md:p-1.5">{dayLabel}</div>
         ) : (
           workouts.map((w, i) => (
-            <Block key={w.id} workout={w} today={today} detailed={view === "week"} dayLabel={i === 0 ? dayLabel : null} />
+            <Block
+              key={w.id}
+              workout={w}
+              today={today}
+              detailed={view === "week"}
+              dayLabel={i === 0 ? dayLabel : null}
+              clearCorner={i === 0 && pb}
+            />
           ))
         )}
       </div>
@@ -380,11 +411,14 @@ function Block({
   today,
   detailed,
   dayLabel,
+  clearCorner = false,
 }: {
   workout: Workout;
   today: string;
   detailed: boolean;
   dayLabel: React.ReactNode;
+  /** Leave room in the top-right for the PB star. */
+  clearCorner?: boolean;
 }) {
   const status = today ? displayStatus(w, today) : w.status;
   const draggable = w.status === "planned";
@@ -407,6 +441,7 @@ function Block({
       className={cx(
         "relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden px-1 py-0.5 text-[11px] leading-tight transition-[filter] group-hover:brightness-95 md:px-1.5 md:py-1 md:text-xs",
         !dayLabel && "border-t border-surface",
+        clearCorner && "pr-5 md:pr-6",
         done && "bg-done text-done-fg",
         status === "planned" &&
           "border border-dashed border-done bg-planned-bg text-planned-fg",
@@ -418,7 +453,7 @@ function Block({
       )}
       title={`${meta.label}: ${w.title}`}
     >
-      {status === "needs_review" && <span className="absolute right-1 top-1 size-2 rounded-full bg-warn" />}
+      {status === "needs_review" && <span className="absolute bottom-1 right-1 size-2 rounded-full bg-warn" />}
       <div className="flex min-w-0 items-center gap-1">
         {dayLabel}
         {rest && <Moon className="size-3 shrink-0" aria-hidden />}
@@ -443,6 +478,7 @@ function WeekSummary({
   today,
   startDate,
   isInjured,
+  hasResult,
   onCopy,
 }: {
   week: string[];
@@ -452,11 +488,12 @@ function WeekSummary({
   today: string;
   startDate: string | null;
   isInjured: (d: string) => boolean;
+  hasResult: (d: string) => boolean;
   onCopy: () => void;
 }) {
   const ws = week.flatMap((d) => byDay.get(d) ?? []).filter((w) => w.type !== "rest");
   const done = ws.filter((w) => DONE_STATUSES.has(w.status));
-  const a = weekAdherence(week, byDay, today, startDate, isInjured);
+  const a = weekAdherence(week, byDay, today, startDate, isInjured, hasResult);
   const parts = [
     a.asPlanned && `${a.asPlanned} as planned`,
     a.rest && `${a.rest} rest`,
