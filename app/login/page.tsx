@@ -38,6 +38,12 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
         >
           Sign in
         </a>
+        <p className="text-center text-sm text-muted">
+          New here?{" "}
+          <a href="/api/auth/login?signup=1" className="font-medium text-accent hover:underline">
+            Create an account
+          </a>
+        </p>
       </div>
     </div>
   );

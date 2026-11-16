@@ -17,6 +17,8 @@ export async function GET(req: NextRequest) {
     state,
     nonce,
   });
+  // Cognito managed login serves sign-up at /signup with the same parameters as /oauth2/authorize.
+  if (req.nextUrl.searchParams.get("signup") === "1") url.pathname = "/signup";
 
   const res = NextResponse.redirect(url);
   res.cookies.set(FLOW_COOKIE, await signFlow({ verifier, state, nonce }), { ...cookieBase, maxAge: 600 });
