@@ -1,10 +1,17 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Check, HeartPulse, MapPin, Minus, Pencil, Plus, Trash2, Trophy, Wine } from "lucide-react";
+import { Ban, Check, HeartPulse, MapPin, Minus, Moon, Repeat, X, Pencil, Plus, Trash2, Trophy, Wine } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { addResultAction, deleteWorkoutAction, logAsDoneAction, saveDayAction } from "@/lib/actions";
+import {
+  addResultAction,
+  deleteWorkoutAction,
+  logAsDoneAction,
+  markRestDayAction,
+  resolveWorkoutAction,
+  saveDayAction,
+} from "@/lib/actions";
 import { parseValue, valueLabel } from "@/lib/benchmarks/input";
 import { describeIntervals, detailsDurationSec, displayStatus, formatDistance, formatDuration } from "@/lib/domain";
 import type { BenchmarkDef, DayLog, Injury, Profile, Workout, WorkoutDetails } from "@/lib/types";
@@ -36,6 +43,7 @@ export function DayDrawer({
   log,
   injuries,
   activeInjuries,
+  missed,
   benchmarks,
   profile,
   onClose,
@@ -46,11 +54,20 @@ export function DayDrawer({
   log?: DayLog;
   injuries: Injury[];
   activeInjuries: Injury[];
+  /** Empty past day that counts as a miss. */
+  missed: boolean;
   benchmarks: BenchmarkDef[];
   profile: Profile;
   onClose: () => void;
 }) {
   const [editing, setEditing] = useState<Workout | "new" | null>(null);
+  const [preset, setPreset] = useState<Workout["status"] | undefined>();
+  const [skipping, setSkipping] = useState<string | null>(null); // workout id with the reason field open
+  const [skipReason, setSkipReason] = useState("");
+  const edit = (w: Workout | "new" | null, status?: Workout["status"]) => {
+    setPreset(status);
+    setEditing(w);
+  };
   const [pending, start] = useTransition();
   const d = parseISO(date);
   const relative = !today ? "" : date === today ? "Today" : date < today ? "Past" : "Upcoming";
@@ -77,7 +94,8 @@ export function DayDrawer({
           workout={editing === "new" ? undefined : editing}
           units={profile.units}
           injuries={injuries}
-          onDone={() => setEditing(null)}
+          presetStatus={preset}
+          onDone={() => edit(null)}
         />
       ) : (
         <div className="space-y-6">
@@ -142,8 +160,66 @@ export function DayDrawer({
                       </div>
                     </div>
                   </div>
+                  {status === "needs_review" && (
+                    <div className="mt-3 space-y-2 rounded-lg bg-warn/10 p-2">
+                      <div className="text-xs font-medium text-text">How did it go?</div>
+                      {skipping === w.id ? (
+                        <form
+                          className="flex gap-1.5"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            start(async () => {
+                              await resolveWorkoutAction(w.date, w.id, "skipped", skipReason);
+                              setSkipping(null);
+                              setSkipReason("");
+                            });
+                          }}
+                        >
+                          <Input
+                            autoFocus
+                            value={skipReason}
+                            onChange={(e) => setSkipReason(e.target.value)}
+                            placeholder="Why? Sick, travel, wedding…"
+                            className="h-8 flex-1 text-sm"
+                            required
+                          />
+                          <Button size="sm" type="submit" variant="primary" disabled={pending || !skipReason.trim()}>
+                            Save
+                          </Button>
+                          <Button size="sm" type="button" variant="ghost" onClick={() => setSkipping(null)}>
+                            <X className="size-3.5" />
+                          </Button>
+                        </form>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            disabled={pending}
+                            onClick={() => start(() => resolveWorkoutAction(w.date, w.id, "completed"))}
+                          >
+                            <Check className="size-3.5" /> Done as planned
+                          </Button>
+                          <Button size="sm" onClick={() => edit(w, "substituted")}>
+                            <Repeat className="size-3.5" /> Did something else…
+                          </Button>
+                          <Button size="sm" onClick={() => setSkipping(w.id)}>
+                            Skipped…
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            disabled={pending}
+                            onClick={() => start(() => resolveWorkoutAction(w.date, w.id, "missed"))}
+                          >
+                            <Ban className="size-3.5" /> Missed
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    {w.status === "planned" && (
+                    {status === "planned" && (
                       <Button
                         size="sm"
                         variant="primary"
@@ -153,8 +229,8 @@ export function DayDrawer({
                         <Check className="size-3.5" /> Log as done
                       </Button>
                     )}
-                    <Button size="sm" onClick={() => setEditing(w)}>
-                      <Pencil className="size-3.5" /> {w.status === "planned" ? "Log / edit" : "Edit"}
+                    <Button size="sm" onClick={() => edit(w)}>
+                      <Pencil className="size-3.5" /> {status === "planned" ? "Log / edit" : "Edit"}
                     </Button>
                     <Button
                       size="sm"
@@ -168,9 +244,27 @@ export function DayDrawer({
                 </div>
               );
             })}
-            <Button className="w-full border-dashed" onClick={() => setEditing("new")}>
-              <Plus className="size-4" /> Add workout
-            </Button>
+            {workouts.length === 0 ? (
+              <>
+                {missed && <p className="text-sm text-danger">Nothing was planned or logged for this day.</p>}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button className="border-dashed" onClick={() => edit("new")}>
+                    <Plus className="size-4" /> Add a workout
+                  </Button>
+                  <Button
+                    className="border-dashed"
+                    disabled={pending || !today}
+                    onClick={() => start(() => markRestDayAction(date, today))}
+                  >
+                    <Moon className="size-4" /> Mark as rest day
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <Button className="w-full border-dashed" onClick={() => edit("new")}>
+                <Plus className="size-4" /> Add workout
+              </Button>
+            )}
           </section>
 
           {benchmarks.length > 0 && <QuickBenchmark date={date} benchmarks={benchmarks} profile={profile} workouts={workouts} />}

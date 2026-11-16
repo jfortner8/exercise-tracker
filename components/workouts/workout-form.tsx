@@ -139,12 +139,15 @@ export function WorkoutForm({
   units,
   injuries,
   onDone,
+  presetStatus,
 }: {
   date: string;
   workout?: Workout;
   units: Units;
   injuries: Injury[];
   onDone: () => void;
+  /** Start the form on this status (e.g. "substituted" from the drawer's quick resolve). */
+  presetStatus?: Workout["status"];
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +155,7 @@ export function WorkoutForm({
   const [title, setTitle] = useState(workout?.title ?? "");
   const [location, setLocation] = useState(workout?.location ?? "");
   const [day, setDay] = useState(workout?.date ?? date);
-  const [status, setStatus] = useState<Workout["status"]>(workout?.status ?? "planned");
+  const [status, setStatus] = useState<Workout["status"]>(presetStatus ?? workout?.status ?? "planned");
   const [planned, setPlanned] = useState(toDraft(workout?.planned, units));
   const [actual, setActual] = useState(toDraft(workout?.actual, units));
   const [reason, setReason] = useState(workout?.reason ?? "");

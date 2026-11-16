@@ -131,13 +131,82 @@ export function formatDistance(m: number, units: Units) {
 // ---------- Status ----------
 export type DisplayStatus = Workout["status"] | "needs_review";
 
-/** A planned workout whose day has passed but was never logged needs review. */
-export function displayStatus(w: Pick<Workout, "status" | "date">, today: string): DisplayStatus {
+/**
+ * A planned workout whose day has passed but was never logged needs review.
+ * A planned rest day counts as done as soon as its day arrives: resting is the plan.
+ */
+export function displayStatus(w: Pick<Workout, "status" | "date" | "type">, today: string): DisplayStatus {
+  if (w.status === "planned" && w.type === "rest" && today && w.date <= today) return "completed";
   if (w.status === "planned" && w.date < today) return "needs_review";
   return w.status;
 }
 
 export const DONE_STATUSES = new Set(["completed", "partial", "substituted"]);
+
+/** Green: the user did what they meant to (a workout or an intentional rest). */
+export const isOnTrack = (w: Pick<Workout, "status" | "date" | "type">, today: string) =>
+  DONE_STATUSES.has(displayStatus(w, today));
+
+/**
+ * A day is missed when it has passed with nothing planned or logged, on or after the
+ * user's first entry, and it isn't covered by an injury. (Today isn't over yet.)
+ */
+export function isMissedDay(
+  date: string,
+  today: string,
+  startDate: string | null,
+  workouts: readonly unknown[],
+  injured: boolean,
+) {
+  return !!today && !!startDate && date < today && date >= startDate && workouts.length === 0 && !injured;
+}
+
+export interface Adherence {
+  onTrack: number;
+  elapsed: number;
+  asPlanned: number;
+  rest: number;
+  moved: number;
+  substituted: number;
+  skipped: number;
+  missed: number;
+}
+
+/**
+ * How a set of days went against the plan, counting days on/after the start date up to today.
+ * Today only counts once it's on track, since it isn't over yet.
+ */
+export function weekAdherence(
+  days: string[],
+  byDay: Map<string, Workout[]>,
+  today: string,
+  startDate: string | null,
+  isInjured: (d: string) => boolean,
+): Adherence {
+  const a: Adherence = { onTrack: 0, elapsed: 0, asPlanned: 0, rest: 0, moved: 0, substituted: 0, skipped: 0, missed: 0 };
+  if (!today || !startDate) return a;
+  for (const d of days) {
+    if (d > today || d < startDate) continue;
+    const ws = byDay.get(d) ?? [];
+    const onTrack = ws.some((w) => isOnTrack(w, today));
+    if (d === today && !onTrack) continue;
+    a.elapsed++;
+    if (onTrack) a.onTrack++;
+    if (isMissedDay(d, today, startDate, ws, isInjured(d))) a.missed++;
+    for (const w of ws) {
+      const st = displayStatus(w, today);
+      if (st === "missed") a.missed++;
+      else if (st === "skipped") a.skipped++;
+      else if (st === "substituted") a.substituted++;
+      else if (st === "completed" || st === "partial") {
+        if (w.type === "rest") a.rest++;
+        else if (w.originalDate) a.moved++;
+        else a.asPlanned++;
+      }
+    }
+  }
+  return a;
+}
 
 // ---------- Benchmarks ----------
 /** Epley estimated one-rep max. */

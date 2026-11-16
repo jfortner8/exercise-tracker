@@ -117,6 +117,25 @@ export const saveWorkout = (sub: string, w: Workout) => put(sub, woSK(w.date, w.
 export const deleteWorkout = (sub: string, date: string, id: string) => del(sub, woSK(date, id));
 
 /** Date is part of the key, so moving = delete + put in one transaction. */
+/** Date of the user's earliest workout or day log; days before it never count as missed. */
+export async function firstEntryDate(sub: string): Promise<string | null> {
+  const first = async (prefix: string) => {
+    const res = await db().send(
+      new QueryCommand({
+        TableName: T(),
+        KeyConditionExpression: "PK = :pk AND begins_with(SK, :p)",
+        ExpressionAttributeValues: { ":pk": pk(sub), ":p": prefix },
+        ProjectionExpression: "SK",
+        Limit: 1,
+      }),
+    );
+    const sk = res.Items?.[0]?.SK as string | undefined;
+    return sk ? sk.slice(prefix.length, prefix.length + 10) : null;
+  };
+  const dates = (await Promise.all([first("WO#"), first("DAY#")])).filter((d): d is string => !!d);
+  return dates.length ? dates.sort()[0] : null;
+}
+
 export async function moveWorkout(sub: string, w: Workout, toDate: string) {
   const moved: Workout = {
     ...w,

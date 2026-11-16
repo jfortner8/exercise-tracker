@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { Workout } from "./types";
 import {
   displayStatus,
+  isMissedDay,
+  weekAdherence,
   epley1RM,
   formatClock,
   formatDuration,
@@ -68,9 +71,9 @@ describe("personal bests", () => {
 
 describe("status", () => {
   it("flags past planned workouts as needs review", () => {
-    expect(displayStatus({ status: "planned", date: "2026-11-10" }, "2026-11-16")).toBe("needs_review");
-    expect(displayStatus({ status: "planned", date: "2026-11-16" }, "2026-11-16")).toBe("planned");
-    expect(displayStatus({ status: "completed", date: "2026-11-10" }, "2026-11-16")).toBe("completed");
+    expect(displayStatus({ type: "run", status: "planned", date: "2026-11-10" }, "2026-11-16")).toBe("needs_review");
+    expect(displayStatus({ type: "run", status: "planned", date: "2026-11-16" }, "2026-11-16")).toBe("planned");
+    expect(displayStatus({ type: "run", status: "completed", date: "2026-11-10" }, "2026-11-16")).toBe("completed");
   });
 });
 
@@ -94,5 +97,62 @@ describe("units", () => {
     const mixed = normalizeUnits({ distance: "km", weight: "lb" });
     expect(formatDistance(5000, mixed)).toBe("5.00 km");
     expect(Math.round(kgToDisplay(100, mixed))).toBe(220);
+  });
+});
+
+describe("intentional days", () => {
+  const w = (p: Partial<Workout> & Pick<Workout, "date">): Workout => ({
+    id: Math.random().toString(36),
+    type: "run",
+    title: "Run",
+    status: "planned",
+    createdAt: "",
+    updatedAt: "",
+    ...p,
+  });
+
+  it("counts a planned rest day as done once its day arrives", () => {
+    expect(displayStatus({ status: "planned", type: "rest", date: "2026-11-10" }, "2026-11-16")).toBe("completed");
+    expect(displayStatus({ status: "planned", type: "rest", date: "2026-11-16" }, "2026-11-16")).toBe("completed");
+    expect(displayStatus({ status: "planned", type: "rest", date: "2026-11-17" }, "2026-11-16")).toBe("planned");
+    expect(displayStatus({ status: "planned", type: "run", date: "2026-11-10" }, "2026-11-16")).toBe("needs_review");
+  });
+
+  it("only treats empty past days after the start date, outside injuries, as missed", () => {
+    const today = "2026-11-16";
+    expect(isMissedDay("2026-11-12", today, "2026-11-10", [], false)).toBe(true);
+    expect(isMissedDay("2026-11-09", today, "2026-11-10", [], false)).toBe(false); // before start
+    expect(isMissedDay("2026-11-12", today, "2026-11-10", [], true)).toBe(false); // injured
+    expect(isMissedDay("2026-11-16", today, "2026-11-10", [], false)).toBe(false); // today
+    expect(isMissedDay("2026-11-18", today, "2026-11-10", [], false)).toBe(false); // future
+    expect(isMissedDay("2026-11-12", today, null, [], false)).toBe(false); // no entries yet
+    expect(isMissedDay("2026-11-12", today, "2026-11-10", [{}], false)).toBe(false); // has a workout
+  });
+
+  it("summarizes a week against the plan", () => {
+    const today = "2026-11-15";
+    const ws = [
+      w({ date: "2026-11-09", status: "completed" }),
+      w({ date: "2026-11-10", status: "planned", type: "rest" }),
+      w({ date: "2026-11-11", status: "completed", originalDate: "2026-11-10" }),
+      w({ date: "2026-11-12", status: "substituted" }),
+      w({ date: "2026-11-12", status: "skipped" }),
+      w({ date: "2026-11-13", status: "missed" }),
+      w({ date: "2026-11-14", status: "planned" }), // needs review: not on track, not counted
+      // 15th: empty and today -> not missed yet, and not counted until it's on track
+    ];
+    const byDay = new Map<string, Workout[]>();
+    for (const x of ws) byDay.set(x.date, [...(byDay.get(x.date) ?? []), x]);
+    const days = ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15"];
+    expect(weekAdherence(days, byDay, today, "2026-11-09", () => false)).toEqual({
+      onTrack: 4,
+      elapsed: 6,
+      asPlanned: 1,
+      rest: 1,
+      moved: 1,
+      substituted: 1,
+      skipped: 1,
+      missed: 1,
+    });
   });
 });
