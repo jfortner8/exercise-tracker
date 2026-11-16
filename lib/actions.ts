@@ -7,6 +7,7 @@ import { z } from "zod";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { requireUser } from "@/lib/dal";
 import * as repo from "@/lib/db/repo";
+import { syncLeaderboard } from "@/lib/leaderboard";
 import {
   BENCHMARK_CATEGORIES,
   DISTANCE_UNITS,
@@ -214,6 +215,7 @@ export async function saveProfileAction(raw: {
   units: Units;
   weekStartsOn: 0 | 1;
   trackDrinks: boolean;
+  leaderboard: boolean;
 }) {
   const { sub, email } = await requireUser();
   const p = z
@@ -222,9 +224,12 @@ export async function saveProfileAction(raw: {
       units: z.object({ distance: z.enum(DISTANCE_UNITS), weight: z.enum(WEIGHT_UNITS) }),
       weekStartsOn: z.union([z.literal(0), z.literal(1)]),
       trackDrinks: z.boolean(),
+      leaderboard: z.boolean(),
     })
     .parse(raw);
   await repo.saveProfile(sub, { ...p, email });
+  // Opting in/out or renaming changes what others see on leaderboards.
+  await syncLeaderboard(sub);
   refresh();
 }
 
@@ -289,6 +294,7 @@ export async function createBenchmarkAction(raw: z.infer<typeof benchmarkInput>)
 export async function deleteBenchmarkAction(benchmarkId: string) {
   const { sub } = await requireUser();
   await repo.deleteBenchmark(sub, id.parse(benchmarkId));
+  await syncLeaderboard(sub);
   refresh();
 }
 
@@ -303,13 +309,17 @@ const resultInput = z.object({
 export async function addResultAction(raw: z.infer<typeof resultInput>) {
   const { sub } = await requireUser();
   const r = resultInput.parse(raw);
-  if (!(await repo.getBenchmark(sub, r.benchmarkId))) throw new Error("Benchmark not found");
+  const bm = await repo.getBenchmark(sub, r.benchmarkId);
+  if (!bm) throw new Error("Benchmark not found");
   await repo.saveResult(sub, { ...r, id: ulid() });
+  if (bm.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
   refresh();
 }
 
 export async function deleteResultAction(benchmarkId: string, date: string, resultId: string) {
   const { sub } = await requireUser();
   await repo.deleteResult(sub, { benchmarkId: id.parse(benchmarkId), date: day.parse(date), id: id.parse(resultId) });
+  const bm = await repo.getBenchmark(sub, benchmarkId);
+  if (bm?.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
   refresh();
 }

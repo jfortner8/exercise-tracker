@@ -22,6 +22,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             units: p.units,
             weekStartsOn: p.weekStartsOn,
             trackDrinks: p.trackDrinks,
+            leaderboard: p.leaderboard,
           });
           setSaved(true);
         });
@@ -78,6 +79,14 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             label="Track drinks"
             description="Adds a drinks counter to each day and a weekly total to the calendar. Hidden everywhere when off."
           />
+          <div className="mt-4">
+            <Toggle
+              checked={p.leaderboard}
+              onChange={(v) => setP({ ...p, leaderboard: v })}
+              label="Show my PBs on leaderboards"
+              description="Your display name and best results on built-in benchmarks become visible to everyone with an account. Custom benchmarks always stay private."
+            />
+          </div>
         </div>
       </Card>
       <div className="mt-4 flex items-center justify-end gap-3">

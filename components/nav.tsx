@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, CalendarDays, HeartPulse, Settings, Trophy } from "lucide-react";
+import { Activity, CalendarDays, HeartPulse, Medal, Settings, Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
@@ -9,6 +9,7 @@ import { cx } from "./ui";
 const ITEMS = [
   { href: "/", label: "Calendar", icon: CalendarDays },
   { href: "/benchmarks", label: "Benchmarks", icon: Trophy },
+  { href: "/leaderboards", label: "Leaderboards", icon: Medal },
   { href: "/injuries", label: "Injuries", icon: HeartPulse },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
@@ -55,7 +56,7 @@ export function Sidebar({ footer }: { footer: ReactNode }) {
 
 export function BottomNav() {
   return <WithPath>{(path) => (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
       {ITEMS.map(({ href, label, icon: Icon }) => (
         <Link
           key={href}

@@ -81,6 +81,21 @@ export interface Profile {
   units: Units;
   weekStartsOn: 0 | 1; // 0 Sunday, 1 Monday
   trackDrinks: boolean;
+  /** Opt-in: show this user's PBs on built-in benchmarks to everyone with an account. */
+  leaderboard: boolean;
+}
+
+/** One user's best result on a built-in benchmark, as shown on its leaderboard. */
+export interface LeaderboardEntry {
+  sub: string;
+  catalogKey: string;
+  displayName: string;
+  value: number;
+  reps?: number;
+  date: string;
+  score: number;
+  /** Dates this user set a new PB and the score each time, oldest first (for % improvement). */
+  history: { date: string; score: number }[];
 }
 
 export type InjuryStatus = "active" | "recovering" | "healed";

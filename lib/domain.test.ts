@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Workout } from "./types";
 import {
   describeDuration,
+  improvementPct,
   describeIntervals,
   displayStatus,
   formatMinutesInput,
@@ -194,5 +195,24 @@ describe("describeIntervals", () => {
     expect(describeIntervals({ reps: 6, workSec: 126, restSec: 60, warmupSec: 300, cooldownSec: 300 })).toBe(
       "5′ WU + 6× 126/60 + 5′ CD",
     );
+  });
+});
+
+describe("improvementPct", () => {
+  const fiveK = [
+    { date: "2026-05-01", score: 1680 }, // 28:00
+    { date: "2026-08-10", score: 1620 }, // 27:00
+    { date: "2026-11-01", score: 1530 }, // 25:30
+  ];
+  it("compares the PB now with the PB as it stood at the start of the window", () => {
+    expect(improvementPct(fiveK, "lower", "2026-08-16")).toBeCloseTo(5.556, 2); // 27:00 -> 25:30
+    expect(improvementPct(fiveK, "lower", "2026-05-16")).toBeCloseTo(8.929, 2); // 28:00 -> 25:30
+    expect(improvementPct(fiveK, "lower", "2026-11-10")).toBe(0); // no new PB since
+  });
+  it("needs a result from before the window", () => {
+    expect(improvementPct(fiveK, "lower", "2026-04-01")).toBeUndefined();
+  });
+  it("treats higher-is-better the other way round", () => {
+    expect(improvementPct([{ date: "2026-01-01", score: 100 }, { date: "2026-06-01", score: 110 }], "higher", "2026-02-01")).toBeCloseTo(10);
   });
 });
