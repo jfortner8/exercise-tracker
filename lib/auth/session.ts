@@ -3,7 +3,6 @@ import { jwtVerify, SignJWT } from "jose";
 import { env } from "@/lib/env";
 
 export const SESSION_COOKIE = "et_session";
-export const FLOW_COOKIE = "et_oauth";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 export interface SessionUser {
@@ -31,21 +30,6 @@ export async function verifySession(token: string | undefined): Promise<SessionU
       email: payload.email,
       name: typeof payload.name === "string" ? payload.name : undefined,
     };
-  } catch {
-    return null;
-  }
-}
-
-/** Short-lived signed cookie carrying PKCE verifier + state through the redirect. */
-export async function signFlow(data: { verifier: string; state: string; nonce: string }) {
-  return new SignJWT(data).setProtectedHeader({ alg: "HS256" }).setExpirationTime("10m").sign(env.authSecret);
-}
-
-export async function verifyFlow(token: string | undefined) {
-  if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, env.authSecret, { algorithms: ["HS256"] });
-    return payload as unknown as { verifier: string; state: string; nonce: string };
   } catch {
     return null;
   }

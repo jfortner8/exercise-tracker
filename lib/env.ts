@@ -19,9 +19,6 @@ export const env = {
   get cognitoIssuer() {
     return req("COGNITO_ISSUER");
   },
-  get cognitoDomain() {
-    return req("COGNITO_DOMAIN");
-  },
   get cognitoClientId() {
     return req("COGNITO_CLIENT_ID");
   },

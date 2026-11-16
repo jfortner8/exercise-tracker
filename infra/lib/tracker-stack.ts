@@ -7,8 +7,6 @@ import { Construct } from "constructs";
 export interface TrackerStackProps extends cdk.StackProps {
   vercelTeamSlug: string;
   vercelProject: string;
-  /** Origins allowed to use Cognito login, e.g. http://localhost:3000 and the prod URL. */
-  appUrls: string[];
   selfSignUp: boolean;
 }
 
@@ -39,35 +37,24 @@ export class TrackerStack extends cdk.Stack {
       },
       passwordPolicy: { minLength: 10, requireSymbols: false },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      userVerification: {
+        emailSubject: "Your Exercise Tracker code",
+        emailBody: "Your Exercise Tracker verification code is {####}",
+        emailStyle: cognito.VerificationEmailStyle.CODE,
+      },
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    const domain = userPool.addDomain("Domain", {
-      cognitoDomain: { domainPrefix: `exercise-tracker-${this.account}` },
-      managedLoginVersion: cognito.ManagedLoginVersion.NEWER_MANAGED_LOGIN,
-    });
-
+    // The app has its own sign-in pages and calls Cognito's API server-side
+    // (USER_PASSWORD_AUTH + SECRET_HASH), so no hosted UI / OAuth is needed.
     const client = userPool.addClient("WebClient", {
       userPoolClientName: "exercise-tracker-web",
       generateSecret: true,
-      authFlows: {},
-      oAuth: {
-        flows: { authorizationCodeGrant: true },
-        scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
-        callbackUrls: props.appUrls.map((u) => `${u}/api/auth/callback`),
-        logoutUrls: props.appUrls.map((u) => `${u}/login`),
-      },
-      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+      authFlows: { userPassword: true },
+      disableOAuth: true,
       preventUserExistenceErrors: true,
       idTokenValidity: cdk.Duration.hours(1),
       refreshTokenValidity: cdk.Duration.days(30),
-    });
-
-    // Managed login (v2) needs a branding resource per client; use Cognito defaults.
-    new cognito.CfnManagedLoginBranding(this, "Branding", {
-      userPoolId: userPool.userPoolId,
-      clientId: client.userPoolClientId,
-      useCognitoProvidedValues: true,
     });
 
     // ---------- Vercel OIDC -> AWS role (no long-lived keys) ----------
@@ -100,9 +87,6 @@ export class TrackerStack extends cdk.Stack {
       value: `https://cognito-idp.${this.region}.amazonaws.com/${userPool.userPoolId}`,
     });
     new cdk.CfnOutput(this, "CognitoClientId", { value: client.userPoolClientId });
-    new cdk.CfnOutput(this, "CognitoDomain", {
-      value: `https://${domain.domainName}.auth.${this.region}.amazoncognito.com`,
-    });
     new cdk.CfnOutput(this, "UserPoolId", { value: userPool.userPoolId });
   }
 }

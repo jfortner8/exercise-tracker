@@ -11,7 +11,7 @@ A calendar-first workout tracker. Past days show what you actually did, and futu
 
 ## Architecture
 - `app/`: App Router pages (Cache Components on; session reads stream inside `<Suspense>`). `proxy.ts` does the optimistic auth redirect.
-- `lib/auth/`: Cognito OIDC (auth code + PKCE via `openid-client`), with sessions in a signed HTTP-only cookie (`jose`).
+- `lib/auth/`: the app's own sign-in, sign-up, confirm, and reset pages call Cognito's API from the server (`USER_PASSWORD_AUTH` + `SECRET_HASH`); the Cognito ID token is verified, then a signed HTTP-only session cookie (`jose`) is set.
 - `lib/dal.ts`: `requireUser()`, the only source of the user id for data access.
 - `lib/db/repo.ts`: single-table DynamoDB access (`PK=USER#<sub>`).
 - `lib/actions.ts`: server actions (Zod-validated).
@@ -26,21 +26,15 @@ npm run dev
 ```
 Locally the app uses your AWS CLI credentials. On Vercel it exchanges the deployment's OIDC token for the `exercise-tracker-vercel` role.
 
-Env vars: `APP_AWS_REGION`, `APP_AWS_ROLE_ARN` (Vercel only), `TABLE_NAME`, `COGNITO_ISSUER`, `COGNITO_DOMAIN`, `COGNITO_CLIENT_ID`, `COGNITO_CLIENT_SECRET`, `AUTH_SECRET`.
+Env vars: `APP_AWS_REGION`, `APP_AWS_ROLE_ARN` (Vercel only), `TABLE_NAME`, `COGNITO_ISSUER`, `COGNITO_CLIENT_ID`, `COGNITO_CLIENT_SECRET`, `AUTH_SECRET`.
 
 ## Users
-Sign-up is invite-only. To add someone:
-```bash
-aws cognito-idp admin-create-user --user-pool-id us-east-1_Qn070C54V --username friend@example.com \
-  --user-attributes Name=email,Value=friend@example.com Name=email_verified,Value=true Name=given_name,Value=Friend
-```
-Cognito emails them a temporary password. To open self sign-up instead, set `"selfSignUp": true` in `infra/cdk.json` and redeploy the infra.
+Anyone can create an account at `/signup` (Cognito emails a confirmation code). To close sign-ups, set `"selfSignUp": false` in `infra/cdk.json` and redeploy the infra.
 
 ## Infra changes
 ```bash
 cd infra && npm install && npm run deploy
 ```
-To allow a new domain to sign in, add it to `appUrls` in `infra/cdk.json` and redeploy.
 
 ## Tests
 ```bash

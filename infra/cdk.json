@@ -3,7 +3,6 @@
   "context": {
     "vercelTeamSlug": "john-90f0",
     "vercelProject": "exercise-tracker",
-    "appUrls": ["http://localhost:3000", "https://exercise-tracker-green.vercel.app"],
     "selfSignUp": true
   }
 }
