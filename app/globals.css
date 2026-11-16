@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-2: #f1f1ee;
+  --border: #e4e4df;
+  --text: #1c1c1a;
+  --muted: #6b6b66;
+  --accent: #ea580c;
+  --accent-fg: #ffffff;
+  --today: #ea580c;
+  --danger: #dc2626;
+  --warn: #d97706;
+  --injury: rgba(220, 38, 38, 0.07);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111110;
+    --surface: #1a1a18;
+    --surface-2: #232320;
+    --border: #2e2e2a;
+    --text: #ededea;
+    --muted: #9a9a93;
+    --accent: #fb923c;
+    --accent-fg: #1c1209;
+    --today: #fb923c;
+    --danger: #f87171;
+    --warn: #fbbf24;
+    --injury: rgba(248, 113, 113, 0.09);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-today: var(--today);
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+  --color-injury: var(--injury);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.injury-stripe {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--injury) 0 6px,
+    transparent 6px 12px
+  );
+}

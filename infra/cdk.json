@@ -1,0 +1,9 @@
+{
+  "app": "npx tsx bin/app.ts",
+  "context": {
+    "vercelTeamSlug": "john-90f0",
+    "vercelProject": "exercise-tracker",
+    "appUrls": ["http://localhost:3000"],
+    "selfSignUp": false
+  }
+}

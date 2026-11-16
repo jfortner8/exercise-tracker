@@ -1,0 +1,74 @@
+"use client";
+
+import { Activity, CalendarDays, HeartPulse, Settings, Trophy } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Suspense, type ReactNode } from "react";
+import { cx } from "./ui";
+
+const ITEMS = [
+  { href: "/", label: "Calendar", icon: CalendarDays },
+  { href: "/benchmarks", label: "Benchmarks", icon: Trophy },
+  { href: "/injuries", label: "Injuries", icon: HeartPulse },
+  { href: "/settings", label: "Settings", icon: Settings },
+] as const;
+
+const matches = (path: string | null, href: string) =>
+  path != null && (href === "/" ? path === "/" : path.startsWith(href));
+
+/** usePathname is request data, so links render statically first and pick up the active state in a Suspense boundary. */
+function WithPath({ children }: { children: (path: string | null) => ReactNode }) {
+  return <Suspense fallback={children(null)}><PathReader>{children}</PathReader></Suspense>;
+}
+function PathReader({ children }: { children: (path: string | null) => ReactNode }) {
+  return children(usePathname());
+}
+
+export function Sidebar({ footer }: { footer: ReactNode }) {
+  return (
+    <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r border-border bg-surface px-3 py-5 md:flex">
+      <Link href="/" className="mb-8 flex items-center gap-2 px-2 text-lg font-semibold tracking-tight">
+        <span className="grid size-7 place-items-center rounded-lg bg-accent text-accent-fg">
+          <Activity className="size-4" />
+        </span>
+        Stride
+      </Link>
+      <WithPath>{(path) => <nav className="flex flex-col gap-0.5">
+        {ITEMS.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className={cx(
+              "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+              matches(path, href) ? "bg-surface-2 text-text" : "text-muted hover:bg-surface-2 hover:text-text",
+            )}
+          >
+            <Icon className="size-4" />
+            {label}
+          </Link>
+        ))}
+      </nav>}</WithPath>
+      <div className="mt-auto">{footer}</div>
+    </aside>
+  );
+}
+
+export function BottomNav() {
+  return <WithPath>{(path) => (
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+      {ITEMS.map(({ href, label, icon: Icon }) => (
+        <Link
+          key={href}
+          href={href}
+          className={cx(
+            "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
+            matches(path, href) ? "text-accent" : "text-muted",
+          )}
+        >
+          <Icon className="size-5" />
+          {label}
+        </Link>
+      ))}
+    </nav>
+  )}</WithPath>;
+}
