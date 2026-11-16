@@ -239,10 +239,10 @@ function Legend() {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
       <span className="flex items-center gap-1.5">
-        <span className="h-3 w-5 rounded bg-green-500" /> Done / rest
+        <span className="h-3 w-5 rounded bg-done" /> Done / rest
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="h-3 w-5 rounded border border-dashed border-green-500 bg-green-50" /> Planned
+        <span className="h-3 w-5 rounded border border-dashed border-done bg-planned-bg" /> Planned
       </span>
       <span className="flex items-center gap-1.5">
         <span className="h-3 w-5 rounded border border-dashed border-warn bg-warn/15" />
@@ -252,7 +252,7 @@ function Legend() {
         <span className="h-3 w-5 rounded bg-surface-2" /> Skipped
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="h-3 w-5 rounded bg-red-500" /> Missed
+        <span className="h-3 w-5 rounded bg-missed" /> Missed
       </span>
       <span className="flex items-center gap-1.5">
         <span className="injury-stripe h-3 w-5 rounded border border-border" /> Injured
@@ -320,7 +320,7 @@ function DayCell({
       {/* Workouts fill the tile down to the footer: one = whole area, two = halves, three = thirds. */}
       <div className="flex min-h-0 flex-1 flex-col">
         {workouts.length === 0 && missed ? (
-          <div className="flex flex-1 flex-col bg-red-500 p-1 text-[11px] leading-tight text-white transition-[filter] group-hover:brightness-95 md:p-1.5 md:text-xs">
+          <div className="flex flex-1 flex-col bg-missed p-1 text-[11px] leading-tight text-missed-fg transition-[filter] group-hover:brightness-95 md:p-1.5 md:text-xs">
             <div className="flex items-center gap-1">
               {dayLabel}
               <span className="truncate font-medium">Missed</span>
@@ -339,15 +339,15 @@ function DayCell({
   );
 }
 
-/** Drink count background: green at 0 through intense red at 6+. Classes listed in full for Tailwind. */
+/** Drink count background: green at 0 through intense red at 6+ (theme tokens in globals.css). */
 const DRINK_COLORS = [
-  "bg-green-500 text-white",
-  "bg-green-200 text-green-900",
-  "bg-yellow-200 text-yellow-900",
-  "bg-yellow-400 text-yellow-950",
-  "bg-orange-400 text-orange-950",
-  "bg-red-500 text-white",
-  "bg-red-700 text-white",
+  "bg-drink-0 text-drink-0-fg",
+  "bg-drink-1 text-drink-1-fg",
+  "bg-drink-2 text-drink-2-fg",
+  "bg-drink-3 text-drink-3-fg",
+  "bg-drink-4 text-drink-4-fg",
+  "bg-drink-5 text-drink-5-fg",
+  "bg-drink-6 text-drink-6-fg",
 ];
 
 /** Bottom strip of a day tile, split down the middle: note preview on the left, drink count on the right. */
@@ -407,12 +407,12 @@ function Block({
       className={cx(
         "relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden px-1 py-0.5 text-[11px] leading-tight transition-[filter] group-hover:brightness-95 md:px-1.5 md:py-1 md:text-xs",
         !dayLabel && "border-t border-surface",
-        done && "bg-green-500 text-white",
+        done && "bg-done text-done-fg",
         status === "planned" &&
-          "border border-dashed border-green-500 bg-green-50 text-green-800 dark:bg-green-500/10 dark:text-green-300",
+          "border border-dashed border-done bg-planned-bg text-planned-fg",
         status === "needs_review" && "border border-dashed border-warn bg-warn/15 text-text",
         status === "skipped" && "bg-surface-2 text-muted",
-        status === "missed" && "bg-red-500 text-white",
+        status === "missed" && "bg-missed text-missed-fg",
         draggable && "cursor-grab touch-none active:cursor-grabbing",
         isDragging && "z-20 opacity-80 shadow-lg",
       )}

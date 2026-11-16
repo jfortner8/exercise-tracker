@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { Suspense } from "react";
 import { BottomNav, Sidebar } from "@/components/nav";
+import { ThemeSwitch } from "@/components/theme-switch";
 import { requireProfile } from "@/lib/dal";
 
 async function UserFooter() {
@@ -26,7 +27,18 @@ async function UserFooter() {
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-dvh">
-      <Sidebar footer={<Suspense fallback={<div className="h-12" />}><UserFooter /></Suspense>} />
+      <Sidebar
+        footer={
+          <>
+            <div className="mb-3 px-2">
+              <ThemeSwitch compact />
+            </div>
+            <Suspense fallback={<div className="h-12" />}>
+              <UserFooter />
+            </Suspense>
+          </>
+        }
+      />
       <main className="min-w-0 flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10 md:pt-8">{children}</main>
       <BottomNav />
     </div>
