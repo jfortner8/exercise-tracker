@@ -65,7 +65,14 @@ export interface DayLog {
   drinks?: number;
 }
 
-export type Units = "imperial" | "metric";
+export const DISTANCE_UNITS = ["km", "mi"] as const;
+export const WEIGHT_UNITS = ["kg", "lb"] as const;
+export type DistanceUnit = (typeof DISTANCE_UNITS)[number];
+export type WeightUnit = (typeof WEIGHT_UNITS)[number];
+export interface Units {
+  distance: DistanceUnit;
+  weight: WeightUnit;
+}
 
 export interface Profile {
   displayName: string;

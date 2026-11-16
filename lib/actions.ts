@@ -9,9 +9,12 @@ import { requireUser } from "@/lib/dal";
 import * as repo from "@/lib/db/repo";
 import {
   BENCHMARK_CATEGORIES,
+  DISTANCE_UNITS,
   METRIC_KINDS,
   WORKOUT_STATUSES,
+  WEIGHT_UNITS,
   WORKOUT_TYPES,
+  type Units,
   type Workout,
 } from "@/lib/types";
 
@@ -154,7 +157,7 @@ export async function saveDayAction(date: string, notes: string | undefined, dri
 // ---------- Profile ----------
 export async function saveProfileAction(raw: {
   displayName: string;
-  units: "imperial" | "metric";
+  units: Units;
   weekStartsOn: 0 | 1;
   trackDrinks: boolean;
 }) {
@@ -162,7 +165,7 @@ export async function saveProfileAction(raw: {
   const p = z
     .object({
       displayName: z.string().trim().min(1).max(80),
-      units: z.enum(["imperial", "metric"]),
+      units: z.object({ distance: z.enum(DISTANCE_UNITS), weight: z.enum(WEIGHT_UNITS) }),
       weekStartsOn: z.union([z.literal(0), z.literal(1)]),
       trackDrinks: z.boolean(),
     })

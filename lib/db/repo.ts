@@ -8,6 +8,7 @@ import {
   TransactWriteCommand,
   type QueryCommandInput,
 } from "@aws-sdk/lib-dynamodb";
+import { normalizeUnits } from "@/lib/domain";
 import { env } from "@/lib/env";
 import type { BenchmarkDef, BenchmarkResult, DayLog, Injury, Profile, Workout } from "@/lib/types";
 import { db } from "./client";
@@ -72,7 +73,7 @@ async function batchDelete(sub: string, sks: string[]) {
 export const defaultProfile = (email: string, name?: string): Profile => ({
   displayName: name ?? email.split("@")[0],
   email,
-  units: "imperial",
+  units: { distance: "mi", weight: "lb" },
   weekStartsOn: 1,
   trackDrinks: false,
 });
@@ -93,7 +94,9 @@ export async function ensureProfile(sub: string, email: string, name?: string) {
 
 export async function getProfile(sub: string): Promise<Profile | null> {
   const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: "PROFILE" } }));
-  return res.Item ? strip<Profile>(res.Item) : null;
+  if (!res.Item) return null;
+  const p = strip<Profile>(res.Item);
+  return { ...p, units: normalizeUnits(p.units) };
 }
 
 export const saveProfile = (sub: string, p: Profile) => put(sub, "PROFILE", "profile", p);
