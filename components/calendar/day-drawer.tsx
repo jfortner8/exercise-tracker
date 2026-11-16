@@ -50,7 +50,7 @@ export function DayDrawer({
   profile: Profile;
   onClose: () => void;
 }) {
-  const [editing, setEditing] = useState<Workout | "new" | null>(workouts.length === 0 ? "new" : null);
+  const [editing, setEditing] = useState<Workout | "new" | null>(null);
   const [pending, start] = useTransition();
   const d = parseISO(date);
   const relative = !today ? "" : date === today ? "Today" : date < today ? "Past" : "Upcoming";
@@ -81,7 +81,10 @@ export function DayDrawer({
         />
       ) : (
         <div className="space-y-6">
+          <DayNotes date={date} log={log} trackDrinks={profile.trackDrinks} />
+
           <section className="space-y-2">
+            <h3 className="text-sm font-semibold">Workouts</h3>
             {workouts.map((w) => {
               const status = today ? displayStatus(w, today) : w.status;
               const meta = TYPE_META[w.type];
@@ -169,8 +172,6 @@ export function DayDrawer({
               <Plus className="size-4" /> Add workout
             </Button>
           </section>
-
-          <DayNotes date={date} log={log} trackDrinks={profile.trackDrinks} />
 
           {benchmarks.length > 0 && <QuickBenchmark date={date} benchmarks={benchmarks} profile={profile} workouts={workouts} />}
         </div>
