@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { saveProfileAction } from "@/lib/actions";
 import type { DistanceUnit, Profile, WeightUnit } from "@/lib/types";
+import { ThemeSwitch } from "./theme-switch";
 import { Button, Card, Field, Input, Select, cx } from "./ui";
 
 export function SettingsForm({ profile }: { profile: Profile }) {
@@ -63,6 +64,11 @@ export function SettingsForm({ profile }: { profile: Profile }) {
               </Select>
             </Field>
           </div>
+        </div>
+        <div className="p-5">
+          <h2 className="text-sm font-semibold">Appearance</h2>
+          <p className="mb-3 mt-0.5 text-sm text-muted">Saved on this device and applied right away.</p>
+          <ThemeSwitch />
         </div>
         <div className="p-5">
           <h2 className="mb-3 text-sm font-semibold">Optional tracking</h2>

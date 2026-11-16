@@ -70,6 +70,36 @@ export function parseClock(input: string): number {
   return parts.reduce((acc, p) => acc * 60 + Number(p), 0);
 }
 
+/**
+ * A duration typed into a minutes field. Plain numbers are minutes ("45", "87.5");
+ * clock style is minutes:seconds or hours:minutes:seconds ("87:45", "1:27:45", 44'12").
+ * Returns seconds, undefined when empty, or NaN when it can't be read.
+ */
+export function parseMinutesInput(input: string): number | undefined {
+  const t = input.trim().replace(/["”]/g, "").replace(/['’]/g, ":").replace(/:$/, "");
+  if (!t) return undefined;
+  if (/^\d+(\.\d+)?$/.test(t)) return Math.round(Number(t) * 60);
+  const parts = t.split(":");
+  if (parts.length > 3 || parts.some((p) => !/^\d+(\.\d+)?$/.test(p))) return NaN;
+  if (parts.slice(1).some((p) => Number(p) >= 60)) return NaN; // seconds/minutes after the first part must be < 60
+  return Math.round(parts.reduce((acc, p) => acc * 60 + Number(p), 0));
+}
+
+/** Seconds back into a minutes field: whole minutes as "45", otherwise "87:45". */
+export function formatMinutesInput(sec?: number): string {
+  if (!sec) return "";
+  const s = Math.round(sec);
+  return s % 60 === 0 ? String(s / 60) : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** Plain-language duration for previews: 5265 -> "1 h 27 min 45 s". */
+export function describeDuration(sec: number): string {
+  const s = Math.round(sec);
+  const [h, m, r] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60];
+  const out = [h && `${h} h`, m && `${m} min`, r && `${r} s`].filter(Boolean).join(" ");
+  return out || "0 min";
+}
+
 // ---------- Intervals ----------
 export function intervalTotalSec(iv?: Intervals): number | undefined {
   if (!iv) return undefined;
@@ -87,8 +117,10 @@ export function detailsDurationSec(d?: WorkoutDetails): number | undefined {
 export function describeIntervals(iv?: Intervals): string | undefined {
   if (!iv?.reps || !iv.workSec) return undefined;
   const core = `${iv.reps}× ${iv.workSec}/${iv.restSec ?? 0}`;
-  const wu = iv.warmupSec ? `${Math.round(iv.warmupSec / 60)}′ WU + ` : "";
-  const cd = iv.cooldownSec ? ` + ${Math.round(iv.cooldownSec / 60)}′ CD` : "";
+  // Whole minutes read as 5′; anything else keeps its seconds (7'45") instead of rounding.
+  const span = (sec: number) => (sec % 60 === 0 ? `${sec / 60}′` : formatDuration(sec));
+  const wu = iv.warmupSec ? `${span(iv.warmupSec)} WU + ` : "";
+  const cd = iv.cooldownSec ? ` + ${span(iv.cooldownSec)} CD` : "";
   return `${wu}${core}${cd}`;
 }
 
@@ -131,13 +163,82 @@ export function formatDistance(m: number, units: Units) {
 // ---------- Status ----------
 export type DisplayStatus = Workout["status"] | "needs_review";
 
-/** A planned workout whose day has passed but was never logged needs review. */
-export function displayStatus(w: Pick<Workout, "status" | "date">, today: string): DisplayStatus {
+/**
+ * A planned workout whose day has passed but was never logged needs review.
+ * A planned rest day counts as done as soon as its day arrives: resting is the plan.
+ */
+export function displayStatus(w: Pick<Workout, "status" | "date" | "type">, today: string): DisplayStatus {
+  if (w.status === "planned" && w.type === "rest" && today && w.date <= today) return "completed";
   if (w.status === "planned" && w.date < today) return "needs_review";
   return w.status;
 }
 
 export const DONE_STATUSES = new Set(["completed", "partial", "substituted"]);
+
+/** Green: the user did what they meant to (a workout or an intentional rest). */
+export const isOnTrack = (w: Pick<Workout, "status" | "date" | "type">, today: string) =>
+  DONE_STATUSES.has(displayStatus(w, today));
+
+/**
+ * A day is missed when it has passed with nothing planned or logged, on or after the
+ * user's first entry, and it isn't covered by an injury. (Today isn't over yet.)
+ */
+export function isMissedDay(
+  date: string,
+  today: string,
+  startDate: string | null,
+  workouts: readonly unknown[],
+  injured: boolean,
+) {
+  return !!today && !!startDate && date < today && date >= startDate && workouts.length === 0 && !injured;
+}
+
+export interface Adherence {
+  onTrack: number;
+  elapsed: number;
+  asPlanned: number;
+  rest: number;
+  moved: number;
+  substituted: number;
+  skipped: number;
+  missed: number;
+}
+
+/**
+ * How a set of days went against the plan, counting days on/after the start date up to today.
+ * Today only counts once it's on track, since it isn't over yet.
+ */
+export function weekAdherence(
+  days: string[],
+  byDay: Map<string, Workout[]>,
+  today: string,
+  startDate: string | null,
+  isInjured: (d: string) => boolean,
+): Adherence {
+  const a: Adherence = { onTrack: 0, elapsed: 0, asPlanned: 0, rest: 0, moved: 0, substituted: 0, skipped: 0, missed: 0 };
+  if (!today || !startDate) return a;
+  for (const d of days) {
+    if (d > today || d < startDate) continue;
+    const ws = byDay.get(d) ?? [];
+    const onTrack = ws.some((w) => isOnTrack(w, today));
+    if (d === today && !onTrack) continue;
+    a.elapsed++;
+    if (onTrack) a.onTrack++;
+    if (isMissedDay(d, today, startDate, ws, isInjured(d))) a.missed++;
+    for (const w of ws) {
+      const st = displayStatus(w, today);
+      if (st === "missed") a.missed++;
+      else if (st === "skipped") a.skipped++;
+      else if (st === "substituted") a.substituted++;
+      else if (st === "completed" || st === "partial") {
+        if (w.type === "rest") a.rest++;
+        else if (w.originalDate) a.moved++;
+        else a.asPlanned++;
+      }
+    }
+  }
+  return a;
+}
 
 // ---------- Benchmarks ----------
 /** Epley estimated one-rep max. */

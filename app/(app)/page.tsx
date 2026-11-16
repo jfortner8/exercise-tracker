@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { eachDay, monthGridRange, weekRange, ymd } from "@/lib/domain";
 import { requireProfile } from "@/lib/dal";
-import { listBenchmarks, listDays, listInjuries, listWorkouts } from "@/lib/db/repo";
+import { firstEntryDate, listBenchmarks, listDays, listInjuries, listWorkouts } from "@/lib/db/repo";
 
 function CalendarSkeleton() {
   return (
@@ -25,11 +25,12 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
     view === "month" ? monthGridRange(anchor, profile.weekStartsOn) : weekRange(anchor, profile.weekStartsOn);
   const [s, e] = [ymd(start), ymd(end)];
 
-  const [workouts, days, injuries, benchmarks] = await Promise.all([
+  const [workouts, days, injuries, benchmarks, startDate] = await Promise.all([
     listWorkouts(user.sub, s, e),
     listDays(user.sub, s, e),
     listInjuries(user.sub),
     listBenchmarks(user.sub),
+    firstEntryDate(user.sub),
   ]);
 
   const title = view === "month" ? format(anchor, "MMMM yyyy") : `Week of ${format(start, "MMM d, yyyy")}`;
@@ -50,6 +51,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
       injuries={injuries}
       benchmarks={benchmarks}
       profile={profile}
+      startDate={startDate}
     />
   );
 }

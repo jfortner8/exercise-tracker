@@ -44,6 +44,7 @@ const workoutInput = z.object({
   originalDate: day.optional(), // the workout's current key date when editing
   type: z.enum(WORKOUT_TYPES),
   title: z.string().trim().min(1).max(200),
+  location: z.string().trim().max(200).optional(),
   status: z.enum(WORKOUT_STATUSES),
   planned: details,
   actual: details,
@@ -64,8 +65,9 @@ export async function saveWorkoutAction(raw: WorkoutInput) {
     const existing = await repo.getWorkout(sub, input.originalDate, input.id);
     if (!existing) throw new Error("Workout not found");
     const { originalDate: keyDate, ...rest } = input;
+    // The form always sends the whole workout, so replace rather than merge:
+    // a field cleared in the form arrives as absent and must not keep its old value.
     const updated: Workout = {
-      ...existing,
       ...rest,
       id: existing.id,
       date: existing.date,
@@ -99,15 +101,66 @@ export async function moveWorkoutAction(date: string, workoutId: string, toDate:
 
 /** Mark a planned workout done, copying the plan into "actual" so only differences need editing. */
 export async function logAsDoneAction(date: string, workoutId: string) {
+  return resolveWorkoutAction(date, workoutId, "completed");
+}
+
+/** Mark a day as an intentional rest day. `today` is the client's local date. */
+export async function markRestDayAction(date: string, today: string) {
   const { sub } = await requireUser();
+  const d = day.parse(date);
+  const now = new Date().toISOString();
+  await repo.saveWorkout(sub, {
+    id: ulid(),
+    date: d,
+    type: "rest",
+    title: "Rest",
+    status: d <= day.parse(today) ? "completed" : "planned",
+    createdAt: now,
+    updatedAt: now,
+  });
+  refresh();
+}
+
+/** One-tap outcome for a planned workout: done as planned, missed, or skipped with a reason. */
+export async function resolveWorkoutAction(
+  date: string,
+  workoutId: string,
+  status: "completed" | "missed" | "skipped",
+  reason?: string,
+) {
+  const { sub } = await requireUser();
+  const input = z
+    .discriminatedUnion("status", [
+      z.object({ status: z.literal("completed") }),
+      z.object({ status: z.literal("missed") }),
+      z.object({ status: z.literal("skipped"), reason: z.string().trim().min(1).max(1000) }),
+    ])
+    .parse({ status, reason });
   const w = await repo.getWorkout(sub, day.parse(date), id.parse(workoutId));
   if (!w) throw new Error("Workout not found");
   await repo.saveWorkout(sub, {
     ...w,
-    status: "completed",
-    actual: w.actual ?? w.planned,
+    status: input.status,
+    actual: input.status === "completed" ? (w.actual ?? w.planned) : undefined,
+    reason: input.status === "skipped" ? input.reason : undefined,
     updatedAt: new Date().toISOString(),
   });
+  refresh();
+}
+
+/**
+ * Swap days: move the dragged workout to `toDate` and that day's planned workouts to its old day.
+ * Both sides keep `originalDate`, so the calendar shows "moved from …".
+ */
+export async function swapDaysAction(fromDate: string, workoutId: string, toDate: string) {
+  const { sub } = await requireUser();
+  const [from, to] = [day.parse(fromDate), day.parse(toDate)];
+  if (from === to) return;
+  const w = await repo.getWorkout(sub, from, id.parse(workoutId));
+  if (!w) throw new Error("Workout not found");
+  const others = (await repo.listWorkouts(sub, to, to)).filter((o) => o.status === "planned");
+  await repo.moveWorkout(sub, w, to);
+  for (const o of others) await repo.moveWorkout(sub, o, from);
   refresh();
 }
 
@@ -131,6 +184,7 @@ export async function copyWeekAction(fromStart: string, toStart: string, times: 
         date: format(addDays(parseISO(w.date), offset), "yyyy-MM-dd"),
         type: w.type,
         title: w.title,
+        location: w.location,
         status: "planned",
         planned: w.planned ?? w.actual,
         createdAt: now,

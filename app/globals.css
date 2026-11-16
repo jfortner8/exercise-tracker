@@ -1,7 +1,13 @@
 @import "tailwindcss";
 
+/*
+ * Themes. Light is the default. Dark applies when the user picks it (data-theme="dark"
+ * on <html>, set before paint by the script in app/layout.tsx), or when they leave it on
+ * System and the device prefers dark. Keep the two dark blocks below identical.
+ */
 
 :root {
+  color-scheme: light;
   --bg: #f7f7f5;
   --surface: #ffffff;
   --surface-2: #f1f1ee;
@@ -14,10 +20,67 @@
   --danger: #dc2626;
   --warn: #d97706;
   --injury: rgba(220, 38, 38, 0.07);
+
+  /* Calendar outcomes: a touch softer than Tailwind's 500s. */
+  --done: oklch(0.67 0.16 150);
+  --done-fg: #ffffff;
+  --missed: oklch(0.61 0.18 26);
+  --missed-fg: #ffffff;
+  --planned-bg: oklch(0.97 0.03 150);
+  --planned-fg: oklch(0.45 0.1 150);
+
+  /* Drink count scale: 0 green -> 6+ intense red. */
+  --drink-0: var(--done);
+  --drink-0-fg: var(--done-fg);
+  --drink-1: oklch(0.9 0.07 150);
+  --drink-1-fg: oklch(0.36 0.08 150);
+  --drink-2: oklch(0.94 0.09 100);
+  --drink-2-fg: oklch(0.4 0.08 90);
+  --drink-3: oklch(0.86 0.14 90);
+  --drink-3-fg: oklch(0.3 0.06 80);
+  --drink-4: oklch(0.77 0.14 60);
+  --drink-4-fg: oklch(0.28 0.06 50);
+  --drink-5: var(--missed);
+  --drink-5-fg: var(--missed-fg);
+  --drink-6: oklch(0.49 0.17 26);
+  --drink-6-fg: #ffffff;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110;
+  --surface: #1a1a18;
+  --surface-2: #232320;
+  --border: #2e2e2a;
+  --text: #ededea;
+  --muted: #9a9a93;
+  --accent: #fb923c;
+  --accent-fg: #1c1209;
+  --today: #fb923c;
+  --danger: #f87171;
+  --warn: #fbbf24;
+  --injury: rgba(248, 113, 113, 0.09);
+  --done: oklch(0.56 0.13 150);
+  --done-fg: oklch(0.98 0.02 150);
+  --missed: oklch(0.53 0.16 26);
+  --missed-fg: oklch(0.98 0.01 26);
+  --planned-bg: oklch(0.56 0.13 150 / 0.13);
+  --planned-fg: oklch(0.82 0.1 150);
+  --drink-1: oklch(0.43 0.08 150);
+  --drink-1-fg: oklch(0.93 0.05 150);
+  --drink-2: oklch(0.52 0.09 100);
+  --drink-2-fg: oklch(0.98 0.03 100);
+  --drink-3: oklch(0.62 0.12 85);
+  --drink-3-fg: oklch(0.2 0.04 80);
+  --drink-4: oklch(0.63 0.14 55);
+  --drink-4-fg: oklch(0.18 0.04 50);
+  --drink-6: oklch(0.41 0.15 26);
+  --drink-6-fg: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #111110;
     --surface: #1a1a18;
     --surface-2: #232320;
@@ -30,6 +93,34 @@
     --danger: #f87171;
     --warn: #fbbf24;
     --injury: rgba(248, 113, 113, 0.09);
+    --done: oklch(0.56 0.13 150);
+    --done-fg: oklch(0.98 0.02 150);
+    --missed: oklch(0.53 0.16 26);
+    --missed-fg: oklch(0.98 0.01 26);
+    --planned-bg: oklch(0.56 0.13 150 / 0.13);
+    --planned-fg: oklch(0.82 0.1 150);
+    --drink-1: oklch(0.43 0.08 150);
+    --drink-1-fg: oklch(0.93 0.05 150);
+    --drink-2: oklch(0.52 0.09 100);
+    --drink-2-fg: oklch(0.98 0.03 100);
+    --drink-3: oklch(0.62 0.12 85);
+    --drink-3-fg: oklch(0.2 0.04 80);
+    --drink-4: oklch(0.63 0.14 55);
+    --drink-4-fg: oklch(0.18 0.04 50);
+    --drink-6: oklch(0.41 0.15 26);
+    --drink-6-fg: #ffffff;
+  }
+}
+
+/* Tailwind's dark: variant follows the same rule as the tokens above. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
   }
 }
 
@@ -46,12 +137,28 @@
   --color-danger: var(--danger);
   --color-warn: var(--warn);
   --color-injury: var(--injury);
+  --color-done: var(--done);
+  --color-done-fg: var(--done-fg);
+  --color-missed: var(--missed);
+  --color-missed-fg: var(--missed-fg);
+  --color-planned-bg: var(--planned-bg);
+  --color-planned-fg: var(--planned-fg);
+  --color-drink-0: var(--drink-0);
+  --color-drink-0-fg: var(--drink-0-fg);
+  --color-drink-1: var(--drink-1);
+  --color-drink-1-fg: var(--drink-1-fg);
+  --color-drink-2: var(--drink-2);
+  --color-drink-2-fg: var(--drink-2-fg);
+  --color-drink-3: var(--drink-3);
+  --color-drink-3-fg: var(--drink-3-fg);
+  --color-drink-4: var(--drink-4);
+  --color-drink-4-fg: var(--drink-4-fg);
+  --color-drink-5: var(--drink-5);
+  --color-drink-5-fg: var(--drink-5-fg);
+  --color-drink-6: var(--drink-6);
+  --color-drink-6-fg: var(--drink-6-fg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-html {
-  color-scheme: light dark;
 }
 
 body {

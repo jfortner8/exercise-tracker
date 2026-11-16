@@ -47,6 +47,7 @@ export interface Workout {
   originalDate?: string; // set when a planned workout is moved
   type: WorkoutType;
   title: string;
+  location?: string; // e.g. "Piedmont Park", "YMCA pool", "Treadmill"
   status: WorkoutStatus;
   planned?: WorkoutDetails;
   actual?: WorkoutDetails;
