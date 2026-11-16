@@ -6,7 +6,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Stride", template: "%s · Stride" },
+  title: { default: "Exercise Tracker", template: "%s · Exercise Tracker" },
   description: "Plan workouts, log what you actually did, and track personal bests.",
 };
 

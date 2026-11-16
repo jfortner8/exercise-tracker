@@ -24,7 +24,7 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
           <span className="grid size-10 place-items-center rounded-xl bg-accent text-accent-fg">
             <Activity className="size-5" />
           </span>
-          <h1 className="text-2xl font-semibold tracking-tight">Stride</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Exercise Tracker</h1>
           <p className="text-sm text-muted">
             Plan your training on a calendar, log what you actually did, and track your personal bests.
           </p>

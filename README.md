@@ -1,4 +1,4 @@
-# Stride: exercise tracker
+# Exercise Tracker
 
 A calendar-first workout tracker. Past days show what you actually did, and future days show what you planned. Built with Next.js 16 on Vercel, backed by AWS (DynamoDB + Cognito).
 

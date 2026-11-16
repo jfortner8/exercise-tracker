@@ -31,7 +31,7 @@ export function Sidebar({ footer }: { footer: ReactNode }) {
         <span className="grid size-7 place-items-center rounded-lg bg-accent text-accent-fg">
           <Activity className="size-4" />
         </span>
-        Stride
+        Exercise Tracker
       </Link>
       <WithPath>{(path) => <nav className="flex flex-col gap-0.5">
         {ITEMS.map(({ href, label, icon: Icon }) => (
