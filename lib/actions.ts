@@ -44,6 +44,7 @@ const workoutInput = z.object({
   originalDate: day.optional(), // the workout's current key date when editing
   type: z.enum(WORKOUT_TYPES),
   title: z.string().trim().min(1).max(200),
+  location: z.string().trim().max(200).optional(),
   status: z.enum(WORKOUT_STATUSES),
   planned: details,
   actual: details,
@@ -64,8 +65,9 @@ export async function saveWorkoutAction(raw: WorkoutInput) {
     const existing = await repo.getWorkout(sub, input.originalDate, input.id);
     if (!existing) throw new Error("Workout not found");
     const { originalDate: keyDate, ...rest } = input;
+    // The form always sends the whole workout, so replace rather than merge:
+    // a field cleared in the form arrives as absent and must not keep its old value.
     const updated: Workout = {
-      ...existing,
       ...rest,
       id: existing.id,
       date: existing.date,
@@ -131,6 +133,7 @@ export async function copyWeekAction(fromStart: string, toStart: string, times: 
         date: format(addDays(parseISO(w.date), offset), "yyyy-MM-dd"),
         type: w.type,
         title: w.title,
+        location: w.location,
         status: "planned",
         planned: w.planned ?? w.actual,
         createdAt: now,

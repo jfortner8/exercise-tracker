@@ -150,6 +150,7 @@ export function WorkoutForm({
   const [error, setError] = useState<string | null>(null);
   const [type, setType] = useState<Workout["type"]>(workout?.type ?? "run");
   const [title, setTitle] = useState(workout?.title ?? "");
+  const [location, setLocation] = useState(workout?.location ?? "");
   const [day, setDay] = useState(workout?.date ?? date);
   const [status, setStatus] = useState<Workout["status"]>(workout?.status ?? "planned");
   const [planned, setPlanned] = useState(toDraft(workout?.planned, units));
@@ -172,6 +173,7 @@ export function WorkoutForm({
       date: day,
       type,
       title: title.trim() || TYPE_META[type].label,
+      location: location.trim() || undefined,
       status,
       planned: fromDraft(planned, units),
       actual: showActual ? fromDraft(actual, units) : undefined,
@@ -213,6 +215,13 @@ export function WorkoutForm({
           onChange={(e) => setTitle(e.target.value)}
           placeholder={type === "run" ? "Easy run, Long run, 5K benchmark…" : TYPE_META[type].label}
           autoFocus={!workout}
+        />
+      </Field>
+      <Field label="Location">
+        <Input
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder={type === "swim" ? "YMCA pool, open water…" : "Piedmont Park, gym, treadmill…"}
         />
       </Field>
 

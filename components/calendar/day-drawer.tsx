@@ -1,7 +1,7 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Check, HeartPulse, Minus, Pencil, Plus, Trash2, Trophy, Wine } from "lucide-react";
+import { Check, HeartPulse, MapPin, Minus, Pencil, Plus, Trash2, Trophy, Wine } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { addResultAction, deleteWorkoutAction, logAsDoneAction, saveDayAction } from "@/lib/actions";
@@ -104,6 +104,14 @@ export function DayDrawer({
                       </div>
                       <div className="text-xs text-muted">
                         {meta.label}
+                        {w.location && (
+                          <>
+                            {" · "}
+                            <MapPin className="inline size-3 -translate-y-px" aria-hidden />
+                            {" "}
+                            {w.location}
+                          </>
+                        )}
                         {w.originalDate && ` · moved from ${format(parseISO(w.originalDate), "EEE MMM d")}`}
                       </div>
                       <div className="mt-2 space-y-1.5 text-sm">
