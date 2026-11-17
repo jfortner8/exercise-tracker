@@ -3,6 +3,7 @@ export const WORKOUT_TYPES = [
   "walk",
   "swim",
   "bike",
+  "row",
   "strength",
   "plyo",
   "yoga",
@@ -39,6 +40,8 @@ export interface WorkoutDetails {
   distanceM?: number;
   intervals?: Intervals;
   description?: string;
+  /** Average heart rate during the workout (bpm). Recorded on what was actually done. */
+  avgHeartRate?: number;
 }
 
 export interface Workout {
@@ -48,6 +51,12 @@ export interface Workout {
   type: WorkoutType;
   title: string;
   location?: string; // e.g. "Piedmont Park", "YMCA pool", "Treadmill"
+  /** For type "sport": key from lib/sports.ts ("soccer", "roller-derby", "other"). */
+  sport?: string;
+  /** Name typed in when sport is "other". */
+  sportName?: string;
+  /** Session key from the sport's list ("match", "practice", "bout"…). */
+  sportSession?: string;
   status: WorkoutStatus;
   planned?: WorkoutDetails;
   actual?: WorkoutDetails;
@@ -64,6 +73,8 @@ export interface DayLog {
   date: string;
   notes?: string;
   drinks?: number;
+  /** One bodyweight per day, stored in kg. */
+  weightKg?: number;
 }
 
 export const DISTANCE_UNITS = ["km", "mi"] as const;
@@ -81,6 +92,10 @@ export interface Profile {
   units: Units;
   weekStartsOn: 0 | 1; // 0 Sunday, 1 Monday
   trackDrinks: boolean;
+  /** Opt-in: log one bodyweight per day; shown on the calendar on days it's logged. */
+  trackWeight: boolean;
+  /** Set once the user completes a sport workout; shows the Sports tab. Not a setting. */
+  hasSports?: boolean;
 }
 
 export type InjuryStatus = "active" | "recovering" | "healed";
@@ -128,4 +143,12 @@ export interface BenchmarkResult {
   reps?: number; // for weight_reps
   workoutId?: string;
   notes?: string;
+}
+
+/** A benchmark result as shown on the calendar, flagged if it set a new PB at the time. */
+export interface DayResult extends BenchmarkResult {
+  benchmarkName: string;
+  metricKind: MetricKind;
+  unit?: string;
+  isPb: boolean;
 }

@@ -6,7 +6,9 @@ import { ulid } from "ulid";
 import { z } from "zod";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { requireUser } from "@/lib/dal";
+import { linkableWorkouts } from "@/lib/benchmarks/linking";
 import * as repo from "@/lib/db/repo";
+import { SPORTS, sportMeta } from "@/lib/sports";
 import {
   BENCHMARK_CATEGORIES,
   DISTANCE_UNITS,
@@ -19,6 +21,12 @@ import {
 } from "@/lib/types";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const SPORT_KEYS = SPORTS.map((s) => s.key) as [string, ...string[]];
+
+/** The Sports tab appears once a sport workout has been completed. */
+async function noteSport(sub: string, w: Pick<Workout, "type" | "status">) {
+  if (w.type === "sport" && (w.status === "completed" || w.status === "partial")) await repo.markHasSports(sub);
+}
 const id = z.string().min(1).max(64);
 const secs = z.number().nonnegative().max(60 * 60 * 48).optional();
 const details = z
@@ -35,6 +43,7 @@ const details = z
       })
       .optional(),
     description: z.string().max(2000).optional(),
+    avgHeartRate: z.number().int().min(30).max(250).optional(),
   })
   .optional();
 
@@ -45,6 +54,9 @@ const workoutInput = z.object({
   type: z.enum(WORKOUT_TYPES),
   title: z.string().trim().min(1).max(200),
   location: z.string().trim().max(200).optional(),
+  sport: z.enum(SPORT_KEYS).optional(),
+  sportName: z.string().trim().max(60).optional(),
+  sportSession: z.string().max(40).optional(),
   status: z.enum(WORKOUT_STATUSES),
   planned: details,
   actual: details,
@@ -58,7 +70,15 @@ export type WorkoutInput = z.infer<typeof workoutInput>;
 
 export async function saveWorkoutAction(raw: WorkoutInput) {
   const { sub } = await requireUser();
-  const input = workoutInput.parse(raw);
+  const parsed = workoutInput.parse(raw);
+  // Sport details only belong on sport workouts; a session must be one the sport offers.
+  const sportDef = parsed.type === "sport" ? sportMeta(parsed.sport) : undefined;
+  const input = {
+    ...parsed,
+    sport: sportDef?.key,
+    sportName: sportDef?.key === "other" ? parsed.sportName || undefined : undefined,
+    sportSession: sportDef?.sessions.some((s) => s.key === parsed.sportSession) ? parsed.sportSession : undefined,
+  };
   const now = new Date().toISOString();
 
   if (input.id && input.originalDate) {
@@ -82,6 +102,7 @@ export async function saveWorkoutAction(raw: WorkoutInput) {
     void _ignored;
     await repo.saveWorkout(sub, { ...rest, id: ulid(), createdAt: now, updatedAt: now });
   }
+  await noteSport(sub, input);
   refresh();
 }
 
@@ -145,6 +166,7 @@ export async function resolveWorkoutAction(
     reason: input.status === "skipped" ? input.reason : undefined,
     updatedAt: new Date().toISOString(),
   });
+  await noteSport(sub, { type: w.type, status: input.status });
   refresh();
 }
 
@@ -185,6 +207,9 @@ export async function copyWeekAction(fromStart: string, toStart: string, times: 
         type: w.type,
         title: w.title,
         location: w.location,
+        sport: w.sport,
+        sportName: w.sportName,
+        sportSession: w.sportSession,
         status: "planned",
         planned: w.planned ?? w.actual,
         createdAt: now,
@@ -198,12 +223,30 @@ export async function copyWeekAction(fromStart: string, toStart: string, times: 
 }
 
 // ---------- Day logs ----------
-export async function saveDayAction(date: string, notes: string | undefined, drinks: number | undefined) {
+/**
+ * Update a day's notes, drinks and/or bodyweight. A field left out keeps its saved value;
+ * null clears it. (So saving notes never wipes drinks or weight hidden by settings.)
+ */
+export async function saveDayAction(
+  date: string,
+  patch: { notes?: string | null; drinks?: number | null; weightKg?: number | null },
+) {
   const { sub } = await requireUser();
+  const d = day.parse(date);
+  const p = z
+    .object({
+      notes: z.string().max(5000).nullable().optional(),
+      drinks: z.number().min(0).max(50).nullable().optional(),
+      weightKg: z.number().positive().max(500).nullable().optional(),
+    })
+    .parse(patch);
+  const existing = (await repo.getDay(sub, d)) ?? { date: d };
+  const pick = <K extends keyof typeof p>(k: K, old: unknown) => (p[k] === undefined ? old : (p[k] ?? undefined));
   await repo.saveDay(sub, {
-    date: day.parse(date),
-    notes: z.string().max(5000).optional().parse(notes)?.trim() || undefined,
-    drinks: z.number().min(0).max(50).optional().parse(drinks) || undefined,
+    date: d,
+    notes: (pick("notes", existing.notes) as string | undefined)?.trim() || undefined,
+    drinks: (pick("drinks", existing.drinks) as number | undefined) || undefined,
+    weightKg: pick("weightKg", existing.weightKg) as number | undefined,
   });
   refresh();
 }
@@ -214,6 +257,7 @@ export async function saveProfileAction(raw: {
   units: Units;
   weekStartsOn: 0 | 1;
   trackDrinks: boolean;
+  trackWeight: boolean;
 }) {
   const { sub, email } = await requireUser();
   const p = z
@@ -222,9 +266,12 @@ export async function saveProfileAction(raw: {
       units: z.object({ distance: z.enum(DISTANCE_UNITS), weight: z.enum(WEIGHT_UNITS) }),
       weekStartsOn: z.union([z.literal(0), z.literal(1)]),
       trackDrinks: z.boolean(),
+      trackWeight: z.boolean(),
     })
     .parse(raw);
-  await repo.saveProfile(sub, { ...p, email });
+  const existing = await repo.getProfile(sub);
+  // Keep internal flags that aren't part of the settings form.
+  await repo.saveProfile(sub, { ...p, email, hasSports: existing?.hasSports });
   refresh();
 }
 
@@ -303,7 +350,14 @@ const resultInput = z.object({
 export async function addResultAction(raw: z.infer<typeof resultInput>) {
   const { sub } = await requireUser();
   const r = resultInput.parse(raw);
-  if (!(await repo.getBenchmark(sub, r.benchmarkId))) throw new Error("Benchmark not found");
+  const bm = await repo.getBenchmark(sub, r.benchmarkId);
+  if (!bm) throw new Error("Benchmark not found");
+  if (r.workoutId) {
+    // Must be this user's workout, on the result's day, of a type the benchmark can belong to.
+    const w = await repo.getWorkout(sub, r.date, r.workoutId);
+    if (!w) throw new Error("That workout isn't on the result's date");
+    if (!linkableWorkouts(bm, [w]).length) throw new Error(`${bm.name} can't be part of a ${w.type} workout`);
+  }
   await repo.saveResult(sub, { ...r, id: ulid() });
   refresh();
 }
@@ -312,4 +366,11 @@ export async function deleteResultAction(benchmarkId: string, date: string, resu
   const { sub } = await requireUser();
   await repo.deleteResult(sub, { benchmarkId: id.parse(benchmarkId), date: day.parse(date), id: id.parse(resultId) });
   refresh();
+}
+
+/** Workouts on one day, for the benchmark form's "Part of workout" picker. */
+export async function workoutsOnDayAction(date: string) {
+  const { sub } = await requireUser();
+  const d = day.parse(date);
+  return repo.listWorkouts(sub, d, d);
 }

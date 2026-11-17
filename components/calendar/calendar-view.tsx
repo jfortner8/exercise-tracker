@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { addDays, format, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, Moon, Wine } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Star, Wine } from "lucide-react";
 import Link from "next/link";
 import { useId, useMemo, useOptimistic, useState, useSyncExternalStore, useTransition } from "react";
 import { moveWorkoutAction, swapDaysAction } from "@/lib/actions";
@@ -22,11 +22,13 @@ import {
   DONE_STATUSES,
   formatDistance,
   isMissedDay,
+  kgToDisplay,
+  weightUnit,
   weekAdherence,
   ymd,
 } from "@/lib/domain";
-import type { BenchmarkDef, DayLog, Injury, Profile, Workout } from "@/lib/types";
-import { TYPE_META } from "@/lib/workout-types";
+import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Units, Workout } from "@/lib/types";
+import { blockMetrics, workoutCategory, type ActivityKey } from "@/lib/activities";
 import { Button, cx } from "../ui";
 import { Sheet } from "../sheet";
 import { CopyWeekDialog } from "./copy-week-dialog";
@@ -47,6 +49,10 @@ export interface CalendarProps {
   profile: Profile;
   /** Earliest workout/day-log date; empty days before it are never "missed". */
   startDate: string | null;
+  /** Benchmark results in view, flagged if they set a PB at the time. */
+  results: DayResult[];
+  /** The user's most recent activities (for the workout form's picker). */
+  recent: ActivityKey[];
 }
 
 /** Local "today" (browser timezone), stable across renders; empty during SSR. */
@@ -84,6 +90,13 @@ export function CalendarView(props: CalendarProps) {
     return map;
   }, [workouts]);
   const logByDay = useMemo(() => new Map(props.dayLogs.map((d) => [d.date, d])), [props.dayLogs]);
+  const resultsByDay = useMemo(() => {
+    const map = new Map<string, DayResult[]>();
+    for (const r of props.results) map.set(r.date, [...(map.get(r.date) ?? []), r]);
+    return map;
+  }, [props.results]);
+  // A logged benchmark result means the day wasn't missed, even with no workout.
+  const activityOn = (d: string) => [...(byDay.get(d) ?? []), ...(resultsByDay.get(d) ?? [])];
   const injuriesOn = (d: string) =>
     injuries.filter((i) => i.startDate <= d && (i.endDate ? d <= i.endDate : i.status !== "healed" && !!today && d <= today));
 
@@ -176,8 +189,11 @@ export function CalendarView(props: CalendarProps) {
                   workouts={byDay.get(d) ?? []}
                   log={logByDay.get(d)}
                   injured={injuriesOn(d).length > 0}
-                  missed={isMissedDay(d, today, props.startDate, byDay.get(d) ?? [], injuriesOn(d).length > 0)}
+                  missed={isMissedDay(d, today, props.startDate, activityOn(d), injuriesOn(d).length > 0)}
                   trackDrinks={profile.trackDrinks}
+                  trackWeight={profile.trackWeight}
+                  units={profile.units}
+                  pb={(resultsByDay.get(d) ?? []).some((r) => r.isPb)}
                   onOpen={() => setSelected(d)}
                 />
               ))}
@@ -189,6 +205,7 @@ export function CalendarView(props: CalendarProps) {
                 today={today}
                 startDate={props.startDate}
                 isInjured={(d) => injuriesOn(d).length > 0}
+                hasResult={(d) => resultsByDay.has(d)}
                 onCopy={() => setCopyFrom(week[0])}
               />
             </div>
@@ -205,8 +222,10 @@ export function CalendarView(props: CalendarProps) {
           log={logByDay.get(selected)}
           injuries={injuries}
           activeInjuries={injuriesOn(selected)}
-          missed={isMissedDay(selected, today, props.startDate, byDay.get(selected) ?? [], injuriesOn(selected).length > 0)}
+          missed={isMissedDay(selected, today, props.startDate, activityOn(selected), injuriesOn(selected).length > 0)}
           benchmarks={props.benchmarks}
+          results={resultsByDay.get(selected) ?? []}
+          recent={props.recent}
           profile={profile}
           onClose={() => setSelected(null)}
         />
@@ -257,6 +276,9 @@ function Legend() {
       <span className="flex items-center gap-1.5">
         <span className="injury-stripe h-3 w-5 rounded border border-border" /> Injured
       </span>
+      <span className="flex items-center gap-1.5">
+        <Star className="size-3.5 fill-amber-400 text-amber-500" /> New PB
+      </span>
       <span className="ml-auto hidden md:inline">Drag planned workouts to reschedule</span>
     </div>
   );
@@ -272,6 +294,9 @@ function DayCell({
   injured,
   missed,
   trackDrinks,
+  trackWeight,
+  units,
+  pb,
   onOpen,
 }: {
   date: string;
@@ -283,6 +308,10 @@ function DayCell({
   injured: boolean;
   missed: boolean;
   trackDrinks: boolean;
+  trackWeight: boolean;
+  units: Units;
+  /** A benchmark result on this day set a new PB. */
+  pb: boolean;
   onOpen: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
@@ -317,6 +346,12 @@ function DayCell({
         isOver && "ring-2 ring-inset ring-accent",
       )}
     >
+      {pb && (
+        <Star
+          className="absolute right-1 top-1 z-10 size-3.5 fill-amber-400 text-amber-500 drop-shadow-sm md:size-4"
+          aria-label="New personal best"
+        />
+      )}
       {/* Workouts fill the tile down to the footer: one = whole area, two = halves, three = thirds. */}
       <div className="flex min-h-0 flex-1 flex-col">
         {workouts.length === 0 && missed ? (
@@ -330,11 +365,20 @@ function DayCell({
           <div className="flex-1 p-1 transition-colors group-hover:bg-surface-2/60 md:p-1.5">{dayLabel}</div>
         ) : (
           workouts.map((w, i) => (
-            <Block key={w.id} workout={w} today={today} detailed={view === "week"} dayLabel={i === 0 ? dayLabel : null} />
+            <Block
+              key={w.id}
+              workout={w}
+              today={today}
+              detailed={view === "week"}
+              dayLabel={i === 0 ? dayLabel : null}
+              units={units}
+              compact={view === "week" || workouts.length < 2 ? "none" : workouts.length === 2 ? "two" : "three"}
+              clearCorner={i === 0 && pb}
+            />
           ))
         )}
       </div>
-      <DayFooter date={date} today={today} log={log} trackDrinks={trackDrinks} />
+      <DayFooter date={date} today={today} log={log} trackDrinks={trackDrinks} trackWeight={trackWeight} units={units} />
     </div>
   );
 }
@@ -351,8 +395,23 @@ const DRINK_COLORS = [
 ];
 
 /** Bottom strip of a day tile, split down the middle: note preview on the left, drink count on the right. */
-function DayFooter({ date, today, log, trackDrinks }: { date: string; today: string; log?: DayLog; trackDrinks: boolean }) {
+function DayFooter({
+  date,
+  today,
+  log,
+  trackDrinks,
+  trackWeight,
+  units,
+}: {
+  date: string;
+  today: string;
+  log?: DayLog;
+  trackDrinks: boolean;
+  trackWeight: boolean;
+  units: Units;
+}) {
   const note = log?.notes?.trim();
+  const weight = log?.weightKg != null ? Math.round(kgToDisplay(log.weightKg, units) * 10) / 10 : null;
   // Future days stay blank; from the day itself onward an unlogged day counts as 0.
   const drinks = today && date <= today ? (log?.drinks ?? 0) : null;
   return (
@@ -360,15 +419,38 @@ function DayFooter({ date, today, log, trackDrinks }: { date: string; today: str
       <span className="flex min-w-0 flex-1 items-center bg-surface px-1 text-muted" title={note}>
         {note && <span className="truncate">{note}</span>}
       </span>
+      {trackWeight && (
+        // Always present when tracking so tiles line up; greyed out on days without a weigh-in.
+        <span
+          className={cx(
+            "flex flex-1 items-center justify-center gap-0.5 border-l border-border font-medium tabular-nums",
+            weight != null ? "bg-surface text-text" : "bg-surface-2",
+          )}
+          title={weight != null ? `Bodyweight ${weight} ${weightUnit(units)}` : "No weight logged"}
+        >
+          {weight != null && (
+            <>
+              {weight}
+              <span className="text-muted">{weightUnit(units)}</span>
+            </>
+          )}
+        </span>
+      )}
       {trackDrinks && (
         <span
           className={cx(
-            "flex flex-1 items-center justify-center border-l border-border font-semibold tabular-nums",
-            drinks == null ? "bg-surface" : DRINK_COLORS[Math.min(drinks, DRINK_COLORS.length - 1)],
+            "flex flex-1 items-center justify-center gap-0.5 border-l border-border font-semibold tabular-nums",
+            // Half drinks (the stepper allows .5) round down to the colour below.
+            drinks == null ? "bg-surface" : DRINK_COLORS[Math.min(Math.floor(drinks), DRINK_COLORS.length - 1)],
           )}
           title={drinks != null ? `${drinks} drink${drinks === 1 ? "" : "s"}` : undefined}
         >
-          {drinks}
+          {drinks != null && (
+            <>
+              <Wine className="size-2.5 shrink-0 opacity-80 md:size-3" aria-hidden />
+              {drinks}
+            </>
+          )}
         </span>
       )}
     </div>
@@ -380,11 +462,19 @@ function Block({
   today,
   detailed,
   dayLabel,
+  units,
+  compact,
+  clearCorner = false,
 }: {
   workout: Workout;
   today: string;
   detailed: boolean;
   dayLabel: React.ReactNode;
+  units: Units;
+  /** Several workouts share a month tile: keep to the most important line(s). */
+  compact: "none" | "two" | "three";
+  /** Leave room in the top-right for the PB star. */
+  clearCorner?: boolean;
 }) {
   const status = today ? displayStatus(w, today) : w.status;
   const draggable = w.status === "planned";
@@ -393,10 +483,12 @@ function Block({
     data: { workout: w },
     disabled: !draggable,
   });
-  const meta = TYPE_META[w.type];
   const done = DONE_STATUSES.has(status);
-  const rest = w.type === "rest";
-  const dur = detailsDurationSec(done ? (w.actual ?? w.planned) : w.planned);
+  const cat = workoutCategory(w);
+  const metrics = blockMetrics(w, units);
+  // Don't repeat "Run" twice when the title is just the category.
+  const titleIsCategory = w.title.trim().toLowerCase() === cat.label.toLowerCase();
+  const struck = status === "skipped" && "line-through";
 
   return (
     <div
@@ -405,8 +497,9 @@ function Block({
       {...attributes}
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined}
       className={cx(
-        "relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden px-1 py-0.5 text-[11px] leading-tight transition-[filter] group-hover:brightness-95 md:px-1.5 md:py-1 md:text-xs",
+        "relative flex min-h-0 flex-1 flex-col overflow-hidden px-1 py-0.5 text-[11px] leading-tight transition-[filter] group-hover:brightness-95 md:px-1.5 md:py-1 md:text-xs",
         !dayLabel && "border-t border-surface",
+        clearCorner && "pr-5 md:pr-6",
         done && "bg-done text-done-fg",
         status === "planned" &&
           "border border-dashed border-done bg-planned-bg text-planned-fg",
@@ -416,20 +509,45 @@ function Block({
         draggable && "cursor-grab touch-none active:cursor-grabbing",
         isDragging && "z-20 opacity-80 shadow-lg",
       )}
-      title={`${meta.label}: ${w.title}`}
+      title={[w.title, `${cat.emoji} ${cat.label}`, metrics].filter(Boolean).join(" · ")}
     >
-      {status === "needs_review" && <span className="absolute right-1 top-1 size-2 rounded-full bg-warn" />}
-      <div className="flex min-w-0 items-center gap-1">
-        {dayLabel}
-        {rest && <Moon className="size-3 shrink-0" aria-hidden />}
-        <span className={cx("truncate font-medium", status === "skipped" && "line-through")}>{w.title}</span>
-      </div>
-      {detailed && (
-        <span className="block opacity-80">
-          {meta.label}
-          {dur ? ` · ${Math.round(dur / 60)} min` : ""}
-          {w.originalDate ? ` · moved from ${format(parseISO(w.originalDate), "EEE")}` : ""}
-        </span>
+      {status === "needs_review" && <span className="absolute bottom-1 right-1 size-2 rounded-full bg-warn" />}
+      {compact !== "none" ? (
+        // Shared month tile: date + emoji + title on one line, metrics below when two share it.
+        <>
+          <div className="flex min-w-0 items-center gap-1">
+            {dayLabel}
+            <span className="shrink-0" aria-hidden>
+              {cat.emoji}
+            </span>
+            <span className={cx("truncate font-medium", struck)}>{w.title}</span>
+          </div>
+          {compact === "two" && metrics && (
+            <span className="hidden truncate tabular-nums opacity-80 md:block">{metrics}</span>
+          )}
+        </>
+      ) : (
+        <>
+          {dayLabel && <div className="flex shrink-0">{dayLabel}</div>}
+          {/* Title, category and basics, centered in the block. */}
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden text-center">
+            {!titleIsCategory && (
+              <span className={cx("max-w-full truncate font-semibold", struck)}>{w.title}</span>
+            )}
+            <span
+              className={cx(
+                "max-w-full truncate",
+                titleIsCategory ? cx("font-semibold", struck) : "hidden opacity-90 md:block",
+              )}
+            >
+              <span aria-hidden>{cat.emoji}</span> {cat.label}
+            </span>
+            {metrics && <span className="hidden max-w-full truncate tabular-nums opacity-80 md:block">{metrics}</span>}
+            {detailed && w.originalDate && (
+              <span className="hidden opacity-70 md:block">moved from {format(parseISO(w.originalDate), "EEE")}</span>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -443,6 +561,7 @@ function WeekSummary({
   today,
   startDate,
   isInjured,
+  hasResult,
   onCopy,
 }: {
   week: string[];
@@ -452,11 +571,12 @@ function WeekSummary({
   today: string;
   startDate: string | null;
   isInjured: (d: string) => boolean;
+  hasResult: (d: string) => boolean;
   onCopy: () => void;
 }) {
   const ws = week.flatMap((d) => byDay.get(d) ?? []).filter((w) => w.type !== "rest");
   const done = ws.filter((w) => DONE_STATUSES.has(w.status));
-  const a = weekAdherence(week, byDay, today, startDate, isInjured);
+  const a = weekAdherence(week, byDay, today, startDate, isInjured, hasResult);
   const parts = [
     a.asPlanned && `${a.asPlanned} as planned`,
     a.rest && `${a.rest} rest`,

@@ -6,6 +6,7 @@ import {
   PutCommand,
   QueryCommand,
   TransactWriteCommand,
+  UpdateCommand,
   type QueryCommandInput,
 } from "@aws-sdk/lib-dynamodb";
 import { normalizeUnits } from "@/lib/domain";
@@ -76,6 +77,7 @@ export const defaultProfile = (email: string, name?: string): Profile => ({
   units: { distance: "mi", weight: "lb" },
   weekStartsOn: 1,
   trackDrinks: false,
+  trackWeight: false,
 });
 
 export async function ensureProfile(sub: string, email: string, name?: string) {
@@ -96,16 +98,47 @@ export async function getProfile(sub: string): Promise<Profile | null> {
   const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: "PROFILE" } }));
   if (!res.Item) return null;
   const p = strip<Profile>(res.Item);
-  return { ...p, units: normalizeUnits(p.units) };
+  return { ...p, units: normalizeUnits(p.units), trackWeight: p.trackWeight === true, hasSports: p.hasSports === true };
 }
 
 export const saveProfile = (sub: string, p: Profile) => put(sub, "PROFILE", "profile", p);
+
+/** Flag that the user has completed a sport workout (shows the Sports tab). */
+export const markHasSports = (sub: string) =>
+  db().send(
+    new UpdateCommand({
+      TableName: T(),
+      Key: { PK: pk(sub), SK: "PROFILE" },
+      UpdateExpression: "SET hasSports = :t",
+      ConditionExpression: "attribute_exists(PK)",
+      ExpressionAttributeValues: { ":t": true },
+    }),
+  ).catch((e: Error) => {
+    if (e.name !== "ConditionalCheckFailedException") throw e;
+  });
 
 // ---------- Workouts ----------
 const woSK = (date: string, id: string) => `WO#${date}#${id}`;
 
 export const listWorkouts = (sub: string, start: string, end: string) =>
   between(sub, "WO#", start, end) as Promise<Workout[]>;
+
+/** The user's latest workouts up to and including `today`, newest first (for "recent activities"). */
+export async function recentWorkouts(sub: string, today: string, limit = 30): Promise<Workout[]> {
+  const res = await db().send(
+    new QueryCommand({
+      TableName: T(),
+      KeyConditionExpression: "PK = :pk AND SK BETWEEN :a AND :b",
+      ExpressionAttributeValues: { ":pk": pk(sub), ":a": "WO#0000", ":b": `WO#${today}~` },
+      ScanIndexForward: false,
+      Limit: limit,
+    }),
+  );
+  return (res.Items ?? []).map((it) => strip<Workout>(it));
+}
+
+/** Every workout the user has logged (Sports tab tallies). */
+export const listAllWorkouts = (sub: string) => beginsWith<Workout>(sub, "WO#");
 
 export async function getWorkout(sub: string, date: string, id: string) {
   const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: woSK(date, id) } }));
@@ -179,8 +212,16 @@ export const listWorkoutsForInjury = (sub: string, injuryId: string) =>
 export const listDays = (sub: string, start: string, end: string) =>
   between(sub, "DAY#", start, end) as Promise<DayLog[]>;
 
+/** Every day log (notes, drinks, weigh-ins) — for the Weight page. */
+export const listAllDays = (sub: string) => beginsWith<DayLog>(sub, "DAY#");
+
+export async function getDay(sub: string, date: string) {
+  const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: `DAY#${date}` } }));
+  return res.Item ? strip<DayLog>(res.Item) : null;
+}
+
 export async function saveDay(sub: string, d: DayLog) {
-  const empty = !d.notes?.trim() && !d.drinks;
+  const empty = !d.notes?.trim() && !d.drinks && d.weightKg == null;
   if (empty) return del(sub, `DAY#${d.date}`);
   return put(sub, `DAY#${d.date}`, "day", d);
 }

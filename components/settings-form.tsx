@@ -22,6 +22,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             units: p.units,
             weekStartsOn: p.weekStartsOn,
             trackDrinks: p.trackDrinks,
+            trackWeight: p.trackWeight,
           });
           setSaved(true);
         });
@@ -78,6 +79,14 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             label="Track drinks"
             description="Adds a drinks counter to each day and a weekly total to the calendar. Hidden everywhere when off."
           />
+          <div className="mt-4">
+            <Toggle
+              checked={p.trackWeight}
+              onChange={(v) => setP({ ...p, trackWeight: v })}
+              label="Track bodyweight"
+              description="Log one weight per day from the day view. It shows on the calendar on days you log it."
+            />
+          </div>
         </div>
       </Card>
       <div className="mt-4 flex items-center justify-end gap-3">

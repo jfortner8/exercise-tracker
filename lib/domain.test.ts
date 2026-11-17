@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Workout } from "./types";
 import {
+  calendarResults,
   describeDuration,
   describeIntervals,
   displayStatus,
@@ -194,5 +195,29 @@ describe("describeIntervals", () => {
     expect(describeIntervals({ reps: 6, workSec: 126, restSec: 60, warmupSec: 300, cooldownSec: 300 })).toBe(
       "5′ WU + 6× 126/60 + 5′ CD",
     );
+  });
+});
+
+describe("calendarResults", () => {
+  it("flags results that set a PB at the time and keeps only the range", () => {
+    const tenK = { id: "b10", name: "10K run", category: "cardio", metricKind: "time", direction: "lower", createdAt: "" } as const;
+    const results = [
+      { id: "r1", benchmarkId: "b10", date: "2026-10-01", value: 3300 },
+      { id: "r2", benchmarkId: "b10", date: "2026-11-12", value: 3150 }, // new PB, inside the 11K
+      { id: "r3", benchmarkId: "b10", date: "2026-11-14", value: 3200 }, // slower: not a PB
+    ];
+    const out = calendarResults([tenK], results, "2026-11-01", "2026-11-30");
+    expect(out.map((r) => [r.id, r.isPb, r.benchmarkName])).toEqual([
+      ["r2", true, "10K run"],
+      ["r3", false, "10K run"],
+    ]);
+  });
+});
+
+describe("benchmark results count as training", () => {
+  it("a day with only a benchmark result is on track, not missed", () => {
+    const days = ["2026-11-14", "2026-11-15"];
+    const a = weekAdherence(days, new Map(), "2026-11-16", "2026-11-01", () => false, (d) => d === "2026-11-15");
+    expect(a).toMatchObject({ onTrack: 1, elapsed: 2, missed: 1 }); // the 14th is still missed
   });
 });
