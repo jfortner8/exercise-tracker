@@ -368,7 +368,7 @@ async function checkResult(sub: string, r: z.infer<typeof resultInput>) {
 export async function addResultAction(raw: z.infer<typeof resultInput>) {
   const { sub } = await requireUser();
   const r = resultInput.parse(raw);
-  await checkResult(sub, r);
+  const bm = await checkResult(sub, r);
   await repo.saveResult(sub, { ...r, id: ulid() });
   if (bm.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
   refresh();
@@ -381,9 +381,11 @@ export async function updateResultAction(raw: z.infer<typeof resultInput> & { id
   const resultId = id.parse(raw.id);
   const old = await repo.getResult(sub, { benchmarkId: r.benchmarkId, date: day.parse(raw.originalDate), id: resultId });
   if (!old) throw new Error("Result not found");
-  await checkResult(sub, r);
+  const bm = await checkResult(sub, r);
   // The form sends the whole result, so cleared fields (notes, link) are dropped rather than kept.
   await repo.replaceResult(sub, old, { ...r, id: resultId });
+  // An edited value or date can change the PB and its history on the leaderboards.
+  if (bm.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
   refresh();
 }
 
