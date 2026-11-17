@@ -16,7 +16,7 @@ async function Trend() {
     return (
       <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted">
         Bodyweight tracking is off.{" "}
-        <Link href="/settings" className="font-medium text-accent hover:underline">
+        <Link href="/settings" className="font-medium text-accent-ink hover:underline">
           Turn on &ldquo;Track bodyweight&rdquo; in Settings
         </Link>{" "}
         to log a weight each day.

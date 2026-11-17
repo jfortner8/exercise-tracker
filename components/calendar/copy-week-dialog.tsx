@@ -61,7 +61,7 @@ export function CopyWeekDialog({
               />
             </Field>
           </div>
-          {msg && <p className="text-sm text-accent">{msg}</p>}
+          {msg && <p className="text-sm text-accent-ink">{msg}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" onClick={onClose}>
               Cancel

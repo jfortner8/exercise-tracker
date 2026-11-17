@@ -85,7 +85,7 @@ function BenchmarkCard({ def, results, units }: { def: BenchmarkDef; results: Be
       <Card className="h-full p-4 transition-colors group-hover:border-accent/60">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-medium">{def.name}</h3>
-          {pb && <Trophy className="size-4 shrink-0 text-accent" />}
+          {pb && <Trophy className="size-4 shrink-0 text-accent-ink" />}
         </div>
         {pb ? (
           <>
@@ -114,7 +114,7 @@ function Sparkline({ def, results }: { def: BenchmarkDef; results: BenchmarkResu
   const norm = (y: number) => (def.direction === "lower" ? (y - min) / span : 1 - (y - min) / span);
   const pts = ys.map((y, i) => `${(i / (ys.length - 1)) * 100},${4 + norm(y) * 24}`).join(" ");
   return (
-    <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="mt-3 h-8 w-full text-accent" aria-hidden>
+    <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="mt-3 h-8 w-full text-accent-ink" aria-hidden>
       <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
     </svg>
   );
@@ -146,7 +146,7 @@ function Suggestions({ tracked }: { tracked: Set<string | undefined> }) {
                     start(() => trackCatalogBenchmarkAction(a.key));
                   }}
                   className={cx(
-                    "inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-medium hover:border-accent hover:text-accent disabled:opacity-60",
+                    "inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-medium hover:border-accent hover:text-accent-ink disabled:opacity-60",
                     busy === a.key && pending && "animate-pulse",
                   )}
                 >

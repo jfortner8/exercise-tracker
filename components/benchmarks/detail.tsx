@@ -63,7 +63,7 @@ export function BenchmarkDetail({ def, results, units }: { def: BenchmarkDef; re
         <Card className="p-4">
           {pb ? (
             <div className="mb-4 flex items-center gap-3">
-              <Trophy className="size-6 text-accent" />
+              <Trophy className="size-6 text-accent-ink" />
               <div>
                 <div className="text-3xl font-semibold tabular-nums tracking-tight">{formatResult(def, pb, units)}</div>
                 <div className="text-sm text-muted">
@@ -156,7 +156,7 @@ export function BenchmarkDetail({ def, results, units }: { def: BenchmarkDef; re
                 <td className="px-4 py-2 tabular-nums">{format(parseISO(r.date), "MMM d, yyyy")}</td>
                 <td className={cx("px-4 py-2 tabular-nums", r.isPb && "font-semibold")}>
                   {formatResult(def, r, units)}
-                  {r.id === pb?.id && <Trophy className="ml-1.5 inline size-3.5 text-accent" />}
+                  {r.id === pb?.id && <Trophy className="ml-1.5 inline size-3.5 text-accent-ink" />}
                 </td>
                 <td className="hidden px-4 py-2 text-muted sm:table-cell">{r.notes}</td>
                 <td className="whitespace-nowrap px-2">

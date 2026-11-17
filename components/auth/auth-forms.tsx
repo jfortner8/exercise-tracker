@@ -121,7 +121,7 @@ function CodeStep({
       }}
     >
       <div className="flex gap-3 rounded-lg border border-border bg-surface p-3 text-sm">
-        <MailCheck className="mt-0.5 size-5 shrink-0 text-accent" />
+        <MailCheck className="mt-0.5 size-5 shrink-0 text-accent-ink" />
         <p>
           We sent a code to <strong className="break-all">{email}</strong>. It can take a minute to arrive.
         </p>
@@ -146,7 +146,7 @@ function CodeStep({
         <button
           type="button"
           disabled={resent === "sending"}
-          className="font-medium text-accent hover:underline disabled:opacity-60"
+          className="font-medium text-accent-ink hover:underline disabled:opacity-60"
           onClick={async () => {
             setResent("sending");
             await resendCodeAction({ email });
@@ -206,7 +206,7 @@ export function SignInForm() {
       <div className="space-y-1">
         <div className="flex items-baseline justify-between">
           <span className="text-sm font-medium text-muted">Password</span>
-          <Link href="/forgot-password" className="text-xs font-medium text-accent hover:underline">
+          <Link href="/forgot-password" className="text-xs font-medium text-accent-ink hover:underline">
             Forgot password?
           </Link>
         </div>
@@ -276,7 +276,7 @@ export function SignUpForm() {
               key={c.label}
               className={cx(
                 "rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors",
-                c.ok ? "bg-accent/15 text-accent" : "bg-surface-2 text-muted",
+                c.ok ? "bg-accent/15 text-accent-ink" : "bg-surface-2 text-muted",
               )}
             >
               {c.label}
