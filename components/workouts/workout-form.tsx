@@ -13,8 +13,9 @@ import {
   parseMinutesInput,
 } from "@/lib/domain";
 import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
-import { activityKey, activityMeta, applyActivity, type ActivityKey } from "@/lib/activities";
-import { SPORTS, sportCategory, sportMeta } from "@/lib/sports";
+import { activityKey, activityMeta, applyActivity, autoTitle, type ActivityKey } from "@/lib/activities";
+import { DANCE_SESSIONS, DANCE_STYLES } from "@/lib/dance";
+import { SPORTS, sportMeta } from "@/lib/sports";
 import { STATUS_LABEL, TYPE_META } from "@/lib/workout-types";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
 
@@ -268,8 +269,10 @@ export function WorkoutForm({
   const [sport, setSport] = useState(workout?.sport ?? "");
   const [sportName, setSportName] = useState(workout?.sportName ?? "");
   const [sportSession, setSportSession] = useState(workout?.sportSession ?? "");
+  const [danceStyle, setDanceStyle] = useState(workout?.danceStyle ?? "");
+  const [danceStyleName, setDanceStyleName] = useState(workout?.danceStyleName ?? "");
+  const [danceSession, setDanceSession] = useState(workout?.danceSession ?? "");
   const sportDef = type === "sport" ? sportMeta(sport) : undefined;
-  const category = type === "sport" ? sportCategory({ sport, sportName, sportSession }) : undefined;
   // The picker shows a recent sport as its own option; otherwise it shows the plain type.
   const currentKey = activityKey({ type, sport });
   const pickerValue = recent.includes(currentKey) ? currentKey : type;
@@ -296,6 +299,22 @@ export function WorkoutForm({
 
   const showActual = status !== "planned" && status !== "skipped" && status !== "missed";
   const showReason = status !== "planned" && status !== "completed";
+  // What the title becomes if left blank, from the choices so far: "10 km Run", "Roller Derby Bout".
+  const autoName = autoTitle(
+    {
+      type,
+      sport,
+      sportName,
+      sportSession,
+      danceStyle,
+      danceStyleName,
+      danceSession,
+      status,
+      planned: fromDraft(planned, units),
+      actual: showActual ? fromDraft(actual, units) : undefined,
+    },
+    units,
+  );
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -318,13 +337,20 @@ export function WorkoutForm({
       originalDate: workout?.date,
       date: day,
       type,
-      title: title.trim() || category || TYPE_META[type].label,
+      title: title.trim() || autoName,
       location: location.trim() || undefined,
       ...(type === "sport"
         ? {
             sport: sport || undefined,
             sportName: sport === "other" ? sportName.trim() || undefined : undefined,
             sportSession: sportSession || undefined,
+          }
+        : {}),
+      ...(type === "dance"
+        ? {
+            danceStyle: danceStyle || undefined,
+            danceStyleName: danceStyle === "other" ? danceStyleName.trim() || undefined : undefined,
+            danceSession: danceSession || undefined,
           }
         : {}),
       status,
@@ -420,13 +446,50 @@ export function WorkoutForm({
           )}
         </div>
       )}
+      {type === "dance" && (
+        <div className="space-y-3 rounded-lg border border-border p-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Style (optional)" className={danceStyle === "other" ? "" : "col-span-2"}>
+              <Select value={danceStyle} onChange={(e) => setDanceStyle(e.target.value)}>
+                <option value="">Any / not set</option>
+                {DANCE_STYLES.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {danceStyle === "other" && (
+              <Field label="Style name">
+                <Input value={danceStyleName} onChange={(e) => setDanceStyleName(e.target.value)} placeholder="Reggaeton, voguing…" />
+              </Field>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Dance session">
+            {DANCE_SESSIONS.map((s) => (
+              <button
+                type="button"
+                key={s.key}
+                role="radio"
+                aria-checked={danceSession === s.key}
+                // Tap again to clear.
+                onClick={() => setDanceSession(danceSession === s.key ? "" : s.key)}
+                className={cx(
+                  "rounded-full border px-3 py-1 text-xs font-medium",
+                  danceSession === s.key ? "border-accent bg-accent/10 text-accent-ink" : "border-border text-muted hover:text-text",
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <Field label="Title">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={
-            category ?? (type === "run" ? "Easy run, Long run, 5K benchmark…" : TYPE_META[type].label)
-          }
+          placeholder={autoName}
           autoFocus={!workout}
         />
       </Field>
