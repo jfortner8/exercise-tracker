@@ -394,6 +394,25 @@ export async function getCode(code: string): Promise<CodeTarget | null> {
     : { kind: "friend", sub: res.Item.sub as string };
 }
 
+// Wrong codes entered, per user per day (UTC): PK = USER#<sub>, SK = CODEFAIL#<date>, { count }.
+const codeFailKey = (sub: string, day: string) => ({ PK: pk(sub), SK: `CODEFAIL#${day}` });
+
+export async function getCodeFailures(sub: string, day: string): Promise<number> {
+  const res = await db().send(new GetCommand({ TableName: T(), Key: codeFailKey(sub, day) }));
+  return (res.Item?.count as number | undefined) ?? 0;
+}
+
+export const addCodeFailure = (sub: string, day: string) =>
+  db().send(
+    new UpdateCommand({
+      TableName: T(),
+      Key: codeFailKey(sub, day),
+      UpdateExpression: "SET entity = :e ADD #c :one",
+      ExpressionAttributeNames: { "#c": "count" },
+      ExpressionAttributeValues: { ":e": "codeFailures", ":one": 1 },
+    }),
+  );
+
 /** Claims an unused code as this user's friend code, retiring `old`. False if the code was taken or the old one changed. */
 export const setFriendCode = (sub: string, code: string, old?: string) =>
   tryWrite(() =>

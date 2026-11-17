@@ -5,7 +5,7 @@ import { ulid } from "ulid";
 import { z } from "zod";
 import { requireUser } from "@/lib/dal";
 import * as repo from "@/lib/db/repo";
-import { CODE_LENGTH, newCode, nextAdmin, normalizeCode } from "@/lib/social";
+import { CODE_FAILURES_PER_DAY, CODE_LENGTH, newCode, nextAdmin, normalizeCode } from "@/lib/social";
 import type { Club } from "@/lib/types";
 
 /*
@@ -31,13 +31,22 @@ export async function joinWithCodeAction(raw: string): Promise<SocialResult> {
   const { sub, displayName } = await me();
   const code = normalizeCode(z.string().max(40).parse(raw));
   if (code.length !== CODE_LENGTH) return { error: "Codes are 8 letters and numbers, like ABCD-EFGH." };
+  // After too many wrong codes today, every attempt fails with a generic error (see CODE_FAILURES_PER_DAY).
+  const today = new Date().toISOString().slice(0, 10);
+  if ((await repo.getCodeFailures(sub, today)) >= CODE_FAILURES_PER_DAY) return { error: "An error occurred." };
   const target = await repo.getCode(code);
-  if (!target) return { error: "No friend or club has that code. Check it and try again." };
+  if (!target) {
+    await repo.addCodeFailure(sub, today);
+    return { error: "No friend or club has that code. Check it and try again." };
+  }
 
   if (target.kind === "friend") {
     if (target.sub === sub) return { error: "That's your own code. Send it to a friend instead." };
     const them = await repo.getProfile(target.sub);
-    if (!them) return { error: "No friend or club has that code. Check it and try again." };
+    if (!them) {
+      await repo.addCodeFailure(sub, today);
+      return { error: "No friend or club has that code. Check it and try again." };
+    }
     const since = now();
     const added = await repo.addFriendship({ sub, displayName, since }, { sub: target.sub, displayName: them.displayName, since });
     if (!added) return { error: `You and ${them.displayName} are already friends.` };

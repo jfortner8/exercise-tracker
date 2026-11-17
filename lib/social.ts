@@ -22,6 +22,12 @@ export function newCode(): string {
   return out;
 }
 
+/**
+ * Wrong codes a user may enter per day (UTC) before every code attempt fails. People aren't
+ * told about the limit; past it they just see a generic error, so guessing gets no feedback.
+ */
+export const CODE_FAILURES_PER_DAY = 20;
+
 /** What someone typed or pasted, as a stored code: "abcd-efgh " -> "ABCDEFGH". */
 export const normalizeCode = (input: string) => input.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
