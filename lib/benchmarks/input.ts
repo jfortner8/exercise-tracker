@@ -1,11 +1,16 @@
-import { displayToKg, displayToMeters, distanceUnit, formatClock, kgToDisplay, metersToDisplay, parseClock, weightUnit } from "../domain";
+import { clockEntryError, displayToKg, displayToMeters, distanceUnit, formatClock, kgToDisplay, metersToDisplay, parseClock, weightUnit } from "../domain";
 import type { BenchmarkDef, Units } from "../types";
+
+/** Timed benchmarks, entered with the timer-style clock field. */
+export function isClock(bm: Pick<BenchmarkDef, "metricKind">) {
+  return bm.metricKind === "time" || bm.metricKind === "duration";
+}
 
 export function valueLabel(bm: Pick<BenchmarkDef, "metricKind" | "unit">, units: Units) {
   switch (bm.metricKind) {
     case "time":
     case "duration":
-      return "Time (mm:ss)";
+      return "Time";
     case "distance":
       return `Distance (${distanceUnit(units)})`;
     case "weight_reps":
@@ -24,7 +29,7 @@ export function parseValue(bm: Pick<BenchmarkDef, "metricKind">, raw: string, un
   switch (bm.metricKind) {
     case "time":
     case "duration":
-      return parseClock(s);
+      return clockEntryError(s) ? NaN : parseClock(s);
     case "distance":
       return displayToMeters(Number(s), units);
     case "weight_reps":

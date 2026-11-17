@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Workout } from "./types";
 import {
   calendarResults,
+  clockEntry,
+  clockEntryError,
   describeDuration,
   improvementPct,
   describeIntervals,
@@ -48,6 +50,55 @@ describe("clock parsing", () => {
     expect(formatClock(1531)).toBe("25:31");
     expect(formatClock(3725)).toBe("1:02:05");
     expect(formatClock(42.5)).toBe("0:42.5");
+    expect(formatClock(42.53)).toBe("0:42.53");
+    expect(formatClock(102.53)).toBe("1:42.53");
+    expect(parseClock(formatClock(42.53))).toBe(42.53);
+  });
+});
+
+describe("clock entry (digits fill from the right)", () => {
+  // Types each character in turn, as a phone keypad would.
+  const type = (keys: string, start = "") => [...keys].reduce((shown, k) => clockEntry(shown + k, shown), start);
+  const backspace = (shown: string) => clockEntry(shown.slice(0, -1), shown);
+
+  it("adds the colons as you type", () => {
+    expect(type("5")).toBe("0:05");
+    expect(type("53")).toBe("0:53");
+    expect(type("531")).toBe("5:31");
+    expect(type("2531")).toBe("25:31");
+    expect(type("10231")).toBe("1:02:31");
+    expect(type("123456")).toBe("12:34:56");
+  });
+  it("caps at six digits and drops leading zeros", () => {
+    expect(type("1234567")).toBe("12:34:56");
+    expect(type("0005")).toBe("0:05");
+  });
+  it("takes tenths and hundredths after a dot or comma", () => {
+    expect(type("42.")).toBe("0:42.");
+    expect(type("42.53")).toBe("0:42.53");
+    expect(type("42.539")).toBe("0:42.53");
+    expect(type("42,5")).toBe("0:42.5");
+    expect(type(".5")).toBe("0:00.5");
+  });
+  it("backspace removes the last digit", () => {
+    expect(backspace("25:31")).toBe("2:53");
+    expect(backspace("0:05")).toBe("");
+    expect(backspace("0:42.5")).toBe("0:42.");
+    expect(backspace("0:42.")).toBe("0:42");
+  });
+  it("deleting an added colon deletes a digit instead of sticking", () => {
+    expect(clockEntry("2531", "25:31")).toBe("2:53");
+  });
+  it("ignores typed or pasted colons", () => {
+    expect(clockEntry("25:31")).toBe("25:31");
+    expect(clockEntry("1:02:05")).toBe("1:02:05");
+    expect(type(":")).toBe("");
+  });
+  it("flags impossible seconds and minutes", () => {
+    expect(clockEntryError(type("2575"))).toBe("Seconds must be under 60");
+    expect(clockEntryError(type("17500"))).toBe("Minutes must be under 60");
+    expect(clockEntryError("75:00")).toBeNull();
+    expect(clockEntryError("25:31")).toBeNull();
   });
 });
 
