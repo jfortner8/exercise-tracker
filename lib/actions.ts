@@ -14,9 +14,11 @@ import {
   BENCHMARK_CATEGORIES,
   DISTANCE_UNITS,
   METRIC_KINDS,
+  SHARE_LEVELS,
   WORKOUT_STATUSES,
   WEIGHT_UNITS,
   WORKOUT_TYPES,
+  type Share,
   type Units,
   type Workout,
 } from "@/lib/types";
@@ -258,7 +260,7 @@ export async function saveProfileAction(raw: {
   units: Units;
   weekStartsOn: 0 | 1;
   trackDrinks: boolean;
-  leaderboard: boolean;
+  share: Share;
   trackWeight: boolean;
 }) {
   const { sub, email } = await requireUser();
@@ -268,15 +270,16 @@ export async function saveProfileAction(raw: {
       units: z.object({ distance: z.enum(DISTANCE_UNITS), weight: z.enum(WEIGHT_UNITS) }),
       weekStartsOn: z.union([z.literal(0), z.literal(1)]),
       trackDrinks: z.boolean(),
-      leaderboard: z.boolean(),
+      share: z.enum(SHARE_LEVELS),
       trackWeight: z.boolean(),
     })
     .parse(raw);
   const existing = await repo.getProfile(sub);
-  // Keep internal flags that aren't part of the settings form.
-  await repo.saveProfile(sub, { ...p, email, hasSports: existing?.hasSports });
+  // Keep internal fields that aren't part of the settings form.
+  await repo.saveProfile(sub, { ...p, email, hasSports: existing?.hasSports, friendCode: existing?.friendCode });
   // Opting in/out or renaming changes what others see on leaderboards.
   await syncLeaderboard(sub);
+  if (existing && existing.displayName !== p.displayName) await repo.updateSocialName(sub, p.displayName);
   refresh();
 }
 

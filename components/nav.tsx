@@ -1,17 +1,23 @@
 "use client";
 
-import { Activity, CalendarDays, HeartPulse, Medal, Scale, Settings, Trophy, Volleyball } from "lucide-react";
+import { Activity, CalendarDays, HeartPulse, Medal, Scale, Settings, Trophy, Users, Volleyball } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { cx } from "./ui";
 
-/** `short` is the label in the phone's bottom bar, where up to seven tabs share the width. */
-type NavItem = { href: string; label: string; short?: string; icon: typeof Trophy };
+/**
+ * `short` is the label in the phone's bottom bar, where up to seven tabs share the width.
+ * `desktopOnly` items skip that bar (phones reach them from another page); `also` lists
+ * other paths that highlight the item.
+ */
+type NavItem = { href: string; label: string; short?: string; icon: typeof Trophy; desktopOnly?: boolean; also?: string[] };
 const BASE: NavItem[] = [
   { href: "/", label: "Calendar", icon: CalendarDays },
   { href: "/benchmarks", label: "Benchmarks", short: "PBs", icon: Trophy },
   { href: "/leaderboards", label: "Leaderboards", short: "Ranks", icon: Medal },
+  // Phones get here from the Leaderboards page, so the bottom bar doesn't grow.
+  { href: "/friends", label: "Friends & clubs", icon: Users, desktopOnly: true, also: ["/clubs"] },
   { href: "/injuries", label: "Injuries", icon: HeartPulse },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -27,14 +33,14 @@ export interface NavFlags {
 
 /** Optional tabs only show for people who use them. */
 const navItems = ({ showSports, showWeight }: NavFlags): NavItem[] => [
-  ...BASE.slice(0, 3), // Calendar, Benchmarks, Leaderboards
+  ...BASE.slice(0, 4), // Calendar, Benchmarks, Leaderboards, Friends & clubs
   ...(showSports ? [SPORTS_ITEM] : []),
   ...(showWeight ? [WEIGHT_ITEM] : []),
-  ...BASE.slice(3),
+  ...BASE.slice(4),
 ];
 
-const matches = (path: string | null, href: string) =>
-  path != null && (href === "/" ? path === "/" : path.startsWith(href));
+const matches = (path: string | null, href: string, also: string[] = []) =>
+  path != null && (href === "/" ? path === "/" : [href, ...also].some((h) => path.startsWith(h)));
 
 /** usePathname is request data, so links render statically first and pick up the active state in a Suspense boundary. */
 function WithPath({ children }: { children: (path: string | null) => ReactNode }) {
@@ -55,13 +61,13 @@ export function Sidebar({ footer, ...flags }: { footer: ReactNode } & NavFlags) 
         Exercise Tracker
       </Link>
       <WithPath>{(path) => <nav className="flex flex-col gap-0.5">
-        {ITEMS.map(({ href, label, icon: Icon }) => (
+        {ITEMS.map(({ href, label, icon: Icon, also }) => (
           <Link
             key={href}
             href={href}
             className={cx(
               "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
-              matches(path, href) ? "bg-surface-2 text-text" : "text-muted hover:bg-surface-2 hover:text-text",
+              matches(path, href, also) ? "bg-surface-2 text-text" : "text-muted hover:bg-surface-2 hover:text-text",
             )}
           >
             <Icon className="size-4" />
@@ -75,7 +81,7 @@ export function Sidebar({ footer, ...flags }: { footer: ReactNode } & NavFlags) 
 }
 
 export function BottomNav(flags: NavFlags) {
-  const ITEMS = navItems(flags);
+  const ITEMS = navItems(flags).filter((i) => !i.desktopOnly);
   return <WithPath>{(path) => (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
