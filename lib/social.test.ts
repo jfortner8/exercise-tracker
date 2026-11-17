@@ -14,7 +14,7 @@ const entry = (sub: string, share?: LeaderboardEntry["share"]): LeaderboardEntry
 });
 
 describe("codes", () => {
-  it("are 8 characters from the unambiguous alphabet", () => {
+  it("are 16 characters from the unambiguous alphabet", () => {
     expect(CODE_ALPHABET).toHaveLength(31);
     expect(CODE_ALPHABET).not.toMatch(/[01ILO]/);
     for (let i = 0; i < 200; i++) {
@@ -27,8 +27,10 @@ describe("codes", () => {
     expect(new Set(Array.from({ length: 2000 }, newCode)).size).toBe(2000);
   });
   it("normalize what people type and format for display", () => {
-    expect(normalizeCode(" abcd-efgh ")).toBe("ABCDEFGH");
-    expect(formatCode("ABCDEFGH")).toBe("ABCD-EFGH");
+    expect(normalizeCode(" abcd-efgh-jkmn-pqrs ")).toBe("ABCDEFGHJKMNPQRS");
+    expect(normalizeCode("abcd efgh jkmn pqrs")).toBe("ABCDEFGHJKMNPQRS");
+    expect(formatCode("ABCDEFGHJKMNPQRS")).toBe("ABCD-EFGH-JKMN-PQRS");
+    expect(formatCode(newCode())).toMatch(/^([A-Z0-9]{4}-){3}[A-Z0-9]{4}$/);
   });
 });
 

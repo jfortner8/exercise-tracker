@@ -72,7 +72,10 @@ export function CodeCard({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-lg border border-dashed border-accent bg-accent/5 px-3 py-1.5 font-mono text-xl font-semibold tracking-[0.15em] tabular-nums">
+        <span
+          data-code
+          className="whitespace-nowrap rounded-lg border border-dashed border-accent bg-accent/5 px-3 py-1.5 font-mono text-base font-semibold tracking-[0.06em] tabular-nums sm:text-xl sm:tracking-[0.12em]"
+        >
           {shown}
         </span>
         <Button
@@ -135,13 +138,13 @@ export function JoinWithCode() {
         <Input
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="ABCD-EFGH"
+          placeholder="ABCD-EFGH-JKMN-PQRS"
           aria-label="Friend or club code"
           autoCapitalize="characters"
           autoComplete="off"
           spellCheck={false}
           className="font-mono tracking-widest"
-          maxLength={20}
+          maxLength={32}
         />
         <Button type="submit" variant="primary" disabled={pending || !code.trim()} className="shrink-0">
           {pending ? "Adding…" : "Add"}

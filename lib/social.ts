@@ -8,9 +8,9 @@ import type { ClubMember, LeaderboardEntry, Share } from "./types";
 
 /** Friend and club codes: no 0/O, 1/I/L, so they survive being read aloud or retyped. */
 export const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-export const CODE_LENGTH = 8;
+export const CODE_LENGTH = 16;
 
-/** A random code, ~10^12 possibilities, so codes can't be guessed. */
+/** A random code: 31^16, about 7 x 10^23 possibilities, so codes can't be guessed. */
 export function newCode(): string {
   const n = CODE_ALPHABET.length;
   const limit = 256 - (256 % n); // reject bytes past the last full multiple, so every character is equally likely
@@ -29,11 +29,11 @@ export function newCode(): string {
  */
 export const CODE_FAILURES_PER_DAY = 20;
 
-/** What someone typed or pasted, as a stored code: "abcd-efgh " -> "ABCDEFGH". */
+/** What someone typed or pasted, as a stored code: "abcd-efgh-jkmn-pqrs " -> "ABCDEFGHJKMNPQRS". */
 export const normalizeCode = (input: string) => input.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-/** A code as shown to people: "ABCD-EFGH". */
-export const formatCode = (code: string) => (code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code);
+/** A code as shown to people, in groups of four: "ABCD-EFGH-JKMN-PQRS". */
+export const formatCode = (code: string) => code.match(/.{1,4}/g)?.join("-") ?? code;
 
 /**
  * A stored profile's share level. Profiles from before share levels had a yes/no

@@ -30,7 +30,7 @@ async function me() {
 export async function joinWithCodeAction(raw: string): Promise<SocialResult> {
   const { sub, displayName } = await me();
   const code = normalizeCode(z.string().max(40).parse(raw));
-  if (code.length !== CODE_LENGTH) return { error: "Codes are 8 letters and numbers, like ABCD-EFGH." };
+  if (code.length !== CODE_LENGTH) return { error: "Codes are 16 letters and numbers, like ABCD-EFGH-JKMN-PQRS." };
   // After too many wrong codes today, every attempt fails with a generic error (see CODE_FAILURES_PER_DAY).
   const today = new Date().toISOString().slice(0, 10);
   if ((await repo.getCodeFailures(sub, today)) >= CODE_FAILURES_PER_DAY) return { error: "An error occurred." };
