@@ -10,6 +10,7 @@ import { repeatDates } from "@/lib/domain";
 import { linkableWorkouts } from "@/lib/benchmarks/linking";
 import * as repo from "@/lib/db/repo";
 import { syncLeaderboard } from "@/lib/leaderboard";
+import { DANCE_SESSIONS, DANCE_STYLES } from "@/lib/dance";
 import { SPORTS, sportMeta } from "@/lib/sports";
 import {
   BENCHMARK_CATEGORIES,
@@ -26,6 +27,8 @@ import {
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const SPORT_KEYS = SPORTS.map((s) => s.key) as [string, ...string[]];
+const DANCE_STYLE_KEYS = DANCE_STYLES.map((s) => s.key) as [string, ...string[]];
+const DANCE_SESSION_KEYS = DANCE_SESSIONS.map((s) => s.key) as [string, ...string[]];
 
 /** The Sports tab appears once a sport workout has been completed. */
 async function noteSport(sub: string, w: Pick<Workout, "type" | "status">) {
@@ -61,6 +64,9 @@ const workoutInput = z.object({
   sport: z.enum(SPORT_KEYS).optional(),
   sportName: z.string().trim().max(60).optional(),
   sportSession: z.string().max(40).optional(),
+  danceStyle: z.enum(DANCE_STYLE_KEYS).optional(),
+  danceStyleName: z.string().trim().max(60).optional(),
+  danceSession: z.enum(DANCE_SESSION_KEYS).optional(),
   status: z.enum(WORKOUT_STATUSES),
   planned: details,
   actual: details,
@@ -95,6 +101,10 @@ export async function saveWorkoutAction(raw: WorkoutInput, rawRepeat?: RepeatInp
     sport: sportDef?.key,
     sportName: sportDef?.key === "other" ? parsed.sportName || undefined : undefined,
     sportSession: sportDef?.sessions.some((s) => s.key === parsed.sportSession) ? parsed.sportSession : undefined,
+    // Dance style and session only belong on dance workouts.
+    danceStyle: parsed.type === "dance" ? parsed.danceStyle : undefined,
+    danceStyleName: parsed.type === "dance" && parsed.danceStyle === "other" ? parsed.danceStyleName || undefined : undefined,
+    danceSession: parsed.type === "dance" ? parsed.danceSession : undefined,
   };
   const now = new Date().toISOString();
 
@@ -260,6 +270,9 @@ export async function copyWeekAction(fromStart: string, toStart: string, times: 
         sport: w.sport,
         sportName: w.sportName,
         sportSession: w.sportSession,
+        danceStyle: w.danceStyle,
+        danceStyleName: w.danceStyleName,
+        danceSession: w.danceSession,
         status: "planned",
         planned: w.planned ?? w.actual,
         createdAt: now,

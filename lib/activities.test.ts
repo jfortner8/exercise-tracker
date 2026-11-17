@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { activityMeta, applyActivity, blockMetrics, recentActivities, workoutCategory } from "./activities";
 import { SPORTS, sportCategory, sportTallies } from "./sports";
+import { autoTitle } from "./activities";
 import type { Units, Workout } from "./types";
 
 const km: Units = { distance: "km", weight: "kg" };
@@ -73,5 +74,59 @@ describe("sports", () => {
       { label: "Practice", plural: "practices", count: 1 },
     ]);
     expect(padel).toMatchObject({ label: "Padel", total: 1 });
+  });
+});
+
+describe("autoTitle", () => {
+  it("names a sport by sport and session, in title case", () => {
+    expect(autoTitle({ type: "sport", sport: "roller-derby", sportSession: "bout" })).toBe("Roller Derby Bout");
+    expect(autoTitle({ type: "sport", sport: "basketball", sportSession: "practice" })).toBe("Basketball Practice");
+    expect(autoTitle({ type: "sport", sport: "american-football", sportSession: "game" })).toBe("American Football Game");
+    expect(autoTitle({ type: "sport", sport: "combat", sportSession: "sparring" })).toBe("Boxing / Martial Arts Sparring");
+  });
+  it("uses the sport alone without a session, and a typed name for Other", () => {
+    expect(autoTitle({ type: "sport", sport: "tennis" })).toBe("Tennis");
+    expect(autoTitle({ type: "sport", sport: "other", sportName: "padel", sportSession: "game" })).toBe("Padel Game");
+    expect(autoTitle({ type: "sport", sport: "other", sportName: "MMA", sportSession: "practice" })).toBe("MMA Practice");
+    expect(autoTitle({ type: "sport" })).toBe("Sport");
+  });
+  const km: Units = { distance: "km", weight: "kg" };
+  const mi: Units = { distance: "mi", weight: "lb" };
+  it("leads with distance, else time", () => {
+    expect(autoTitle({ type: "run", planned: { distanceM: 10000, durationSec: 3000 } }, km)).toBe("10 km Run");
+    expect(autoTitle({ type: "run", planned: { distanceM: 10000 } }, mi)).toBe("6.2 mi Run");
+    expect(autoTitle({ type: "swim", planned: { distanceM: 750 } }, km)).toBe("0.75 km Swim");
+    expect(autoTitle({ type: "strength", planned: { durationSec: 2700 } }, km)).toBe("45 min Strength");
+    expect(autoTitle({ type: "bike", planned: { durationSec: 5400 } }, km)).toBe("1 h 30 min Bike");
+    expect(autoTitle({ type: "yoga", planned: { durationSec: 3600 } }, km)).toBe("1 h Yoga");
+    expect(autoTitle({ type: "run" }, km)).toBe("Run");
+    expect(autoTitle({ type: "mobility", planned: { durationSec: 900 } }, km)).toBe("15 min Stretch / Mobility");
+  });
+  it("notes intervals, timed from the interval set when there's no distance", () => {
+    expect(autoTitle({ type: "run", planned: { intervals: { reps: 6, workSec: 120, restSec: 60 } } }, km)).toBe("18 min Run Intervals");
+    expect(autoTitle({ type: "run", planned: { distanceM: 8000, intervals: { reps: 6, workSec: 120 } } }, km)).toBe("8 km Run Intervals");
+  });
+  it("uses what was done once logged, the plan before", () => {
+    const w = { type: "run" as const, planned: { distanceM: 10000 }, actual: { distanceM: 8000 } };
+    expect(autoTitle({ ...w, status: "planned" }, km)).toBe("10 km Run");
+    expect(autoTitle({ ...w, status: "completed" }, km)).toBe("8 km Run");
+  });
+  it("names dances by style and session, like sports", () => {
+    expect(autoTitle({ type: "dance", danceStyle: "salsa", danceSession: "class", planned: { durationSec: 3600 } }, km)).toBe("Salsa Class");
+    expect(autoTitle({ type: "dance", danceStyle: "bachata", danceSession: "social" }, km)).toBe("Bachata Social");
+    expect(autoTitle({ type: "dance", danceStyle: "merengue" }, km)).toBe("Merengue");
+    expect(autoTitle({ type: "dance", danceSession: "show" }, km)).toBe("Dance Show");
+    expect(autoTitle({ type: "dance", danceStyle: "other", danceStyleName: "reggaeton", danceSession: "practice" }, km)).toBe("Reggaeton Practice");
+    expect(autoTitle({ type: "dance", danceStyle: "swing", danceSession: "social" }, km)).toBe("Swing / Lindy Hop Social");
+    // Neither chosen: like other activities, by time.
+    expect(autoTitle({ type: "dance", planned: { durationSec: 3600 } }, km)).toBe("1 h Dance");
+  });
+  it("keeps the calendar category line for dances", () => {
+    expect(workoutCategory({ type: "dance", danceStyle: "salsa", danceSession: "class" })).toEqual({ emoji: "💃", label: "Salsa class" });
+    expect(workoutCategory({ type: "dance" }).label).toBe("Dance");
+  });
+  it("leaves sports and rest without amounts", () => {
+    expect(autoTitle({ type: "sport", sport: "roller-derby", sportSession: "bout", planned: { durationSec: 7200 } }, km)).toBe("Roller Derby Bout");
+    expect(autoTitle({ type: "rest" }, km)).toBe("Rest");
   });
 });

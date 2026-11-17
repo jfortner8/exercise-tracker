@@ -59,6 +59,12 @@ export interface Workout {
   sportName?: string;
   /** Session key from the sport's list ("match", "practice", "bout"…). */
   sportSession?: string;
+  /** For type "dance": style key from lib/dance.ts ("salsa", "bachata", "other"…). */
+  danceStyle?: string;
+  /** Style typed in when danceStyle is "other". */
+  danceStyleName?: string;
+  /** "practice", "class", "show" or "social". */
+  danceSession?: string;
   status: WorkoutStatus;
   planned?: WorkoutDetails;
   actual?: WorkoutDetails;
