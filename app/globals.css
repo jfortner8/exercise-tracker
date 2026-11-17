@@ -157,7 +157,8 @@
   --color-drink-5-fg: var(--drink-5-fg);
   --color-drink-6: var(--drink-6);
   --color-drink-6-fg: var(--drink-6-fg);
-  --font-sans: var(--font-geist-sans);
+  /* Geist has no emoji, so emoji fall through to Noto Color Emoji. */
+  --font-sans: var(--font-geist-sans), var(--font-emoji);
   --font-mono: var(--font-geist-mono);
 }
 

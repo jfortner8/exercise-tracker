@@ -1,9 +1,18 @@
 import { addMonths, addWeeks, format, parseISO } from "date-fns";
 import { Suspense } from "react";
 import { CalendarView } from "@/components/calendar/calendar-view";
+import { recentActivities } from "@/lib/activities";
 import { calendarResults, eachDay, monthGridRange, weekRange, ymd } from "@/lib/domain";
 import { requireProfile } from "@/lib/dal";
-import { firstEntryDate, listAllResults, listBenchmarks, listDays, listInjuries, listWorkouts } from "@/lib/db/repo";
+import {
+  firstEntryDate,
+  listAllResults,
+  listBenchmarks,
+  listDays,
+  listInjuries,
+  listWorkouts,
+  recentWorkouts,
+} from "@/lib/db/repo";
 
 function CalendarSkeleton() {
   return (
@@ -25,7 +34,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
     view === "month" ? monthGridRange(anchor, profile.weekStartsOn) : weekRange(anchor, profile.weekStartsOn);
   const [s, e] = [ymd(start), ymd(end)];
 
-  const [workouts, days, injuries, benchmarks, startDate, allResults] = await Promise.all([
+  const [workouts, days, injuries, benchmarks, startDate, allResults, recent] = await Promise.all([
     listWorkouts(user.sub, s, e),
     listDays(user.sub, s, e),
     listInjuries(user.sub),
@@ -33,6 +42,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
     firstEntryDate(user.sub),
     // All results (one small query): earlier history decides whether a result in view was a PB.
     listAllResults(user.sub),
+    recentWorkouts(user.sub, ymd(new Date())),
   ]);
 
   const title = view === "month" ? format(anchor, "MMMM yyyy") : `Week of ${format(start, "MMM d, yyyy")}`;
@@ -55,6 +65,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
       profile={profile}
       startDate={startDate}
       results={calendarResults(benchmarks, allResults, s, e)}
+      recent={recentActivities(recent)}
     />
   );
 }

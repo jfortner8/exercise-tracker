@@ -4,14 +4,16 @@ import { format, parseISO } from "date-fns";
 import { ArrowLeft, Trash2, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { addResultAction, deleteBenchmarkAction, deleteResultAction } from "@/lib/actions";
+import { addResultAction, deleteBenchmarkAction, deleteResultAction, workoutsOnDayAction } from "@/lib/actions";
 import { CATEGORY_LABEL, METRIC_LABEL } from "@/lib/benchmarks/catalog";
 import { parseValue, valueLabel } from "@/lib/benchmarks/input";
+import { suggestLink } from "@/lib/benchmarks/linking";
 import { formatResult, markRunningPBs, personalBest, resultScore, ymd } from "@/lib/domain";
-import type { BenchmarkDef, BenchmarkResult, Units } from "@/lib/types";
+import type { BenchmarkDef, BenchmarkResult, Units, Workout } from "@/lib/types";
 import { Button, Card, Field, Input, PageHeader, cx } from "../ui";
+import { WorkoutLinkField } from "./workout-link-field";
 
 export function BenchmarkDetail({ def, results, units }: { def: BenchmarkDef; results: BenchmarkResult[]; units: Units }) {
   const router = useRouter();
@@ -167,6 +169,23 @@ function AddResult({ def, units }: { def: BenchmarkDef; units: Units }) {
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [workoutId, setWorkoutId] = useState("");
+
+  // Load the chosen day's workouts and pre-select the one this result most likely came from.
+  useEffect(() => {
+    let current = true;
+    workoutsOnDayAction(date)
+      .then((ws) => {
+        if (!current) return;
+        setWorkouts(ws);
+        setWorkoutId(suggestLink(def, ws, units)?.id ?? "");
+      })
+      .catch(() => current && setWorkouts([]));
+    return () => {
+      current = false;
+    };
+  }, [date, def, units]);
 
   return (
     <Card className="h-fit p-4">
@@ -185,6 +204,7 @@ function AddResult({ def, units }: { def: BenchmarkDef; units: Units }) {
               value: v,
               reps: def.metricKind === "weight_reps" ? Number(reps) || 1 : undefined,
               notes: notes.trim() || undefined,
+              workoutId: workoutId || undefined,
             });
             setValue("");
             setReps("");
@@ -205,6 +225,7 @@ function AddResult({ def, units }: { def: BenchmarkDef; units: Units }) {
             </Field>
           )}
         </div>
+        <WorkoutLinkField def={def} workouts={workouts} units={units} value={workoutId} onChange={setWorkoutId} />
         <Field label="Notes">
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Pool, conditions, felt…" />
         </Field>

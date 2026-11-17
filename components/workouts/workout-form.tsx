@@ -13,6 +13,8 @@ import {
   parseMinutesInput,
 } from "@/lib/domain";
 import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
+import { activityKey, activityMeta, applyActivity, type ActivityKey } from "@/lib/activities";
+import { SPORTS, sportCategory, sportMeta } from "@/lib/sports";
 import { STATUS_LABEL, TYPE_META } from "@/lib/workout-types";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
 
@@ -26,6 +28,7 @@ interface DetailsDraft {
   warmupMin: string;
   cooldownMin: string;
   description: string;
+  hr: string;
 }
 
 const num = (s: string) => (s.trim() === "" || isNaN(Number(s)) ? undefined : Number(s));
@@ -41,6 +44,7 @@ function toDraft(d: WorkoutDetails | undefined, units: Units): DetailsDraft {
     warmupMin: formatMinutesInput(d?.intervals?.warmupSec),
     cooldownMin: formatMinutesInput(d?.intervals?.cooldownSec),
     description: d?.description ?? "",
+    hr: str(d?.avgHeartRate, 0),
   };
 }
 
@@ -48,6 +52,13 @@ function toDraft(d: WorkoutDetails | undefined, units: Units): DetailsDraft {
 const minutesField = (s: string) => {
   const v = parseMinutesInput(s);
   return v == null || Number.isNaN(v) ? undefined : v;
+};
+
+/** Heart rate must be a whole-ish number of bpm in a plausible range (or empty). */
+const badHeartRate = (d: DetailsDraft) => {
+  if (!d.hr.trim()) return false;
+  const v = Number(d.hr);
+  return !isFinite(v) || v < 30 || v > 250;
 };
 
 /** Labels of minutes fields whose text can't be read as a duration. */
@@ -76,6 +87,7 @@ function fromDraft(d: DetailsDraft, units: Units): WorkoutDetails | undefined {
     distanceM: dist != null ? Math.round(displayToMeters(dist, units)) : undefined,
     intervals: hasIntervals ? intervals : undefined,
     description: d.description.trim() || undefined,
+    avgHeartRate: num(d.hr) != null ? Math.round(num(d.hr)!) : undefined,
   };
   return Object.values(out).some((v) => v != null) ? out : undefined;
 }
@@ -111,18 +123,21 @@ function MinutesInput({
   );
 }
 
-const INTERVAL_TYPES = new Set(["run", "walk", "swim", "bike"]);
+const INTERVAL_TYPES = new Set(["run", "walk", "swim", "bike", "row"]);
 
 function DetailsFields({
   value,
   onChange,
   units,
   type,
+  showHeartRate = false,
 }: {
   value: DetailsDraft;
   onChange: (d: DetailsDraft) => void;
   units: Units;
   type: Workout["type"];
+  /** Heart rate is recorded on what was actually done, not the plan. */
+  showHeartRate?: boolean;
 }) {
   const set = (k: keyof DetailsDraft) => (e: { target: { value: string } }) => onChange({ ...value, [k]: e.target.value });
   const [showIntervals, setShowIntervals] = useState(!!(value.reps || value.workSec));
@@ -204,6 +219,18 @@ function DetailsFields({
           )}
         </div>
       )}
+      {showHeartRate && (
+        <Field label="Avg heart rate (bpm)" className="w-1/2 pr-1.5">
+          <Input
+            inputMode="numeric"
+            value={value.hr}
+            onChange={set("hr")}
+            placeholder="e.g. 142"
+            aria-invalid={badHeartRate(value) || undefined}
+            className={badHeartRate(value) ? "border-danger" : undefined}
+          />
+        </Field>
+      )}
       <Field label="Details">
         <Textarea
           rows={2}
@@ -223,6 +250,7 @@ export function WorkoutForm({
   injuries,
   onDone,
   presetStatus,
+  recent = [],
 }: {
   date: string;
   workout?: Workout;
@@ -231,10 +259,29 @@ export function WorkoutForm({
   onDone: () => void;
   /** Start the form on this status (e.g. "substituted" from the drawer's quick resolve). */
   presetStatus?: Workout["status"];
+  /** The user's most recent activities, shown first in the picker. */
+  recent?: ActivityKey[];
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [type, setType] = useState<Workout["type"]>(workout?.type ?? "run");
+  const [sport, setSport] = useState(workout?.sport ?? "");
+  const [sportName, setSportName] = useState(workout?.sportName ?? "");
+  const [sportSession, setSportSession] = useState(workout?.sportSession ?? "");
+  const sportDef = type === "sport" ? sportMeta(sport) : undefined;
+  const category = type === "sport" ? sportCategory({ sport, sportName, sportSession }) : undefined;
+  // The picker shows a recent sport as its own option; otherwise it shows the plain type.
+  const currentKey = activityKey({ type, sport });
+  const pickerValue = recent.includes(currentKey) ? currentKey : type;
+
+  function chooseActivity(key: ActivityKey) {
+    const next = applyActivity(key);
+    setType(next.type);
+    if (next.sport && next.sport !== sport) {
+      setSport(next.sport);
+      setSportSession("");
+    }
+  }
   const [title, setTitle] = useState(workout?.title ?? "");
   const [location, setLocation] = useState(workout?.location ?? "");
   const [day, setDay] = useState(workout?.date ?? date);
@@ -253,6 +300,14 @@ export function WorkoutForm({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (showActual && badHeartRate(actual)) {
+      setError("Heart rate should be a number of beats per minute between 30 and 250.");
+      return;
+    }
+    if (type === "sport" && sport === "other" && !sportName.trim()) {
+      setError("Name the sport (or pick one from the list).");
+      return;
+    }
     const bad = [...unreadableDurations(planned), ...(showActual ? unreadableDurations(actual) : [])];
     if (bad.length) {
       setError(`Can't read ${[...new Set(bad)].join(", ").toLowerCase()}. Use minutes (45) or a time (87:45, 1:27:45).`);
@@ -263,8 +318,15 @@ export function WorkoutForm({
       originalDate: workout?.date,
       date: day,
       type,
-      title: title.trim() || TYPE_META[type].label,
+      title: title.trim() || category || TYPE_META[type].label,
       location: location.trim() || undefined,
+      ...(type === "sport"
+        ? {
+            sport: sport || undefined,
+            sportName: sport === "other" ? sportName.trim() || undefined : undefined,
+            sportSession: sportSession || undefined,
+          }
+        : {}),
       status,
       planned: fromDraft(planned, units),
       actual: showActual ? fromDraft(actual, units) : undefined,
@@ -287,24 +349,84 @@ export function WorkoutForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Type">
-          <Select value={type} onChange={(e) => setType(e.target.value as Workout["type"])}>
-            {WORKOUT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {TYPE_META[t].label}
-              </option>
-            ))}
+        <Field label="Activity">
+          <Select value={pickerValue} onChange={(e) => chooseActivity(e.target.value)}>
+            {recent.length > 0 && (
+              <optgroup label="Recent">
+                {recent.map((k) => (
+                  <option key={`recent-${k}`} value={k}>
+                    {activityMeta(k).emoji} {activityMeta(k).label}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="All activities">
+              {WORKOUT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {TYPE_META[t].emoji} {TYPE_META[t].label}
+                </option>
+              ))}
+            </optgroup>
           </Select>
         </Field>
         <Field label="Date">
           <Input type="date" value={day} onChange={(e) => setDay(e.target.value)} required />
         </Field>
       </div>
+      {type === "sport" && (
+        <div className="space-y-3 rounded-lg border border-border p-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Which sport" className={sport === "other" ? "" : "col-span-2"}>
+              <Select
+                value={sport}
+                onChange={(e) => {
+                  setSport(e.target.value);
+                  setSportSession("");
+                }}
+              >
+                <option value="">Choose…</option>
+                {SPORTS.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.emoji} {s.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {sport === "other" && (
+              <Field label="Sport name">
+                <Input value={sportName} onChange={(e) => setSportName(e.target.value)} placeholder="Squash, padel…" />
+              </Field>
+            )}
+          </div>
+          {sportDef && (
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Session">
+              {sportDef.sessions.map((s) => (
+                <button
+                  type="button"
+                  key={s.key}
+                  role="radio"
+                  aria-checked={sportSession === s.key}
+                  // Tap again to clear.
+                  onClick={() => setSportSession(sportSession === s.key ? "" : s.key)}
+                  className={cx(
+                    "rounded-full border px-3 py-1 text-xs font-medium",
+                    sportSession === s.key ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:text-text",
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <Field label="Title">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={type === "run" ? "Easy run, Long run, 5K benchmark…" : TYPE_META[type].label}
+          placeholder={
+            category ?? (type === "run" ? "Easy run, Long run, 5K benchmark…" : TYPE_META[type].label)
+          }
           autoFocus={!workout}
         />
       </Field>
@@ -347,7 +469,7 @@ export function WorkoutForm({
               Same as plan
             </Button>
           </div>
-          <DetailsFields value={actual} onChange={setActual} units={units} type={type} />
+          <DetailsFields value={actual} onChange={setActual} units={units} type={type} showHeartRate />
         </section>
       )}
 

@@ -24,23 +24,34 @@ async function UserFooter() {
   );
 }
 
+const sidebarFooter = (
+  <>
+    <div className="mb-3 px-2">
+      <ThemeSwitch compact />
+    </div>
+    <Suspense fallback={<div className="h-12" />}>
+      <UserFooter />
+    </Suspense>
+  </>
+);
+
+/** Nav that adds the Sports tab once the user has completed a sport workout. */
+async function Nav({ part }: { part: "sidebar" | "bottom" }) {
+  const { profile } = await requireProfile();
+  const showSports = profile.hasSports === true;
+  return part === "sidebar" ? <Sidebar footer={sidebarFooter} showSports={showSports} /> : <BottomNav showSports={showSports} />;
+}
+
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-dvh">
-      <Sidebar
-        footer={
-          <>
-            <div className="mb-3 px-2">
-              <ThemeSwitch compact />
-            </div>
-            <Suspense fallback={<div className="h-12" />}>
-              <UserFooter />
-            </Suspense>
-          </>
-        }
-      />
+      <Suspense fallback={<Sidebar footer={sidebarFooter} />}>
+        <Nav part="sidebar" />
+      </Suspense>
       <main className="min-w-0 flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10 md:pt-8">{children}</main>
-      <BottomNav />
+      <Suspense fallback={<BottomNav />}>
+        <Nav part="bottom" />
+      </Suspense>
     </div>
   );
 }
