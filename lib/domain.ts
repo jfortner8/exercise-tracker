@@ -293,6 +293,31 @@ export function calendarResults(
   return out;
 }
 
+export const IMPROVEMENT_WINDOWS = [
+  { key: "1m", label: "1 mo", months: 1 },
+  { key: "3m", label: "3 mo", months: 3 },
+  { key: "6m", label: "6 mo", months: 6 },
+  { key: "1y", label: "1 yr", months: 12 },
+] as const;
+export type ImprovementWindow = (typeof IMPROVEMENT_WINDOWS)[number]["key"];
+
+/**
+ * % improvement of the PB over a window: the PB now vs. the PB as it stood on `since`.
+ * Positive is better in either direction. Undefined when there was no result by `since`.
+ */
+export function improvementPct(
+  history: { date: string; score: number }[],
+  direction: "lower" | "higher",
+  since: string,
+): number | undefined {
+  if (!history.length) return undefined;
+  const then = [...history].reverse().find((h) => h.date <= since);
+  if (!then || then.score === 0) return undefined;
+  const now = history[history.length - 1].score;
+  const change = direction === "lower" ? then.score - now : now - then.score;
+  return (change / then.score) * 100;
+}
+
 /** Annotates chronologically sorted results with their score and whether each set a new PB at the time. */
 export function markRunningPBs<R extends Pick<BenchmarkResult, "value" | "reps">>(
   def: Pick<BenchmarkDef, "metricKind" | "direction">,

@@ -9,9 +9,11 @@ import {
   UpdateCommand,
   type QueryCommandInput,
 } from "@aws-sdk/lib-dynamodb";
+import { cacheLife, cacheTag } from "next/cache";
+import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { normalizeUnits } from "@/lib/domain";
 import { env } from "@/lib/env";
-import type { BenchmarkDef, BenchmarkResult, DayLog, Injury, Profile, Workout } from "@/lib/types";
+import type { BenchmarkDef, BenchmarkResult, DayLog, Injury, LeaderboardEntry, Profile, Workout } from "@/lib/types";
 import { db } from "./client";
 
 /*
@@ -77,6 +79,7 @@ export const defaultProfile = (email: string, name?: string): Profile => ({
   units: { distance: "mi", weight: "lb" },
   weekStartsOn: 1,
   trackDrinks: false,
+  leaderboard: false,
   trackWeight: false,
 });
 
@@ -98,7 +101,13 @@ export async function getProfile(sub: string): Promise<Profile | null> {
   const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: "PROFILE" } }));
   if (!res.Item) return null;
   const p = strip<Profile>(res.Item);
-  return { ...p, units: normalizeUnits(p.units), trackWeight: p.trackWeight === true, hasSports: p.hasSports === true };
+  return {
+    ...p,
+    units: normalizeUnits(p.units),
+    leaderboard: p.leaderboard === true,
+    trackWeight: p.trackWeight === true,
+    hasSports: p.hasSports === true,
+  };
 }
 
 export const saveProfile = (sub: string, p: Profile) => put(sub, "PROFILE", "profile", p);
@@ -250,4 +259,63 @@ export const deleteResult = (sub: string, r: Pick<BenchmarkResult, "benchmarkId"
 export async function deleteBenchmark(sub: string, id: string) {
   const results = await listResults(sub, id);
   await batchDelete(sub, [`BM#${id}`, ...results.map(bmrSK)]);
+}
+
+// ---------- Leaderboards ----------
+// Each opted-in user has one row per built-in benchmark they have a result for:
+//   SK = LBPB#<catalogKey>, lbKey = LB#<catalogKey>, lbScore = PB score (GSI "leaderboard").
+const lbSK = (key: string) => `LBPB#${key}`;
+
+export const putLeaderboardEntry = (e: LeaderboardEntry) =>
+  db().send(
+    new PutCommand({
+      TableName: T(),
+      Item: { PK: pk(e.sub), SK: lbSK(e.catalogKey), entity: "leaderboard", lbKey: `LB#${e.catalogKey}`, lbScore: e.score, ...e },
+    }),
+  );
+
+export const deleteLeaderboardEntry = (sub: string, key: string) => del(sub, lbSK(key));
+
+/** This user's own leaderboard rows (to update, or remove on opt-out or untracking). */
+export const listOwnLeaderboardEntries = (sub: string) => beginsWith<LeaderboardEntry>(sub, "LBPB#");
+
+export const LEADERBOARD_TAG = "leaderboard";
+
+/**
+ * Every built-in benchmark's board, keyed by catalog key, best first. Cached across requests
+ * (boards change rarely); syncLeaderboard calls updateTag(LEADERBOARD_TAG) when a row changes.
+ */
+export async function getLeaderboards(): Promise<Record<string, LeaderboardEntry[]>> {
+  "use cache";
+  cacheTag(LEADERBOARD_TAG);
+  cacheLife("days");
+  const boards = await Promise.all(
+    BENCHMARK_CATALOG.map(async (c) => [c.key, await listLeaderboard(c.key, c.direction)] as const),
+  );
+  return Object.fromEntries(boards);
+}
+
+/** Everyone on a benchmark's leaderboard, best first. */
+export async function listLeaderboard(key: string, direction: "lower" | "higher"): Promise<LeaderboardEntry[]> {
+  const out: LeaderboardEntry[] = [];
+  let ExclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const res = await db().send(
+      new QueryCommand({
+        TableName: T(),
+        IndexName: "leaderboard",
+        KeyConditionExpression: "lbKey = :k",
+        ExpressionAttributeValues: { ":k": `LB#${key}` },
+        ScanIndexForward: direction === "lower",
+        ExclusiveStartKey,
+      }),
+    );
+    for (const it of res.Items ?? []) {
+      // Same row is also the user's own item; keep only the entry fields.
+      const { sub, catalogKey, displayName, value, reps, date, score, history } = it as LeaderboardEntry;
+      out.push({ sub, catalogKey, displayName, value, reps, date, score, history: history ?? [] });
+    }
+    ExclusiveStartKey = res.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return out;
 }

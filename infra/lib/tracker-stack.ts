@@ -20,6 +20,15 @@ export class TrackerStack extends cdk.Stack {
       partitionKey: { name: "PK", type: dynamodb.AttributeType.STRING },
       sortKey: { name: "SK", type: dynamodb.AttributeType.STRING },
       billing: dynamodb.Billing.onDemand(),
+      // Leaderboards: one PB row per opted-in user per built-in benchmark,
+      // queried by benchmark (lbKey = "LB#<catalogKey>") and sorted by score.
+      globalSecondaryIndexes: [
+        {
+          indexName: "leaderboard",
+          partitionKey: { name: "lbKey", type: dynamodb.AttributeType.STRING },
+          sortKey: { name: "lbScore", type: dynamodb.AttributeType.NUMBER },
+        },
+      ],
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       deletionProtection: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,

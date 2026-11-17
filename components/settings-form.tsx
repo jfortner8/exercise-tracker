@@ -22,6 +22,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             units: p.units,
             weekStartsOn: p.weekStartsOn,
             trackDrinks: p.trackDrinks,
+            leaderboard: p.leaderboard,
             trackWeight: p.trackWeight,
           });
           setSaved(true);
@@ -85,6 +86,14 @@ export function SettingsForm({ profile }: { profile: Profile }) {
               onChange={(v) => setP({ ...p, trackWeight: v })}
               label="Track bodyweight"
               description="Log one weight per day from the day view. It shows on the calendar on days you log it."
+            />
+          </div>
+          <div className="mt-4">
+            <Toggle
+              checked={p.leaderboard}
+              onChange={(v) => setP({ ...p, leaderboard: v })}
+              label="Show my PBs on leaderboards"
+              description="Your display name and best results on built-in benchmarks become visible to everyone with an account. Custom benchmarks always stay private."
             />
           </div>
         </div>

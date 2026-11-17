@@ -3,6 +3,7 @@ import type { Workout } from "./types";
 import {
   calendarResults,
   describeDuration,
+  improvementPct,
   describeIntervals,
   displayStatus,
   formatMinutesInput,
@@ -219,5 +220,24 @@ describe("benchmark results count as training", () => {
     const days = ["2026-11-14", "2026-11-15"];
     const a = weekAdherence(days, new Map(), "2026-11-16", "2026-11-01", () => false, (d) => d === "2026-11-15");
     expect(a).toMatchObject({ onTrack: 1, elapsed: 2, missed: 1 }); // the 14th is still missed
+  });
+});
+
+describe("improvementPct", () => {
+  const fiveK = [
+    { date: "2026-05-01", score: 1680 }, // 28:00
+    { date: "2026-08-10", score: 1620 }, // 27:00
+    { date: "2026-11-01", score: 1530 }, // 25:30
+  ];
+  it("compares the PB now with the PB as it stood at the start of the window", () => {
+    expect(improvementPct(fiveK, "lower", "2026-08-16")).toBeCloseTo(5.556, 2); // 27:00 -> 25:30
+    expect(improvementPct(fiveK, "lower", "2026-05-16")).toBeCloseTo(8.929, 2); // 28:00 -> 25:30
+    expect(improvementPct(fiveK, "lower", "2026-11-10")).toBe(0); // no new PB since
+  });
+  it("needs a result from before the window", () => {
+    expect(improvementPct(fiveK, "lower", "2026-04-01")).toBeUndefined();
+  });
+  it("treats higher-is-better the other way round", () => {
+    expect(improvementPct([{ date: "2026-01-01", score: 100 }, { date: "2026-06-01", score: 110 }], "higher", "2026-02-01")).toBeCloseTo(10);
   });
 });
