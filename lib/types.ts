@@ -48,6 +48,8 @@ export interface Workout {
   id: string;
   date: string; // yyyy-MM-dd
   originalDate?: string; // set when a planned workout is moved
+  /** Shared by the workouts created together by one weekly repeat. */
+  seriesId?: string;
   type: WorkoutType;
   title: string;
   location?: string; // e.g. "Piedmont Park", "YMCA pool", "Treadmill"

@@ -6,6 +6,7 @@ import { ulid } from "ulid";
 import { z } from "zod";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { requireUser } from "@/lib/dal";
+import { repeatDates } from "@/lib/domain";
 import { linkableWorkouts } from "@/lib/benchmarks/linking";
 import * as repo from "@/lib/db/repo";
 import { syncLeaderboard } from "@/lib/leaderboard";
@@ -71,9 +72,22 @@ const workoutInput = z.object({
 });
 export type WorkoutInput = z.infer<typeof workoutInput>;
 
-export async function saveWorkoutAction(raw: WorkoutInput) {
+const repeatInput = z.object({
+  weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+  every: z.number().int().min(1).max(4),
+  weeks: z.number().int().min(1).max(52),
+});
+export type RepeatInput = z.infer<typeof repeatInput>;
+
+/**
+ * Save a workout. With `repeat` (new planned workouts only) it is created on each matching day,
+ * as separate workouts sharing a seriesId, so each one can be logged, moved or edited on its own.
+ */
+export async function saveWorkoutAction(raw: WorkoutInput, rawRepeat?: RepeatInput) {
   const { sub } = await requireUser();
   const parsed = workoutInput.parse(raw);
+  const repeat = rawRepeat ? repeatInput.parse(rawRepeat) : undefined;
+  if (repeat && (parsed.id || parsed.status !== "planned")) throw new Error("Only new planned workouts can repeat");
   // Sport details only belong on sport workouts; a session must be one the sport offers.
   const sportDef = parsed.type === "sport" ? sportMeta(parsed.sport) : undefined;
   const input = {
@@ -95,11 +109,23 @@ export async function saveWorkoutAction(raw: WorkoutInput) {
       id: existing.id,
       date: existing.date,
       originalDate: existing.originalDate,
+      seriesId: existing.seriesId,
       createdAt: existing.createdAt,
       updatedAt: now,
     };
     if (input.date !== keyDate) await repo.moveWorkout(sub, updated, input.date);
     else await repo.saveWorkout(sub, updated);
+  } else if (repeat) {
+    const { originalDate: _ignored, ...rest } = input;
+    void _ignored;
+    const weekStartsOn = (await repo.getProfile(sub))?.weekStartsOn ?? 1;
+    const dates = repeatDates(input.date, repeat.weekdays, repeat.every, repeat.weeks, weekStartsOn);
+    if (!dates.length) throw new Error("None of the chosen days fall in that range");
+    const seriesId = ulid();
+    await repo.saveWorkouts(
+      sub,
+      dates.map((date) => ({ ...rest, date, seriesId, id: ulid(), createdAt: now, updatedAt: now })),
+    );
   } else {
     const { originalDate: _ignored, ...rest } = input;
     void _ignored;
@@ -113,6 +139,27 @@ export async function deleteWorkoutAction(date: string, workoutId: string) {
   const { sub } = await requireUser();
   await repo.deleteWorkout(sub, day.parse(date), id.parse(workoutId));
   refresh();
+}
+
+/**
+ * Delete a repeating workout and the rest of its series dated on or after it. Only workouts still
+ * planned go; ones already logged (done, missed, skipped…) stay as history. Returns how many went.
+ */
+export async function deleteSeriesFromAction(date: string, workoutId: string) {
+  const { sub } = await requireUser();
+  const w = await repo.getWorkout(sub, day.parse(date), id.parse(workoutId));
+  if (!w) throw new Error("Workout not found");
+  if (!w.seriesId) {
+    await repo.deleteWorkout(sub, w.date, w.id);
+    refresh();
+    return { deleted: 1 };
+  }
+  const later = (await repo.listWorkouts(sub, w.date, "9999-12-31")).filter(
+    (o) => o.seriesId === w.seriesId && (o.id === w.id || o.status === "planned"),
+  );
+  await repo.deleteWorkouts(sub, later);
+  refresh();
+  return { deleted: later.length };
 }
 
 export async function moveWorkoutAction(date: string, workoutId: string, toDate: string) {

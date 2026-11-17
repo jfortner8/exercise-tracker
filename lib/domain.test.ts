@@ -19,6 +19,7 @@ import {
   monthGridRange,
   parseClock,
   personalBest,
+  repeatDates,
   ymd,
 } from "./domain";
 
@@ -290,5 +291,35 @@ describe("improvementPct", () => {
   });
   it("treats higher-is-better the other way round", () => {
     expect(improvementPct([{ date: "2026-01-01", score: 100 }, { date: "2026-06-01", score: 110 }], "higher", "2026-02-01")).toBeCloseTo(10);
+  });
+});
+
+describe("repeatDates", () => {
+  const dow = (s: string) => new Date(`${s}T12:00:00`).getDay();
+  it("Wed + Fri for 12 weeks is 24 workouts on those days", () => {
+    const d = repeatDates("2026-11-18", [3, 5], 1, 12, 1); // a Wednesday
+    expect(d).toHaveLength(24);
+    expect(d[0]).toBe("2026-11-18");
+    expect(d[1]).toBe("2026-11-20");
+    expect(d.at(-1)).toBe("2027-02-05");
+    expect(d.every((x) => [3, 5].includes(dow(x)))).toBe(true);
+  });
+  it("skips the start date when its weekday isn't chosen", () => {
+    expect(repeatDates("2026-11-17", [3], 1, 2, 1)).toEqual(["2026-11-18", "2026-11-25"]); // starts on a Tuesday
+  });
+  it("one weekday for one week is one workout", () => {
+    expect(repeatDates("2026-11-18", [3], 1, 1, 1)).toEqual(["2026-11-18"]);
+  });
+  it("crosses month and year ends", () => {
+    expect(repeatDates("2026-12-28", [1], 1, 2, 1)).toEqual(["2026-12-28", "2027-01-04"]);
+  });
+  it("every other week uses alternate calendar weeks", () => {
+    const d = repeatDates("2026-11-16", [1, 3, 5], 2, 12, 1); // a Monday
+    expect(d).toHaveLength(18);
+    expect(d.slice(0, 4)).toEqual(["2026-11-16", "2026-11-18", "2026-11-20", "2026-11-30"]);
+  });
+  it("counts calendar weeks by the user's week start", () => {
+    // Starting Saturday, Sun-start weeks: Sat is week 0, the next Sun is week 1 (skipped every other week).
+    expect(repeatDates("2026-11-21", [0, 6], 2, 2, 0)).toEqual(["2026-11-21", "2026-11-29"]);
   });
 });

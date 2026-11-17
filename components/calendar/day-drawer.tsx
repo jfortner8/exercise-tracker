@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   addResultAction,
+  deleteSeriesFromAction,
   deleteWorkoutAction,
   logAsDoneAction,
   markRestDayAction,
@@ -85,6 +86,7 @@ export function DayDrawer({
   const [preset, setPreset] = useState<Workout["status"] | undefined>();
   const [skipping, setSkipping] = useState<string | null>(null); // workout id with the reason field open
   const [skipReason, setSkipReason] = useState("");
+  const [deleting, setDeleting] = useState<string | null>(null); // repeating workout id with the delete choice open
   const edit = (w: Workout | "new" | null, status?: Workout["status"]) => {
     setPreset(status);
     setEditing(w);
@@ -114,6 +116,7 @@ export function DayDrawer({
           date={date}
           workout={editing === "new" ? undefined : editing}
           units={profile.units}
+          weekStartsOn={profile.weekStartsOn}
           injuries={injuries}
           presetStatus={preset}
           recent={recent}
@@ -158,6 +161,12 @@ export function DayDrawer({
                           </>
                         )}
                         {w.originalDate && ` · moved from ${format(parseISO(w.originalDate), "EEE MMM d")}`}
+                        {w.seriesId && (
+                          <>
+                            {" · "}
+                            <Repeat className="inline size-3 -translate-y-px" aria-hidden /> repeating
+                          </>
+                        )}
                       </div>
                       <div className="mt-2 space-y-1.5 text-sm">
                         {w.planned && (
@@ -261,11 +270,43 @@ export function DayDrawer({
                       size="sm"
                       variant="danger"
                       disabled={pending}
-                      onClick={() => confirm(`Delete "${w.title}"?`) && start(() => deleteWorkoutAction(w.date, w.id))}
+                      aria-label="Delete"
+                      onClick={() =>
+                        w.seriesId
+                          ? setDeleting(deleting === w.id ? null : w.id)
+                          : confirm(`Delete "${w.title}"?`) && start(() => deleteWorkoutAction(w.date, w.id))
+                      }
                     >
                       <Trash2 className="size-3.5" />
                     </Button>
                   </div>
+                  {deleting === w.id && (
+                    <div className="mt-2 space-y-2 rounded-lg bg-danger/10 p-2">
+                      <div className="text-xs font-medium text-text">Delete this repeating workout?</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={pending}
+                          onClick={() => start(async () => { await deleteWorkoutAction(w.date, w.id); setDeleting(null); })}
+                        >
+                          Just this one
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={pending}
+                          onClick={() => start(async () => { await deleteSeriesFromAction(w.date, w.id); setDeleting(null); })}
+                        >
+                          This and later planned ones
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDeleting(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted">Ones you&apos;ve already logged are kept.</p>
+                    </div>
+                  )}
                 </div>
               );
             })}
