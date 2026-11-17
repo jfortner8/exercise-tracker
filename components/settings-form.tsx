@@ -2,9 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { saveProfileAction } from "@/lib/actions";
-import type { DistanceUnit, Profile, WeightUnit } from "@/lib/types";
+import type { DistanceUnit, Profile, Share, WeightUnit } from "@/lib/types";
 import { ThemeSwitch } from "./theme-switch";
 import { Button, Card, Field, Input, Select, cx } from "./ui";
+
+const SHARE_OPTIONS: { value: Share; label: string; description: string }[] = [
+  { value: "off", label: "Nobody", description: "You don't appear on any leaderboard." },
+  {
+    value: "circle",
+    label: "Friends & clubs",
+    description: "Your friends and the members of your clubs. Not on the Everyone board.",
+  },
+  { value: "everyone", label: "Everyone", description: "Friends and clubs, plus the Everyone board that anyone with an account can see." },
+];
 
 export function SettingsForm({ profile }: { profile: Profile }) {
   const [p, setP] = useState(profile);
@@ -22,7 +32,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             units: p.units,
             weekStartsOn: p.weekStartsOn,
             trackDrinks: p.trackDrinks,
-            leaderboard: p.leaderboard,
+            share: p.share,
             trackWeight: p.trackWeight,
           });
           setSaved(true);
@@ -88,15 +98,37 @@ export function SettingsForm({ profile }: { profile: Profile }) {
               description="Log one weight per day from the day view. It shows on the calendar on days you log it."
             />
           </div>
-          <div className="mt-4">
-            <Toggle
-              checked={p.leaderboard}
-              onChange={(v) => setP({ ...p, leaderboard: v })}
-              label="Show my PBs on leaderboards"
-              description="Your display name and best results on built-in benchmarks become visible to everyone with an account. Custom benchmarks always stay private."
-            />
-          </div>
         </div>
+        <fieldset className="p-5">
+          <legend className="float-left text-sm font-semibold">Who sees my PBs on leaderboards</legend>
+          <p className="clear-left mb-3 pt-0.5 text-sm text-muted">
+            Your display name and best results on built-in benchmarks. Custom benchmarks always stay private.
+          </p>
+          <div className="space-y-2">
+            {SHARE_OPTIONS.map((o) => (
+              <label
+                key={o.value}
+                className={cx(
+                  "flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5",
+                  p.share === o.value ? "border-accent bg-accent/5" : "border-border hover:bg-surface-2",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="share"
+                  value={o.value}
+                  checked={p.share === o.value}
+                  onChange={() => setP({ ...p, share: o.value })}
+                  className="mt-1 accent-[var(--accent)]"
+                />
+                <span>
+                  <span className="block text-sm font-medium">{o.label}</span>
+                  <span className="block text-sm text-muted">{o.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
       </Card>
       <div className="mt-4 flex items-center justify-end gap-3">
         {saved && <span className="text-sm text-muted">Saved</span>}

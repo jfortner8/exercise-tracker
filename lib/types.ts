@@ -92,12 +92,50 @@ export interface Profile {
   units: Units;
   weekStartsOn: 0 | 1; // 0 Sunday, 1 Monday
   trackDrinks: boolean;
-  /** Opt-in: show this user's PBs on built-in benchmarks to everyone with an account. */
-  leaderboard: boolean;
+  /** Who sees this user's PBs on built-in benchmarks. See SHARE_LEVELS. */
+  share: Share;
+  /** Code others enter to become friends. Created the first time it's needed. */
+  friendCode?: string;
   /** Opt-in: log one bodyweight per day; shown on the calendar on days it's logged. */
   trackWeight: boolean;
   /** Set once the user completes a sport workout; shows the Sports tab. Not a setting. */
   hasSports?: boolean;
+}
+
+/**
+ * Who sees a user's PBs on leaderboards: nobody, their friends and clubs, or also everyone
+ * with an account (the Everyone board).
+ */
+export const SHARE_LEVELS = ["off", "circle", "everyone"] as const;
+export type Share = (typeof SHARE_LEVELS)[number];
+
+/** One side of a mutual friendship, stored under the user who sees it. */
+export interface Friend {
+  sub: string;
+  displayName: string;
+  since: string;
+}
+
+/** A group whose members all see the same leaderboard. Joined with its invite code. */
+export interface Club {
+  id: string;
+  name: string;
+  /** The one member who can rename, reset the code, remove members, hand over admin and delete. */
+  adminSub: string;
+  code: string;
+  createdAt: string;
+}
+
+export interface ClubMember {
+  sub: string;
+  displayName: string;
+  joinedAt: string;
+}
+
+/** A club as listed under one of its members. */
+export interface MyClub {
+  clubId: string;
+  name: string;
 }
 
 /** One user's best result on a built-in benchmark, as shown on its leaderboard. */
@@ -111,6 +149,8 @@ export interface LeaderboardEntry {
   score: number;
   /** Dates this user set a new PB and the score each time, oldest first (for % improvement). */
   history: { date: string; score: number }[];
+  /** The owner's share level when written. Rows from before share levels are "everyone". */
+  share?: Share;
 }
 
 export type InjuryStatus = "active" | "recovering" | "healed";

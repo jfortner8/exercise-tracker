@@ -1,11 +1,13 @@
 import { format, parseISO, subMonths } from "date-fns";
 import type { Metadata } from "next";
+import { Globe, Users } from "lucide-react";
 import Link from "next/link";
-import { Suspense } from "react";
-import { PageHeader } from "@/components/ui";
+import { notFound } from "next/navigation";
+import { Suspense, type ReactNode } from "react";
+import { cx, PageHeader } from "@/components/ui";
 import { BENCHMARK_CATALOG, CATEGORY_LABEL } from "@/lib/benchmarks/catalog";
 import { requireProfile } from "@/lib/dal";
-import { getLeaderboards } from "@/lib/db/repo";
+import { getLeaderboards, listClubMembers, listMyClubs } from "@/lib/db/repo";
 import {
   formatResult,
   IMPROVEMENT_WINDOWS,
@@ -15,6 +17,8 @@ import {
   ymd,
   type ImprovementWindow,
 } from "@/lib/domain";
+import { boardFor, everyoneBoard } from "@/lib/social";
+import { friendsCircle } from "@/lib/social-server";
 import type { LeaderboardEntry, Units } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Leaderboards" };
@@ -30,34 +34,90 @@ function scoreText(c: Catalog, score: number, units: Units) {
   return formatResult(c, { value: score }, units);
 }
 
+/** The boards you can look at: your friends, each of your clubs, and everyone who shares with everyone. */
+type Group = { key: string; label: string };
+
 async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards">["searchParams"] }) {
   const sp = await searchParams;
   const { user, profile } = await requireProfile();
 
-  // One cached read for every board (invalidated when someone's PB row changes).
-  const all = await getLeaderboards();
-  const boards = BENCHMARK_CATALOG.map((c) => ({ c, entries: all[c.key] ?? [] }));
+  // One cached read for every board (invalidated when someone's PB row changes), then each
+  // group's board is that, kept to its people. Membership is checked here, on the server.
+  const [all, circle, myClubs] = await Promise.all([getLeaderboards(), friendsCircle(user.sub), listMyClubs(user.sub)]);
+  const clubs = [...myClubs].sort((a, b) => a.name.localeCompare(b.name));
+  const groups: Group[] = [
+    { key: "friends", label: "Friends" },
+    ...clubs.map((c) => ({ key: c.clubId, label: c.name })),
+    { key: "everyone", label: "Everyone" },
+  ];
+  const groupKey = typeof sp.g === "string" ? sp.g : "friends";
+  if (!groups.some((g) => g.key === groupKey)) notFound(); // not your club, or no such club
+  const club = clubs.find((c) => c.clubId === groupKey);
+  const members = club ? new Set((await listClubMembers(club.clubId)).map((m) => m.sub)) : null;
+  const pick = (entries: LeaderboardEntry[]) =>
+    groupKey === "everyone" ? everyoneBoard(entries) : boardFor(entries, members ?? circle.people);
+
+  const boards = BENCHMARK_CATALOG.map((c) => ({ c, entries: pick(all[c.key] ?? []) }));
   const withEntries = boards.filter((b) => b.entries.length > 0);
   const selected = withEntries.find((b) => b.c.key === sp.b) ?? withEntries[0];
   const view: View = VIEWS.some((v) => v.key === sp.w) ? (sp.w as View) : "best";
-  const href = (b: string, w: View) => `/leaderboards?b=${b}&w=${w}`;
+  const href = (g: string, b: string | undefined, w: View) =>
+    `/leaderboards?g=${encodeURIComponent(g)}${b ? `&b=${b}` : ""}&w=${w}`;
 
   return (
     <div className="space-y-5">
-      {!profile.leaderboard && (
-        <div className="rounded-xl border border-border bg-surface-2/60 px-4 py-3 text-sm">
-          You&apos;re not on the leaderboards.{" "}
+      <nav aria-label="Boards" className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
+        {groups.map((g) => (
+          <Link
+            key={g.key}
+            href={href(g.key, selected?.c.key, view)}
+            aria-current={g.key === groupKey ? "page" : undefined}
+            className={cx(
+              "shrink-0 rounded-lg border px-3 py-1.5 text-sm font-medium",
+              g.key === groupKey ? "border-accent bg-accent/10 text-accent-ink" : "border-border bg-surface text-muted hover:text-text",
+            )}
+          >
+            {g.key === "friends" && <Users className="mr-1.5 inline size-3.5 -translate-y-px" />}
+            {g.key === "everyone" && <Globe className="mr-1.5 inline size-3.5 -translate-y-px" />}
+            {g.label}
+          </Link>
+        ))}
+      </nav>
+
+      {profile.share === "off" ? (
+        <Notice>
+          You&apos;re hidden from every leaderboard.{" "}
           <Link href="/settings" className="font-medium text-accent-ink hover:underline">
-            Turn on &ldquo;Show my PBs on leaderboards&rdquo; in Settings
-          </Link>{" "}
-          to join.
-        </div>
+            Choose who sees your PBs in Settings
+          </Link>
+          .
+        </Notice>
+      ) : (
+        groupKey === "everyone" &&
+        profile.share === "circle" && (
+          <Notice>
+            You share with friends &amp; clubs only, so you&apos;re not on this board.{" "}
+            <Link href="/settings" className="font-medium text-accent-ink hover:underline">
+              Change it in Settings
+            </Link>
+            .
+          </Notice>
+        )
       )}
 
-      {!selected ? (
-        <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted">
-          No one has shared a PB yet. Leaderboards fill in as people opt in and log results on built-in benchmarks.
-        </p>
+      {groupKey === "friends" && circle.friends.length === 0 ? (
+        <Empty>
+          Add friends with their friend code to compare PBs.{" "}
+          <Link href="/friends" className="font-medium text-accent-ink hover:underline">
+            Get your code or add a friend
+          </Link>
+        </Empty>
+      ) : !selected ? (
+        <Empty>
+          {groupKey === "everyone"
+            ? "Nobody shares with everyone yet."
+            : `No PBs on built-in benchmarks here yet. They show up as ${groupKey === "friends" ? "you and your friends" : "members"} log results.`}
+        </Empty>
       ) : (
         <>
           <div className="space-y-2">
@@ -72,7 +132,7 @@ async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards
                   {inCat.map((b) => (
                     <Link
                       key={b.c.key}
-                      href={href(b.c.key, view)}
+                      href={href(groupKey, b.c.key, view)}
                       className={
                         b.c.key === selected.c.key
                           ? "rounded-full border border-accent bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent-ink"
@@ -93,13 +153,20 @@ async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards
             view={view}
             me={user.sub}
             units={profile.units}
-            tabs={VIEWS.map((v) => ({ ...v, href: href(selected.c.key, v.key) }))}
+            tabs={VIEWS.map((v) => ({ ...v, href: href(groupKey, selected.c.key, v.key) }))}
           />
         </>
       )}
     </div>
   );
 }
+
+const Notice = ({ children }: { children: ReactNode }) => (
+  <div className="rounded-xl border border-border bg-surface-2/60 px-4 py-3 text-sm">{children}</div>
+);
+const Empty = ({ children }: { children: ReactNode }) => (
+  <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted">{children}</p>
+);
 
 function Board({
   c,
@@ -212,7 +279,15 @@ export default function LeaderboardsPage({ searchParams }: PageProps<"/leaderboa
     <div className="max-w-3xl">
       <PageHeader
         title="Leaderboards"
-        subtitle="PBs on built-in benchmarks from everyone who has opted in."
+        subtitle="PBs on built-in benchmarks: with your friends, in your clubs, or with everyone."
+        actions={
+          <Link
+            href="/friends"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-sm font-medium hover:bg-surface-2"
+          >
+            <Users className="size-4" /> Friends &amp; clubs
+          </Link>
+        }
       />
       <Suspense fallback={<div className="h-80 animate-pulse rounded-xl bg-surface-2" />}>
         <Boards searchParams={searchParams} />

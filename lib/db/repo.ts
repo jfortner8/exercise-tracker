@@ -13,13 +13,30 @@ import { cacheLife, cacheTag } from "next/cache";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { normalizeUnits } from "@/lib/domain";
 import { env } from "@/lib/env";
-import type { BenchmarkDef, BenchmarkResult, DayLog, Injury, LeaderboardEntry, Profile, Workout } from "@/lib/types";
+import { shareOf } from "@/lib/social";
+import type {
+  BenchmarkDef,
+  BenchmarkResult,
+  Club,
+  ClubMember,
+  DayLog,
+  Friend,
+  Injury,
+  LeaderboardEntry,
+  MyClub,
+  Profile,
+  Workout,
+} from "@/lib/types";
 import { db } from "./client";
 
 /*
  * Single-table layout, everything partitioned by user:
  *   PK = USER#<sub>
  *   SK = PROFILE | DAY#<date> | WO#<date>#<id> | INJ#<id> | BM#<id> | BMR#<bmId>#<date>#<id>
+ *        | LBPB#<catalogKey> | FRIEND#<sub> | CLUB#<clubId>
+ * plus club and code partitions (see "Friends and clubs" at the end):
+ *   PK = CLUB#<id>   SK = META | MEMBER#<sub>
+ *   PK = CODE#<code> SK = CODE
  */
 const pk = (sub: string) => `USER#${sub}`;
 const T = () => env.tableName;
@@ -79,7 +96,8 @@ export const defaultProfile = (email: string, name?: string): Profile => ({
   units: { distance: "mi", weight: "lb" },
   weekStartsOn: 1,
   trackDrinks: false,
-  leaderboard: false,
+  // Friends and clubs only; nobody sees anything until you add a friend or join a club.
+  share: "circle",
   trackWeight: false,
 });
 
@@ -100,11 +118,12 @@ export async function ensureProfile(sub: string, email: string, name?: string) {
 export async function getProfile(sub: string): Promise<Profile | null> {
   const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: "PROFILE" } }));
   if (!res.Item) return null;
-  const p = strip<Profile>(res.Item);
+  const { leaderboard: _old, ...p } = strip<Profile & { leaderboard?: boolean }>(res.Item);
+  void _old;
   return {
     ...p,
     units: normalizeUnits(p.units),
-    leaderboard: p.leaderboard === true,
+    share: shareOf(res.Item),
     trackWeight: p.trackWeight === true,
     hasSports: p.hasSports === true,
   };
@@ -330,10 +349,267 @@ export async function listLeaderboard(key: string, direction: "lower" | "higher"
     );
     for (const it of res.Items ?? []) {
       // Same row is also the user's own item; keep only the entry fields.
-      const { sub, catalogKey, displayName, value, reps, date, score, history } = it as LeaderboardEntry;
-      out.push({ sub, catalogKey, displayName, value, reps, date, score, history: history ?? [] });
+      const { sub, catalogKey, displayName, value, reps, date, score, history, share } = it as LeaderboardEntry;
+      out.push({ sub, catalogKey, displayName, value, reps, date, score, history: history ?? [], share });
     }
     ExclusiveStartKey = res.LastEvaluatedKey;
   } while (ExclusiveStartKey);
   return out;
+}
+
+// ---------- Friends and clubs ----------
+// Codes:   PK = CODE#<code>, SK = CODE -> { kind: "friend", sub } | { kind: "club", clubId }
+// Friends: PK = USER#a, SK = FRIEND#b and the mirror under b, written and deleted together.
+// Clubs:   PK = CLUB#<id>, SK = META (Club) | MEMBER#<sub> (ClubMember);
+//          PK = USER#<sub>, SK = CLUB#<id> (MyClub) lists a user's clubs.
+const codeKey = (code: string) => ({ PK: `CODE#${code}`, SK: "CODE" });
+const clubPK = (id: string) => `CLUB#${id}`;
+const clubMetaKey = (id: string) => ({ PK: clubPK(id), SK: "META" });
+const memberKey = (id: string, sub: string) => ({ PK: clubPK(id), SK: `MEMBER#${sub}` });
+const myClubKey = (sub: string, id: string) => ({ PK: pk(sub), SK: `CLUB#${id}` });
+const friendKey = (sub: string, other: string) => ({ PK: pk(sub), SK: `FRIEND#${other}` });
+
+/** A write's condition failed: the code was taken, they were already friends or members, etc. */
+const isConflict = (e: unknown) =>
+  (e as Error).name === "ConditionalCheckFailedException" || (e as Error).name === "TransactionCanceledException";
+
+/** Runs a conditional write; false when its condition failed instead of throwing. */
+async function tryWrite(send: () => Promise<unknown>): Promise<boolean> {
+  try {
+    await send();
+    return true;
+  } catch (e) {
+    if (isConflict(e)) return false;
+    throw e;
+  }
+}
+
+export type CodeTarget = { kind: "friend"; sub: string } | { kind: "club"; clubId: string };
+
+export async function getCode(code: string): Promise<CodeTarget | null> {
+  const res = await db().send(new GetCommand({ TableName: T(), Key: codeKey(code) }));
+  if (!res.Item) return null;
+  return res.Item.kind === "club"
+    ? { kind: "club", clubId: res.Item.clubId as string }
+    : { kind: "friend", sub: res.Item.sub as string };
+}
+
+/** Claims an unused code as this user's friend code, retiring `old`. False if the code was taken or the old one changed. */
+export const setFriendCode = (sub: string, code: string, old?: string) =>
+  tryWrite(() =>
+    db().send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: T(),
+              Item: { ...codeKey(code), entity: "code", kind: "friend", sub },
+              ConditionExpression: "attribute_not_exists(PK)",
+            },
+          },
+          {
+            Update: {
+              TableName: T(),
+              Key: { PK: pk(sub), SK: "PROFILE" },
+              UpdateExpression: "SET friendCode = :c",
+              // Only replace the code we think is there, so two tabs can't leave a stray code behind.
+              ConditionExpression: old ? "friendCode = :old" : "attribute_exists(PK) AND attribute_not_exists(friendCode)",
+              ExpressionAttributeValues: { ":c": code, ...(old ? { ":old": old } : {}) },
+            },
+          },
+          ...(old ? [{ Delete: { TableName: T(), Key: codeKey(old) } }] : []),
+        ],
+      }),
+    ),
+  );
+
+export const listFriends = (sub: string) => beginsWith<Friend>(sub, "FRIEND#");
+
+/** Both sides of a friendship at once. False if they were already friends. */
+export const addFriendship = (a: Friend, b: Friend) =>
+  tryWrite(() =>
+    db().send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { Put: { TableName: T(), Item: { ...friendKey(a.sub, b.sub), entity: "friend", ...b }, ConditionExpression: "attribute_not_exists(PK)" } },
+          { Put: { TableName: T(), Item: { ...friendKey(b.sub, a.sub), entity: "friend", ...a }, ConditionExpression: "attribute_not_exists(PK)" } },
+        ],
+      }),
+    ),
+  );
+
+export const removeFriendship = (a: string, b: string) =>
+  db().send(
+    new TransactWriteCommand({
+      TransactItems: [
+        { Delete: { TableName: T(), Key: friendKey(a, b) } },
+        { Delete: { TableName: T(), Key: friendKey(b, a) } },
+      ],
+    }),
+  );
+
+export async function getClub(id: string): Promise<Club | null> {
+  const res = await db().send(new GetCommand({ TableName: T(), Key: clubMetaKey(id) }));
+  return res.Item ? strip<Club>(res.Item) : null;
+}
+
+export const listClubMembers = (id: string) =>
+  queryAll<ClubMember>({
+    KeyConditionExpression: "PK = :pk AND begins_with(SK, :p)",
+    ExpressionAttributeValues: { ":pk": clubPK(id), ":p": "MEMBER#" },
+  });
+
+export const listMyClubs = (sub: string) => beginsWith<MyClub>(sub, "CLUB#");
+
+/** A new club with its creator as admin and first member. False if the code was taken. */
+export const createClub = (club: Club, creator: ClubMember) =>
+  tryWrite(() =>
+    db().send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { Put: { TableName: T(), Item: { ...clubMetaKey(club.id), entity: "club", ...club }, ConditionExpression: "attribute_not_exists(PK)" } },
+          { Put: { TableName: T(), Item: { ...memberKey(club.id, creator.sub), entity: "clubMember", ...creator } } },
+          { Put: { TableName: T(), Item: { ...myClubKey(creator.sub, club.id), entity: "myClub", clubId: club.id, name: club.name } } },
+          { Put: { TableName: T(), Item: { ...codeKey(club.code), entity: "code", kind: "club", clubId: club.id }, ConditionExpression: "attribute_not_exists(PK)" } },
+        ],
+      }),
+    ),
+  );
+
+/** Adds a member. False if they're already in it or the club is gone. */
+export const joinClub = (club: Club, member: ClubMember) =>
+  tryWrite(() =>
+    db().send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { ConditionCheck: { TableName: T(), Key: clubMetaKey(club.id), ConditionExpression: "attribute_exists(PK)" } },
+          { Put: { TableName: T(), Item: { ...memberKey(club.id, member.sub), entity: "clubMember", ...member }, ConditionExpression: "attribute_not_exists(PK)" } },
+          { Put: { TableName: T(), Item: { ...myClubKey(member.sub, club.id), entity: "myClub", clubId: club.id, name: club.name } } },
+        ],
+      }),
+    ),
+  );
+
+/**
+ * Takes a member out of a club. With `newAdmin`, admin passes to them in the same write, and
+ * only while `sub` is still the admin, so a club is never left without one. False if that changed.
+ */
+export const removeClubMember = (id: string, sub: string, newAdmin?: string) =>
+  tryWrite(() =>
+    db().send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { Delete: { TableName: T(), Key: memberKey(id, sub) } },
+          { Delete: { TableName: T(), Key: myClubKey(sub, id) } },
+          ...(newAdmin
+            ? [
+                { ConditionCheck: { TableName: T(), Key: memberKey(id, newAdmin), ConditionExpression: "attribute_exists(PK)" } },
+                {
+                  Update: {
+                    TableName: T(),
+                    Key: clubMetaKey(id),
+                    UpdateExpression: "SET adminSub = :n",
+                    ConditionExpression: "adminSub = :me",
+                    ExpressionAttributeValues: { ":n": newAdmin, ":me": sub },
+                  },
+                },
+              ]
+            : []),
+        ],
+      }),
+    ),
+  );
+
+/** Hands admin to another member (checked to still be in the club). False if either side changed. */
+export const setClubAdmin = (id: string, from: string, to: string) =>
+  tryWrite(() =>
+    db().send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { ConditionCheck: { TableName: T(), Key: memberKey(id, to), ConditionExpression: "attribute_exists(PK)" } },
+          {
+            Update: {
+              TableName: T(),
+              Key: clubMetaKey(id),
+              UpdateExpression: "SET adminSub = :to",
+              ConditionExpression: "adminSub = :from",
+              ExpressionAttributeValues: { ":to": to, ":from": from },
+            },
+          },
+        ],
+      }),
+    ),
+  );
+
+/** Renames a club, including the copy of its name in each member's club list. */
+export async function renameClub(id: string, name: string, members: ClubMember[]) {
+  await db().send(
+    new UpdateCommand({
+      TableName: T(),
+      Key: clubMetaKey(id),
+      UpdateExpression: "SET #n = :n",
+      ExpressionAttributeNames: { "#n": "name" },
+      ExpressionAttributeValues: { ":n": name },
+    }),
+  );
+  await putAll(members.map((m) => ({ ...myClubKey(m.sub, id), entity: "myClub", clubId: id, name })));
+}
+
+/** Swaps a club's invite code; the old one stops working. False if the new code was taken. */
+export const resetClubCode = (club: Club, code: string) =>
+  tryWrite(() =>
+    db().send(
+      new TransactWriteCommand({
+        TransactItems: [
+          { Put: { TableName: T(), Item: { ...codeKey(code), entity: "code", kind: "club", clubId: club.id }, ConditionExpression: "attribute_not_exists(PK)" } },
+          {
+            Update: {
+              TableName: T(),
+              Key: clubMetaKey(club.id),
+              UpdateExpression: "SET code = :c",
+              ConditionExpression: "code = :old",
+              ExpressionAttributeValues: { ":c": code, ":old": club.code },
+            },
+          },
+          { Delete: { TableName: T(), Key: codeKey(club.code) } },
+        ],
+      }),
+    ),
+  );
+
+/** Deletes a club: its code first (so nobody joins mid-delete), then members, their lists, and the club. */
+export async function deleteClub(club: Club) {
+  await db().send(new DeleteCommand({ TableName: T(), Key: codeKey(club.code) }));
+  const members = await listClubMembers(club.id);
+  await deleteAll([...members.flatMap((m) => [memberKey(club.id, m.sub), myClubKey(m.sub, club.id)]), clubMetaKey(club.id)]);
+}
+
+/** After a rename: the name shown in friends' and clubmates' lists. */
+export async function updateSocialName(sub: string, displayName: string) {
+  const [friends, clubs] = await Promise.all([listFriends(sub), listMyClubs(sub)]);
+  const rename = (Key: { PK: string; SK: string }) =>
+    tryWrite(() =>
+      db().send(
+        new UpdateCommand({
+          TableName: T(),
+          Key,
+          UpdateExpression: "SET displayName = :n",
+          ConditionExpression: "attribute_exists(PK)",
+          ExpressionAttributeValues: { ":n": displayName },
+        }),
+      ),
+    );
+  await Promise.all([...friends.map((f) => rename(friendKey(f.sub, sub))), ...clubs.map((c) => rename(memberKey(c.clubId, sub)))]);
+}
+
+async function putAll(items: Record<string, unknown>[]) {
+  for (let i = 0; i < items.length; i += 25) {
+    await db().send(new BatchWriteCommand({ RequestItems: { [T()]: items.slice(i, i + 25).map((Item) => ({ PutRequest: { Item } })) } }));
+  }
+}
+
+async function deleteAll(keys: { PK: string; SK: string }[]) {
+  for (let i = 0; i < keys.length; i += 25) {
+    await db().send(new BatchWriteCommand({ RequestItems: { [T()]: keys.slice(i, i + 25).map((Key) => ({ DeleteRequest: { Key } })) } }));
+  }
 }

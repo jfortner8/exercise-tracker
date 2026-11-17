@@ -16,7 +16,9 @@ export async function syncLeaderboard(sub: string, onlyKey?: string) {
     repo.listBenchmarks(sub),
     repo.listOwnLeaderboardEntries(sub),
   ]);
-  const optedIn = profile?.leaderboard === true;
+  // Rows exist unless sharing is off; each carries the share level so boards can filter.
+  const share = profile?.share ?? "off";
+  const optedIn = share !== "off";
   const tracked = benchmarks.filter((b) => b.catalogKey && (!onlyKey || b.catalogKey === onlyKey));
 
   // Work out each tracked benchmark's entry in parallel (one results query each).
@@ -39,6 +41,7 @@ export async function syncLeaderboard(sub: string, onlyKey?: string) {
           reps: pb.reps,
           date: pb.date,
           score: resultScore(def, pb),
+          share,
           history: markRunningPBs(def, results)
             .filter((r) => r.isPb)
             .map((r) => ({ date: r.date, score: r.score })),
@@ -50,8 +53,8 @@ export async function syncLeaderboard(sub: string, onlyKey?: string) {
 
   // Only write what changed, so the shared leaderboard cache is invalidated only when needed.
   const same = (a: LeaderboardEntry, b: LeaderboardEntry) =>
-    JSON.stringify([a.displayName, a.value, a.reps, a.date, a.score, a.history]) ===
-    JSON.stringify([b.displayName, b.value, b.reps, b.date, b.score, b.history]);
+    JSON.stringify([a.displayName, a.value, a.reps, a.date, a.score, a.history, a.share ?? "everyone"]) ===
+    JSON.stringify([b.displayName, b.value, b.reps, b.date, b.score, b.history, b.share ?? "everyone"]);
   const toPut = wanted.filter((w) => {
     const old = existing.find((e) => e.catalogKey === w.catalogKey);
     return !old || !same(old, w);
