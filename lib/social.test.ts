@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardFor, CODE_ALPHABET, CODE_LENGTH, everyoneBoard, formatCode, newCode, nextAdmin, normalizeCode, shareOf } from "./social";
+import { boardsFrom, CODE_ALPHABET, CODE_LENGTH, everyoneBoard, formatCode, mapLimit, newCode, nextAdmin, normalizeCode, shareOf } from "./social";
 import type { ClubMember, LeaderboardEntry } from "./types";
 
 const entry = (sub: string, share?: LeaderboardEntry["share"]): LeaderboardEntry => ({
@@ -46,8 +46,26 @@ describe("share levels", () => {
 
 describe("boards", () => {
   const all = [entry("a", "everyone"), entry("b", "circle"), entry("c"), entry("d", "everyone")];
-  it("keep only the given people, in order", () => {
-    expect(boardFor(all, new Set(["d", "b", "x"])).map((e) => e.sub)).toEqual(["b", "d"]);
+  it("group people's rows by benchmark, best first in each direction", () => {
+    const row = (sub: string, catalogKey: string, score: number, date = "2026-11-01") => ({ ...entry(sub), catalogKey, score, date });
+    const boards = boardsFrom(
+      [row("a", "run-5k", 1600), row("b", "run-5k", 1500), row("c", "run-5k", 1500, "2026-10-01"), row("a", "bench", 90), row("b", "bench", 100), row("x", "gone", 1)],
+      (k) => (k === "run-5k" ? "lower" : k === "bench" ? "higher" : undefined),
+    );
+    expect(boards["run-5k"].map((e) => e.sub)).toEqual(["c", "b", "a"]); // tie: earlier PB first
+    expect(boards.bench.map((e) => e.sub)).toEqual(["b", "a"]);
+    expect(boards.gone).toBeUndefined();
+  });
+  it("run a bounded number of reads at once, keeping order", async () => {
+    let live = 0, peak = 0;
+    const out = await mapLimit([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
+      peak = Math.max(peak, ++live);
+      await new Promise((r) => setTimeout(r, 5));
+      live--;
+      return n * 10;
+    });
+    expect(out).toEqual([10, 20, 30, 40, 50, 60, 70]);
+    expect(peak).toBe(3);
   });
   it("Everyone shows only people sharing with everyone (old rows count)", () => {
     expect(everyoneBoard(all).map((e) => e.sub)).toEqual(["a", "c", "d"]);

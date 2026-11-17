@@ -1,8 +1,9 @@
 import type { ClubMember, LeaderboardEntry, Share } from "./types";
 
 /*
- * Friends and clubs. Leaderboards are filtered, not copied: every PB lives in one row per user
- * per benchmark, and a Friends or club board is the shared board kept to the people in that set.
+ * Friends and clubs. Every PB lives in one row per user per benchmark. A Friends or club board
+ * reads just those people's rows (so it costs the size of the circle, not of the whole app);
+ * the Everyone board reads the shared, score-sorted index.
  */
 
 /** Friend and club codes: no 0/O, 1/I/L, so they survive being read aloud or retyped. */
@@ -43,9 +44,39 @@ export function shareOf(p: { share?: unknown; leaderboard?: unknown }): Share {
   return p.leaderboard === true ? "everyone" : "off";
 }
 
-/** A board kept to some people (friends, or a club's members), in its original order. */
-export const boardFor = (entries: LeaderboardEntry[], people: ReadonlySet<string>) =>
-  entries.filter((e) => people.has(e.sub));
+/**
+ * Rows read person by person, as one board per benchmark, best first: by score in the
+ * benchmark's direction (the order the shared index gives), then whoever set it first.
+ */
+export function boardsFrom(
+  rows: LeaderboardEntry[],
+  direction: (catalogKey: string) => "lower" | "higher" | undefined,
+): Record<string, LeaderboardEntry[]> {
+  const boards: Record<string, LeaderboardEntry[]> = {};
+  for (const r of rows) {
+    if (!direction(r.catalogKey)) continue; // a benchmark no longer in the catalog
+    (boards[r.catalogKey] ??= []).push(r);
+  }
+  for (const [key, entries] of Object.entries(boards)) {
+    const sign = direction(key) === "lower" ? 1 : -1;
+    entries.sort((a, b) => sign * (a.score - b.score) || a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName));
+  }
+  return boards;
+}
+
+/** Runs `fn` over items with at most `limit` at once (so a big club doesn't fire hundreds of queries together). */
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
 
 /** The Everyone board: only people who chose to share with everyone. */
 export const everyoneBoard = (entries: LeaderboardEntry[]) =>

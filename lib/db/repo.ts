@@ -13,7 +13,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { normalizeUnits } from "@/lib/domain";
 import { env } from "@/lib/env";
-import { shareOf } from "@/lib/social";
+import { boardsFrom, mapLimit, shareOf } from "@/lib/social";
 import type {
   BenchmarkDef,
   BenchmarkResult,
@@ -330,6 +330,22 @@ export async function getLeaderboards(): Promise<Record<string, LeaderboardEntry
     BENCHMARK_CATALOG.map(async (c) => [c.key, await listLeaderboard(c.key, c.direction)] as const),
   );
   return Object.fromEntries(boards);
+}
+
+/**
+ * Boards for a set of people (you and your friends, or a club's members): reads only their own
+ * leaderboard rows, one query per person, so the cost follows the circle's size, not the app's.
+ * Not cached; these rows change whenever one of the people logs a PB.
+ */
+export async function getBoardsFor(subs: Iterable<string>): Promise<Record<string, LeaderboardEntry[]>> {
+  const rows = (await mapLimit([...new Set(subs)], 16, listOwnLeaderboardEntries)).flat();
+  const direction = (key: string) => BENCHMARK_CATALOG.find((c) => c.key === key)?.direction;
+  return boardsFrom(
+    rows.map(({ sub, catalogKey, displayName, value, reps, date, score, history, share }) => ({
+      sub, catalogKey, displayName, value, reps, date, score, history: history ?? [], share,
+    })),
+    direction,
+  );
 }
 
 /** Everyone on a benchmark's leaderboard, best first. */

@@ -7,7 +7,7 @@ import { Suspense, type ReactNode } from "react";
 import { cx, PageHeader } from "@/components/ui";
 import { BENCHMARK_CATALOG, CATEGORY_LABEL } from "@/lib/benchmarks/catalog";
 import { requireProfile } from "@/lib/dal";
-import { getLeaderboards, listClubMembers, listMyClubs } from "@/lib/db/repo";
+import { getBoardsFor, getLeaderboards, listClubMembers, listMyClubs } from "@/lib/db/repo";
 import {
   formatResult,
   IMPROVEMENT_WINDOWS,
@@ -17,7 +17,7 @@ import {
   ymd,
   type ImprovementWindow,
 } from "@/lib/domain";
-import { boardFor, everyoneBoard } from "@/lib/social";
+import { everyoneBoard } from "@/lib/social";
 import { friendsCircle } from "@/lib/social-server";
 import type { LeaderboardEntry, Units } from "@/lib/types";
 
@@ -41,9 +41,8 @@ async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards
   const sp = await searchParams;
   const { user, profile } = await requireProfile();
 
-  // One cached read for every board (invalidated when someone's PB row changes), then each
-  // group's board is that, kept to its people. Membership is checked here, on the server.
-  const [all, circle, myClubs] = await Promise.all([getLeaderboards(), friendsCircle(user.sub), listMyClubs(user.sub)]);
+  // Membership is checked here, on the server, before any board is read.
+  const [circle, myClubs] = await Promise.all([friendsCircle(user.sub), listMyClubs(user.sub)]);
   const clubs = [...myClubs].sort((a, b) => a.name.localeCompare(b.name));
   const groups: Group[] = [
     { key: "friends", label: "Friends" },
@@ -53,11 +52,14 @@ async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards
   const groupKey = typeof sp.g === "string" ? sp.g : "friends";
   if (!groups.some((g) => g.key === groupKey)) notFound(); // not your club, or no such club
   const club = clubs.find((c) => c.clubId === groupKey);
-  const members = club ? new Set((await listClubMembers(club.clubId)).map((m) => m.sub)) : null;
-  const pick = (entries: LeaderboardEntry[]) =>
-    groupKey === "everyone" ? everyoneBoard(entries) : boardFor(entries, members ?? circle.people);
+  // Friends and clubs read just their people's PB rows. Everyone reads the shared cached
+  // board (invalidated when someone's PB row changes), minus people who share with friends & clubs only.
+  const all =
+    groupKey === "everyone"
+      ? Object.fromEntries(Object.entries(await getLeaderboards()).map(([k, entries]) => [k, everyoneBoard(entries)]))
+      : await getBoardsFor(club ? (await listClubMembers(club.clubId)).map((m) => m.sub) : circle.people);
 
-  const boards = BENCHMARK_CATALOG.map((c) => ({ c, entries: pick(all[c.key] ?? []) }));
+  const boards = BENCHMARK_CATALOG.map((c) => ({ c, entries: all[c.key] ?? [] }));
   const withEntries = boards.filter((b) => b.entries.length > 0);
   const selected = withEntries.find((b) => b.c.key === sp.b) ?? withEntries[0];
   const view: View = VIEWS.some((v) => v.key === sp.w) ? (sp.w as View) : "best";
