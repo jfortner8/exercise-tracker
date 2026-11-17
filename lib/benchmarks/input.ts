@@ -1,5 +1,5 @@
-import { displayToKg, displayToMeters, distanceUnit, parseClock, weightUnit } from "@/lib/domain";
-import type { BenchmarkDef, Units } from "@/lib/types";
+import { displayToKg, displayToMeters, distanceUnit, formatClock, kgToDisplay, metersToDisplay, parseClock, weightUnit } from "../domain";
+import type { BenchmarkDef, Units } from "../types";
 
 export function valueLabel(bm: Pick<BenchmarkDef, "metricKind" | "unit">, units: Units) {
   switch (bm.metricKind) {
@@ -31,5 +31,21 @@ export function parseValue(bm: Pick<BenchmarkDef, "metricKind">, raw: string, un
       return displayToKg(Number(s), units);
     default:
       return Number(s);
+  }
+}
+
+/** A stored value as the user would type it (inverse of parseValue), to pre-fill the edit form. */
+export function valueToInput(bm: Pick<BenchmarkDef, "metricKind">, value: number, units: Units): string {
+  const round = (n: number, d: number) => String(Math.round(n * 10 ** d) / 10 ** d);
+  switch (bm.metricKind) {
+    case "time":
+    case "duration":
+      return formatClock(value);
+    case "distance":
+      return round(metersToDisplay(value, units), 3);
+    case "weight_reps":
+      return round(kgToDisplay(value, units), 1);
+    default:
+      return String(value);
   }
 }

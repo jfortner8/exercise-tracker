@@ -133,7 +133,7 @@ function Toggle({
       >
         <span
           className={cx(
-            "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
+            "absolute left-0 top-0.5 size-4 rounded-full bg-white shadow transition-transform",
             checked ? "translate-x-4" : "translate-x-0.5",
           )}
         />

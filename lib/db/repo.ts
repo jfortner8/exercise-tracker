@@ -253,6 +253,24 @@ export const listAllResults = (sub: string) => beginsWith<BenchmarkResult>(sub, 
 export const listResults = (sub: string, benchmarkId: string) =>
   beginsWith<BenchmarkResult>(sub, `BMR#${benchmarkId}#`);
 export const saveResult = (sub: string, r: BenchmarkResult) => put(sub, bmrSK(r), "result", r);
+
+export async function getResult(sub: string, key: Pick<BenchmarkResult, "benchmarkId" | "date" | "id">) {
+  const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: bmrSK(key) } }));
+  return res.Item ? strip<BenchmarkResult>(res.Item) : null;
+}
+
+/** Save an edited result. The date is part of the key, so a new date moves the item atomically. */
+export async function replaceResult(sub: string, old: BenchmarkResult, next: BenchmarkResult) {
+  if (old.date === next.date) return saveResult(sub, next);
+  await db().send(
+    new TransactWriteCommand({
+      TransactItems: [
+        { Delete: { TableName: T(), Key: { PK: pk(sub), SK: bmrSK(old) } } },
+        { Put: { TableName: T(), Item: { PK: pk(sub), SK: bmrSK(next), entity: "result", ...next } } },
+      ],
+    }),
+  );
+}
 export const deleteResult = (sub: string, r: Pick<BenchmarkResult, "benchmarkId" | "date" | "id">) =>
   del(sub, bmrSK(r));
 

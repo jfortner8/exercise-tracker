@@ -353,19 +353,37 @@ const resultInput = z.object({
   workoutId: z.string().max(64).optional(),
   notes: z.string().max(2000).optional(),
 });
-export async function addResultAction(raw: z.infer<typeof resultInput>) {
-  const { sub } = await requireUser();
-  const r = resultInput.parse(raw);
+/** Loads the benchmark and checks a linked workout: this user's, on the result's day, of a fitting type. */
+async function checkResult(sub: string, r: z.infer<typeof resultInput>) {
   const bm = await repo.getBenchmark(sub, r.benchmarkId);
   if (!bm) throw new Error("Benchmark not found");
   if (r.workoutId) {
-    // Must be this user's workout, on the result's day, of a type the benchmark can belong to.
     const w = await repo.getWorkout(sub, r.date, r.workoutId);
     if (!w) throw new Error("That workout isn't on the result's date");
     if (!linkableWorkouts(bm, [w]).length) throw new Error(`${bm.name} can't be part of a ${w.type} workout`);
   }
+  return bm;
+}
+
+export async function addResultAction(raw: z.infer<typeof resultInput>) {
+  const { sub } = await requireUser();
+  const r = resultInput.parse(raw);
+  await checkResult(sub, r);
   await repo.saveResult(sub, { ...r, id: ulid() });
   if (bm.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
+  refresh();
+}
+
+/** Edit a result (value, reps, date, notes, workout link). Changing the date moves it. */
+export async function updateResultAction(raw: z.infer<typeof resultInput> & { id: string; originalDate: string }) {
+  const { sub } = await requireUser();
+  const r = resultInput.parse(raw);
+  const resultId = id.parse(raw.id);
+  const old = await repo.getResult(sub, { benchmarkId: r.benchmarkId, date: day.parse(raw.originalDate), id: resultId });
+  if (!old) throw new Error("Result not found");
+  await checkResult(sub, r);
+  // The form sends the whole result, so cleared fields (notes, link) are dropped rather than kept.
+  await repo.replaceResult(sub, old, { ...r, id: resultId });
   refresh();
 }
 
