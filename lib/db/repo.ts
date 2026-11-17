@@ -212,6 +212,9 @@ export const listWorkoutsForInjury = (sub: string, injuryId: string) =>
 export const listDays = (sub: string, start: string, end: string) =>
   between(sub, "DAY#", start, end) as Promise<DayLog[]>;
 
+/** Every day log (notes, drinks, weigh-ins) — for the Weight page. */
+export const listAllDays = (sub: string) => beginsWith<DayLog>(sub, "DAY#");
+
 export async function getDay(sub: string, date: string) {
   const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: `DAY#${date}` } }));
   return res.Item ? strip<DayLog>(res.Item) : null;

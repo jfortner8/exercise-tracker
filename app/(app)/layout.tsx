@@ -35,11 +35,11 @@ const sidebarFooter = (
   </>
 );
 
-/** Nav that adds the Sports tab once the user has completed a sport workout. */
+/** Nav with the optional tabs: Sports (after a completed sport workout) and Weight (when tracking it). */
 async function Nav({ part }: { part: "sidebar" | "bottom" }) {
   const { profile } = await requireProfile();
-  const showSports = profile.hasSports === true;
-  return part === "sidebar" ? <Sidebar footer={sidebarFooter} showSports={showSports} /> : <BottomNav showSports={showSports} />;
+  const flags = { showSports: profile.hasSports === true, showWeight: profile.trackWeight };
+  return part === "sidebar" ? <Sidebar footer={sidebarFooter} {...flags} /> : <BottomNav {...flags} />;
 }
 
 export default function AppLayout({ children }: LayoutProps<"/">) {

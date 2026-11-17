@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, CalendarDays, HeartPulse, Settings, Trophy, Volleyball } from "lucide-react";
+import { Activity, CalendarDays, HeartPulse, Scale, Settings, Trophy, Volleyball } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
@@ -13,9 +13,22 @@ const BASE = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 const SPORTS_ITEM = { href: "/sports", label: "Sports", icon: Volleyball };
+const WEIGHT_ITEM = { href: "/weight", label: "Weight", icon: Scale };
 
-/** The Sports tab only shows for people who have completed a sport workout. */
-const navItems = (showSports: boolean) => (showSports ? [...BASE.slice(0, 2), SPORTS_ITEM, ...BASE.slice(2)] : BASE);
+export interface NavFlags {
+  /** Has completed a sport workout. */
+  showSports?: boolean;
+  /** Has bodyweight tracking turned on. */
+  showWeight?: boolean;
+}
+
+/** Optional tabs only show for people who use them. */
+const navItems = ({ showSports, showWeight }: NavFlags) => [
+  ...BASE.slice(0, 2),
+  ...(showSports ? [SPORTS_ITEM] : []),
+  ...(showWeight ? [WEIGHT_ITEM] : []),
+  ...BASE.slice(2),
+];
 
 const matches = (path: string | null, href: string) =>
   path != null && (href === "/" ? path === "/" : path.startsWith(href));
@@ -28,8 +41,8 @@ function PathReader({ children }: { children: (path: string | null) => ReactNode
   return children(usePathname());
 }
 
-export function Sidebar({ footer, showSports = false }: { footer: ReactNode; showSports?: boolean }) {
-  const ITEMS = navItems(showSports);
+export function Sidebar({ footer, ...flags }: { footer: ReactNode } & NavFlags) {
+  const ITEMS = navItems(flags);
   return (
     <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r border-border bg-surface px-3 py-5 md:flex">
       <Link href="/" className="mb-8 flex items-center gap-2 px-2 text-lg font-semibold tracking-tight">
@@ -58,8 +71,8 @@ export function Sidebar({ footer, showSports = false }: { footer: ReactNode; sho
   );
 }
 
-export function BottomNav({ showSports = false }: { showSports?: boolean }) {
-  const ITEMS = navItems(showSports);
+export function BottomNav(flags: NavFlags) {
+  const ITEMS = navItems(flags);
   return <WithPath>{(path) => (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
