@@ -34,6 +34,11 @@ export function WeightTrend({ series, units, today }: { series: WeightPoint[]; u
     .filter((p) => p.date >= since)
     .map((p) => ({ date: p.date, label: format(parseISO(p.date), "MMM d"), kg: show(p.kg), avg: show(p.avgKg) }));
 
+  // Four equal steps of whole units, so ticks don't bunch at the top (e.g. 177, 178).
+  const lo = Math.floor(Math.min(...data.map((d) => Math.min(d.kg, d.avg))) - 1);
+  const step = Math.max(1, Math.ceil((Math.max(...data.map((d) => Math.max(d.kg, d.avg))) + 1 - lo) / 4));
+  const ticks = [0, 1, 2, 3, 4].map((i) => lo + i * step);
+
   const changes = [
     { label: "30-day change", c: weightChange(series, 30, today) },
     { label: "90-day change", c: weightChange(series, 90, today) },
@@ -87,7 +92,8 @@ export function WeightTrend({ series, units, today }: { series: WeightPoint[]; u
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="label" tick={{ fill: "var(--muted)", fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={24} />
                 <YAxis
-                  domain={[(min: number) => Math.floor(min - 1), (max: number) => Math.ceil(max + 1)]}
+                  domain={[ticks[0], ticks[4]]}
+                  ticks={ticks}
                   width={44}
                   tick={{ fill: "var(--muted)", fontSize: 12 }}
                   axisLine={false}

@@ -32,7 +32,7 @@ export function Sheet({
           "relative ml-auto flex max-h-dvh w-full flex-col bg-surface shadow-2xl",
           variant === "drawer"
             ? "mt-auto max-h-[92dvh] rounded-t-2xl sm:mt-0 sm:h-dvh sm:max-h-dvh sm:max-w-lg sm:rounded-none sm:border-l sm:border-border"
-            : "m-auto max-w-md rounded-2xl border border-border",
+            : "m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-border",
         )}
       >
         <div className="flex items-start gap-3 border-b border-border px-5 py-4">
@@ -44,7 +44,7 @@ export function Sheet({
             <X className="size-4" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
       </div>
     </div>
   );

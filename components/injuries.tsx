@@ -37,7 +37,7 @@ export function InjuryList({ injuries, pain }: { injuries: Injury[]; pain: Recor
         const points = pain[i.id] ?? [];
         return (
           <Card key={i.id} className="p-4">
-            <div className="flex items-start gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-semibold">{i.name}</h3>
@@ -74,7 +74,7 @@ export function InjuryList({ injuries, pain }: { injuries: Injury[]; pain: Recor
                   </div>
                 )}
               </div>
-              <div className="flex gap-1">
+              <div className="-mb-1 flex items-center gap-1 sm:mb-0">
                 {i.status !== "healed" && (
                   <Button
                     size="sm"

@@ -1,3 +1,4 @@
+import { LogOut } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { SettingsForm } from "@/components/settings-form";
@@ -18,6 +19,12 @@ export default function SettingsPage() {
       <Suspense fallback={<div className="h-80 animate-pulse rounded-xl bg-surface-2" />}>
         <Settings />
       </Suspense>
+      {/* Phones have no sidebar (where sign-out lives on wider screens), so it goes here. */}
+      <form action="/api/auth/logout" method="post" className="mt-8 border-t border-border pt-6 md:hidden">
+        <button className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface text-sm font-medium text-danger hover:bg-surface-2">
+          <LogOut className="size-4" /> Sign out
+        </button>
+      </form>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { subMonths } from "date-fns";
+import { format, parseISO, subMonths } from "date-fns";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -190,7 +190,7 @@ function Board({
                   <span className="block text-sm font-semibold tabular-nums">{formatResult(c, e, units)}</span>
                   <span className="block text-xs text-muted">
                     {c.metricKind === "weight_reps" ? `${scoreText(c, e.score, units)} · ` : ""}
-                    {e.date}
+                    {format(parseISO(e.date), "MMM d, yyyy")}
                   </span>
                 </span>
               )}
