@@ -39,6 +39,25 @@ export function chunkWeeks<T>(days: T[]): T[][] {
 
 export const parseDay = (s: string) => parseISO(s);
 
+/**
+ * Dates for a weekly repeat: every day in the `weeks` weeks starting on `start` (inclusive) that
+ * falls on one of `weekdays` (0 Sunday … 6 Saturday). With `every` > 1, only every Nth calendar
+ * week (counted from the week holding `start`) is used, so 2 means every other week.
+ */
+export function repeatDates(start: string, weekdays: number[], every: number, weeks: number, weekStartsOn: 0 | 1): string[] {
+  const first = parseISO(start);
+  const firstWeek = startOfWeek(first, { weekStartsOn });
+  const days = new Set(weekdays);
+  const out: string[] = [];
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = addDays(first, i);
+    if (!days.has(d.getDay())) continue;
+    const week = Math.round((startOfWeek(d, { weekStartsOn }).getTime() - firstWeek.getTime()) / (7 * 86_400_000));
+    if (week % every === 0) out.push(ymd(d));
+  }
+  return out;
+}
+
 // ---------- Time formatting ----------
 /** 2652 -> 44'12"  ·  3725 -> 1:02'05" */
 export function formatDuration(sec: number): string {

@@ -1,7 +1,9 @@
 "use client";
 
+import { format, parseISO } from "date-fns";
+import { Repeat } from "lucide-react";
 import { useState, useTransition } from "react";
-import { saveWorkoutAction, type WorkoutInput } from "@/lib/actions";
+import { saveWorkoutAction, type RepeatInput, type WorkoutInput } from "@/lib/actions";
 import {
   describeDuration,
   displayToMeters,
@@ -11,6 +13,7 @@ import {
   intervalTotalSec,
   metersToDisplay,
   parseMinutesInput,
+  repeatDates,
 } from "@/lib/domain";
 import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
 import { activityKey, activityMeta, applyActivity, type ActivityKey } from "@/lib/activities";
@@ -243,10 +246,81 @@ function DetailsFields({
   );
 }
 
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "Repeat weekly" for a new planned workout: which weekdays, how often, for how long. */
+function RepeatFields({
+  start,
+  value,
+  onChange,
+  weekStartsOn,
+}: {
+  start: string;
+  value: RepeatInput;
+  onChange: (v: RepeatInput) => void;
+  weekStartsOn: 0 | 1;
+}) {
+  const order = Array.from({ length: 7 }, (_, i) => (i + weekStartsOn) % 7);
+  const toggle = (d: number) =>
+    onChange({ ...value, weekdays: value.weekdays.includes(d) ? value.weekdays.filter((x) => x !== d) : [...value.weekdays, d] });
+  const dates = /^\d{4}-\d{2}-\d{2}$/.test(start) && value.weekdays.length ? repeatDates(start, value.weekdays, value.every, value.weeks, weekStartsOn) : [];
+  const show = (s: string) => format(parseISO(s), "EEE MMM d");
+  return (
+    <div className="space-y-3 rounded-lg border border-border p-3">
+      <div className="grid grid-cols-7 gap-1" role="group" aria-label="Repeat on">
+        {order.map((d) => (
+          <button
+            type="button"
+            key={d}
+            aria-pressed={value.weekdays.includes(d)}
+            onClick={() => toggle(d)}
+            className={cx(
+              "rounded-md border py-1.5 text-xs font-medium",
+              value.weekdays.includes(d) ? "border-accent bg-accent/10 text-accent-ink" : "border-border text-muted hover:text-text",
+            )}
+          >
+            {WEEKDAY_LABELS[d]}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="How often">
+          <Select value={value.every} onChange={(e) => onChange({ ...value, every: Number(e.target.value) })}>
+            <option value={1}>Every week</option>
+            <option value={2}>Every 2 weeks</option>
+            <option value={3}>Every 3 weeks</option>
+            <option value={4}>Every 4 weeks</option>
+          </Select>
+        </Field>
+        <Field label="For how many weeks">
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={52}
+            value={value.weeks}
+            onChange={(e) => onChange({ ...value, weeks: Math.min(52, Math.max(1, Math.floor(Number(e.target.value) || 1))) })}
+          />
+        </Field>
+      </div>
+      <p className="text-xs text-muted" aria-live="polite">
+        {!value.weekdays.length
+          ? "Pick at least one day."
+          : !dates.length
+            ? "None of those days fall in that range."
+            : dates.length === 1
+              ? `Adds 1 workout · ${show(dates[0])}`
+              : `Adds ${dates.length} workouts · ${show(dates[0])} – ${show(dates.at(-1)!)}`}
+      </p>
+    </div>
+  );
+}
+
 export function WorkoutForm({
   date,
   workout,
   units,
+  weekStartsOn = 1,
   injuries,
   onDone,
   presetStatus,
@@ -255,6 +329,7 @@ export function WorkoutForm({
   date: string;
   workout?: Workout;
   units: Units;
+  weekStartsOn?: 0 | 1;
   injuries: Injury[];
   onDone: () => void;
   /** Start the form on this status (e.g. "substituted" from the drawer's quick resolve). */
@@ -293,6 +368,9 @@ export function WorkoutForm({
   const [injuryId, setInjuryId] = useState(workout?.injuryId ?? "");
   const [rpe, setRpe] = useState(workout?.rpe != null ? String(workout.rpe) : "");
   const [notes, setNotes] = useState(workout?.notes ?? "");
+  const [repeating, setRepeating] = useState(false);
+  const [repeat, setRepeat] = useState<RepeatInput>(() => ({ weekdays: [parseISO(date).getDay()], every: 1, weeks: 12 }));
+  const canRepeat = !workout && status === "planned";
 
   const showActual = status !== "planned" && status !== "skipped" && status !== "missed";
   const showReason = status !== "planned" && status !== "completed";
@@ -306,6 +384,10 @@ export function WorkoutForm({
     }
     if (type === "sport" && sport === "other" && !sportName.trim()) {
       setError("Name the sport (or pick one from the list).");
+      return;
+    }
+    if (canRepeat && repeating && !repeat.weekdays.length) {
+      setError("Pick at least one day to repeat on.");
       return;
     }
     const bad = [...unreadableDurations(planned), ...(showActual ? unreadableDurations(actual) : [])];
@@ -338,7 +420,7 @@ export function WorkoutForm({
     };
     start(async () => {
       try {
-        await saveWorkoutAction(input);
+        await saveWorkoutAction(input, canRepeat && repeating ? repeat : undefined);
         onDone();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save");
@@ -456,6 +538,21 @@ export function WorkoutForm({
         </div>
       </Field>
 
+      {canRepeat && (
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" checked={repeating} onChange={(e) => {
+                setRepeating(e.target.checked);
+                // Start from the chosen date's weekday unless several days were already picked.
+                if (e.target.checked && repeat.weekdays.length <= 1 && /^\d{4}-\d{2}-\d{2}$/.test(day))
+                  setRepeat({ ...repeat, weekdays: [parseISO(day).getDay()] });
+              }} className="size-4 accent-[var(--accent)]" />
+            <Repeat className="size-4 text-muted" /> Repeat weekly
+          </label>
+          {repeating && <RepeatFields start={day} value={repeat} onChange={setRepeat} weekStartsOn={weekStartsOn} />}
+        </div>
+      )}
+
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Plan</h3>
         <DetailsFields value={planned} onChange={setPlanned} units={units} type={type} />
@@ -508,7 +605,7 @@ export function WorkoutForm({
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? "Saving…" : workout ? "Save changes" : "Add workout"}
+          {pending ? "Saving…" : workout ? "Save changes" : canRepeat && repeating ? "Add workouts" : "Add workout"}
         </Button>
       </div>
     </form>

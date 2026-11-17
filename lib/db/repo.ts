@@ -176,6 +176,8 @@ export async function getWorkout(sub: string, date: string, id: string) {
 export const saveWorkout = (sub: string, w: Workout) => put(sub, woSK(w.date, w.id), "workout", w);
 
 export const deleteWorkout = (sub: string, date: string, id: string) => del(sub, woSK(date, id));
+export const deleteWorkouts = (sub: string, ws: Pick<Workout, "date" | "id">[]) =>
+  batchDelete(sub, ws.map((w) => woSK(w.date, w.id)));
 
 /** Date is part of the key, so moving = delete + put in one transaction. */
 /** Date of the user's earliest workout or day log; days before it never count as missed. */
