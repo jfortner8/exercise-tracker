@@ -2,6 +2,7 @@ import { addDays, endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOf
 import type {
   BenchmarkDef,
   BenchmarkResult,
+  DayResult,
   Intervals,
   MetricKind,
   Units,
@@ -214,17 +215,20 @@ export function weekAdherence(
   today: string,
   startDate: string | null,
   isInjured: (d: string) => boolean,
+  /** Days with a benchmark result count as trained, even without a workout. */
+  hasResult: (d: string) => boolean = () => false,
 ): Adherence {
   const a: Adherence = { onTrack: 0, elapsed: 0, asPlanned: 0, rest: 0, moved: 0, substituted: 0, skipped: 0, missed: 0 };
   if (!today || !startDate) return a;
   for (const d of days) {
     if (d > today || d < startDate) continue;
     const ws = byDay.get(d) ?? [];
-    const onTrack = ws.some((w) => isOnTrack(w, today));
+    const trained = hasResult(d);
+    const onTrack = trained || ws.some((w) => isOnTrack(w, today));
     if (d === today && !onTrack) continue;
     a.elapsed++;
     if (onTrack) a.onTrack++;
-    if (isMissedDay(d, today, startDate, ws, isInjured(d))) a.missed++;
+    if (!trained && isMissedDay(d, today, startDate, ws, isInjured(d))) a.missed++;
     for (const w of ws) {
       const st = displayStatus(w, today);
       if (st === "missed") a.missed++;
@@ -264,6 +268,29 @@ export function personalBest<R extends Pick<BenchmarkResult, "value" | "reps">>(
     if (!best || isBetter(def, resultScore(def, r), resultScore(def, best))) best = r;
   }
   return best;
+}
+
+/**
+ * Benchmark results dated within [start, end], each flagged if it set a new PB at the time.
+ * Needs every result (not just the range) so earlier history decides what counts as a PB.
+ */
+export function calendarResults(
+  benchmarks: BenchmarkDef[],
+  results: BenchmarkResult[],
+  start: string,
+  end: string,
+): DayResult[] {
+  const out: DayResult[] = [];
+  for (const b of benchmarks) {
+    const mine = results.filter((r) => r.benchmarkId === b.id).sort((x, y) => x.date.localeCompare(y.date));
+    for (const r of markRunningPBs(b, mine)) {
+      if (r.date < start || r.date > end) continue;
+      const { score: _score, ...rest } = r;
+      void _score;
+      out.push({ ...rest, benchmarkName: b.name, metricKind: b.metricKind, unit: b.unit, isPb: r.isPb });
+    }
+  }
+  return out;
 }
 
 export const IMPROVEMENT_WINDOWS = [

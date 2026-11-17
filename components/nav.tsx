@@ -1,18 +1,35 @@
 "use client";
 
-import { Activity, CalendarDays, HeartPulse, Medal, Settings, Trophy } from "lucide-react";
+import { Activity, CalendarDays, HeartPulse, Medal, Scale, Settings, Trophy, Volleyball } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { cx } from "./ui";
 
-const ITEMS = [
+const BASE = [
   { href: "/", label: "Calendar", icon: CalendarDays },
   { href: "/benchmarks", label: "Benchmarks", icon: Trophy },
   { href: "/leaderboards", label: "Leaderboards", icon: Medal },
   { href: "/injuries", label: "Injuries", icon: HeartPulse },
   { href: "/settings", label: "Settings", icon: Settings },
-] as const;
+];
+const SPORTS_ITEM = { href: "/sports", label: "Sports", icon: Volleyball };
+const WEIGHT_ITEM = { href: "/weight", label: "Weight", icon: Scale };
+
+export interface NavFlags {
+  /** Has completed a sport workout. */
+  showSports?: boolean;
+  /** Has bodyweight tracking turned on. */
+  showWeight?: boolean;
+}
+
+/** Optional tabs only show for people who use them. */
+const navItems = ({ showSports, showWeight }: NavFlags) => [
+  ...BASE.slice(0, 2),
+  ...(showSports ? [SPORTS_ITEM] : []),
+  ...(showWeight ? [WEIGHT_ITEM] : []),
+  ...BASE.slice(2),
+];
 
 const matches = (path: string | null, href: string) =>
   path != null && (href === "/" ? path === "/" : path.startsWith(href));
@@ -25,7 +42,8 @@ function PathReader({ children }: { children: (path: string | null) => ReactNode
   return children(usePathname());
 }
 
-export function Sidebar({ footer }: { footer: ReactNode }) {
+export function Sidebar({ footer, ...flags }: { footer: ReactNode } & NavFlags) {
+  const ITEMS = navItems(flags);
   return (
     <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r border-border bg-surface px-3 py-5 md:flex">
       <Link href="/" className="mb-8 flex items-center gap-2 px-2 text-lg font-semibold tracking-tight">
@@ -54,9 +72,13 @@ export function Sidebar({ footer }: { footer: ReactNode }) {
   );
 }
 
-export function BottomNav() {
+export function BottomNav(flags: NavFlags) {
+  const ITEMS = navItems(flags);
   return <WithPath>{(path) => (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
+      style={{ gridTemplateColumns: `repeat(${ITEMS.length}, minmax(0, 1fr))` }}
+    >
       {ITEMS.map(({ href, label, icon: Icon }) => (
         <Link
           key={href}
