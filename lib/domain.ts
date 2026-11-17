@@ -57,7 +57,9 @@ export function formatClock(sec: number): string {
   const h = Math.floor(abs / 3600);
   const m = Math.floor((abs % 3600) / 60);
   const sRaw = abs % 60;
-  const sStr = Number.isInteger(sRaw) ? String(sRaw).padStart(2, "0") : sRaw.toFixed(1).padStart(4, "0");
+  // Up to hundredths for swims, trailing zeros trimmed: 42.5 -> "42.5", 42.53 -> "42.53".
+  const [sInt, sFrac] = String(Math.round(sRaw * 100) / 100).split(".");
+  const sStr = sFrac ? `${sInt.padStart(2, "0")}.${sFrac}` : sInt.padStart(2, "0");
   const body = h ? `${h}:${String(m).padStart(2, "0")}:${sStr}` : `${m}:${sStr}`;
   return neg ? `-${body}` : body;
 }
@@ -69,6 +71,40 @@ export function parseClock(input: string): number {
   const parts = t.split(":").filter((p, i, a) => p !== "" || i < a.length - 1);
   if (parts.length > 3 || parts.some((p) => !/^\d+(\.\d+)?$/.test(p))) return NaN;
   return parts.reduce((acc, p) => acc * 60 + Number(p), 0);
+}
+
+/**
+ * Timer-style entry for a clock field, so a phone's number pad is enough: digits fill from
+ * the right and the colons are added ("2531" -> "25:31", "10231" -> "1:02:31"). A "." (or ",")
+ * starts up to two digits of fraction ("42.53" -> "0:42.53"). Any ":" typed or pasted is ignored.
+ * `prev` is what the field showed before this change; deleting one of the added colons counts as
+ * deleting the last digit, so backspace never gets stuck on it.
+ */
+export function clockEntry(raw: string, prev = ""): string {
+  const t = raw.replace(/,/g, ".");
+  const dot = t.indexOf(".");
+  let whole = (dot < 0 ? t : t.slice(0, dot)).replace(/\D/g, "");
+  const frac = dot < 0 ? null : t.slice(dot + 1).replace(/\D/g, "").slice(0, 2);
+  const digits = (x: string) => x.replace(/\D/g, "");
+  if (raw.length < prev.length && digits(raw) === digits(prev) && raw.includes(".") === prev.includes(".")) {
+    whole = whole.slice(0, -1);
+  }
+  whole = whole.replace(/^0+/, "").slice(0, 6);
+  if (!whole && frac == null) return "";
+  const d = whole.padStart(3, "0");
+  const ss = d.slice(-2);
+  const rest = d.slice(0, -2);
+  const clock = rest.length > 2 ? `${rest.slice(0, -2)}:${rest.slice(-2)}:${ss}` : `${rest}:${ss}`;
+  return frac == null ? clock : `${clock}.${frac}`;
+}
+
+/** What's wrong with a clockEntry value, or null. Minutes may run past 59 only without hours ("75:00"). */
+export function clockEntryError(value: string): string | null {
+  const parts = value.split(".")[0].split(":").map(Number);
+  if (parts.length < 2) return null;
+  if (parts[parts.length - 1] >= 60) return "Seconds must be under 60";
+  if (parts.length === 3 && parts[1] >= 60) return "Minutes must be under 60";
+  return null;
 }
 
 /**
@@ -95,8 +131,8 @@ export function formatMinutesInput(sec?: number): string {
 
 /** Plain-language duration for previews: 5265 -> "1 h 27 min 45 s". */
 export function describeDuration(sec: number): string {
-  const s = Math.round(sec);
-  const [h, m, r] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60];
+  const s = Math.round(sec * 100) / 100; // keeps a swim's hundredths: "42.53 s"
+  const [h, m, r] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), Math.round((s % 60) * 100) / 100];
   const out = [h && `${h} h`, m && `${m} min`, r && `${r} s`].filter(Boolean).join(" ");
   return out || "0 min";
 }

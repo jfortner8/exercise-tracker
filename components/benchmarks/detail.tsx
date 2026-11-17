@@ -14,10 +14,11 @@ import {
   workoutsOnDayAction,
 } from "@/lib/actions";
 import { betterLabel, CATEGORY_LABEL, METRIC_LABEL } from "@/lib/benchmarks/catalog";
-import { parseValue, valueLabel, valueToInput } from "@/lib/benchmarks/input";
+import { isClock, parseValue, valueLabel, valueToInput } from "@/lib/benchmarks/input";
 import { suggestLink } from "@/lib/benchmarks/linking";
 import { formatResult, markRunningPBs, personalBest, resultScore, ymd } from "@/lib/domain";
 import type { BenchmarkDef, BenchmarkResult, Units, Workout } from "@/lib/types";
+import { ClockInput } from "../clock-input";
 import { Button, Card, Field, Input, PageHeader, cx } from "../ui";
 import { WorkoutLinkField } from "./workout-link-field";
 
@@ -280,7 +281,11 @@ function ResultForm({
       </Field>
       <div className="flex gap-2">
         <Field label={valueLabel(def, units)} className="flex-1">
-          <Input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" required autoFocus={!!editing} />
+          {isClock(def) ? (
+            <ClockInput value={value} onChange={setValue} required autoFocus={!!editing} />
+          ) : (
+            <Input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" required autoFocus={!!editing} />
+          )}
         </Field>
         {def.metricKind === "weight_reps" && (
           <Field label="Reps" className="w-20">

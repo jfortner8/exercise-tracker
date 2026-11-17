@@ -12,7 +12,8 @@ import {
   resolveWorkoutAction,
   saveDayAction,
 } from "@/lib/actions";
-import { parseValue, valueLabel } from "@/lib/benchmarks/input";
+import { isClock, parseValue, valueLabel } from "@/lib/benchmarks/input";
+import { ClockInput } from "../clock-input";
 import { workoutCategory, type ActivityKey } from "@/lib/activities";
 import { suggestLink } from "@/lib/benchmarks/linking";
 import {
@@ -446,7 +447,11 @@ function QuickBenchmark({
         {bm && (
           <>
             <Field label={label} className={bm.metricKind === "weight_reps" ? "" : "col-span-2"}>
-              <Input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" />
+              {isClock(bm) ? (
+                <ClockInput value={value} onChange={setValue} />
+              ) : (
+                <Input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" />
+              )}
             </Field>
             {bm.metricKind === "weight_reps" && (
               <Field label="Reps">
