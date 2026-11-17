@@ -78,14 +78,22 @@ export function BenchmarkDetail({ def, results, units }: { def: BenchmarkDef; re
           {data.length >= 2 && (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <LineChart data={data} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
                   <CartesianGrid stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: "var(--muted)", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: "var(--muted)", fontSize: 12 }}
+                    tickMargin={8}
+                    minTickGap={16}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <YAxis
                     dataKey="score"
                     reversed={def.direction === "lower"}
                     domain={["auto", "auto"]}
                     width={64}
+                    interval={0}
                     tick={{ fill: "var(--muted)", fontSize: 12 }}
                     tickFormatter={(v: number) => scoreLabel(v).replace(" e1RM", "")}
                     axisLine={false}
@@ -154,14 +162,14 @@ export function BenchmarkDetail({ def, results, units }: { def: BenchmarkDef; re
                 <td className="whitespace-nowrap px-2">
                   <button
                     aria-label="Edit result"
-                    className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text"
+                    className="rounded-md p-2.5 text-muted hover:bg-surface-2 hover:text-text md:p-1"
                     onClick={() => setEditingId(r.id)}
                   >
                     <Pencil className="size-3.5" />
                   </button>
                   <button
                     aria-label="Delete result"
-                    className="rounded p-1 text-muted hover:bg-surface-2 hover:text-danger"
+                    className="rounded-md p-2.5 text-muted hover:bg-surface-2 hover:text-danger md:p-1"
                     onClick={() => confirm("Delete this result?") && start(() => deleteResultAction(def.id, r.date, r.id))}
                   >
                     <Trash2 className="size-3.5" />

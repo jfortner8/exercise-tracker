@@ -2,7 +2,7 @@
 
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useDraggable,
   useDroppable,
@@ -101,7 +101,9 @@ export function CalendarView(props: CalendarProps) {
     injuries.filter((i) => i.startDate <= d && (i.endDate ? d <= i.endDate : i.status !== "healed" && !!today && d <= today));
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // Mouse drags after a small move. Touch needs a long press, so a swipe that starts on a
+    // planned workout still scrolls the page (a pointer sensor would grab it instead).
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }),
   );
 
@@ -122,7 +124,7 @@ export function CalendarView(props: CalendarProps) {
   }
 
   const weeks = chunkWeeks(days);
-  const weekdayLabels = days.slice(0, 7).map((d) => format(parseISO(d), "EEE"));
+  const weekdayLabels = days.slice(0, 7).map((d) => ({ long: format(parseISO(d), "EEE"), short: format(parseISO(d), "EEEEEE") }));
   const href = (d: string, v = view) => `/?view=${v}&d=${d}`;
 
   return (
@@ -165,19 +167,29 @@ export function CalendarView(props: CalendarProps) {
       <DndContext id={dndId} sensors={sensors} onDragEnd={onDragEnd}>
         <div className="overflow-hidden rounded-xl border border-border bg-surface">
           {/* Weekday header */}
-          <div className="hidden grid-cols-[repeat(7,minmax(0,1fr))_8.5rem] border-b border-border bg-surface-2/50 text-xs font-medium uppercase tracking-wide text-muted md:grid">
+          {/* On phones too in month view; the phone week view is a list whose rows name their day. */}
+          <div
+            className={cx(
+              "grid-cols-7 border-b border-border bg-surface-2/50 text-xs font-medium uppercase tracking-wide text-muted md:grid md:grid-cols-[repeat(7,minmax(0,1fr))_8.5rem]",
+              view === "week" ? "hidden" : "grid",
+            )}
+          >
             {weekdayLabels.map((l) => (
-              <div key={l} className="px-2 py-2">
-                {l}
+              <div key={l.long} className="px-1 py-1.5 md:px-2 md:py-2">
+                <span className="md:hidden">{l.short}</span>
+                <span className="hidden md:inline">{l.long}</span>
               </div>
             ))}
-            <div className="px-2 py-2">Week</div>
+            <div className="hidden px-2 py-2 md:block">Week</div>
           </div>
 
           {weeks.map((week) => (
             <div
               key={week[0]}
-              className="grid grid-cols-7 border-b border-border last:border-b-0 md:grid-cols-[repeat(7,minmax(0,1fr))_8.5rem]"
+              className={cx(
+                "grid border-b border-border last:border-b-0 md:grid-cols-[repeat(7,minmax(0,1fr))_8.5rem]",
+                view === "week" ? "grid-cols-1" : "grid-cols-7",
+              )}
             >
               {week.map((d) => (
                 <DayCell
@@ -339,8 +351,11 @@ function DayCell({
       aria-label={`${format(d, "EEEE, MMMM d")}${workouts.length ? `, ${workouts.length} workout${workouts.length === 1 ? "" : "s"}` : ""}`}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen()}
       className={cx(
-        "group relative flex cursor-pointer flex-col border-r border-border text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
-        view === "month" ? "min-h-20 md:min-h-28" : "min-h-40 md:min-h-[26rem]",
+        "group relative flex cursor-pointer flex-col border-border text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
+        view === "month"
+          ? "min-h-20 border-r md:min-h-28"
+          : // Phones list the week's days top to bottom; wider screens show seven columns.
+            "min-h-14 border-t first:border-t-0 md:min-h-[26rem] md:border-r md:border-t-0",
         outside && "bg-surface-2/40 text-muted",
         injured && "injury-stripe",
         isOver && "ring-2 ring-inset ring-accent",
@@ -378,7 +393,15 @@ function DayCell({
           ))
         )}
       </div>
-      <DayFooter date={date} today={today} log={log} trackDrinks={trackDrinks} trackWeight={trackWeight} units={units} />
+      <DayFooter
+        date={date}
+        today={today}
+        log={log}
+        trackDrinks={trackDrinks}
+        trackWeight={trackWeight}
+        units={units}
+        roomy={view === "week"}
+      />
     </div>
   );
 }
@@ -394,7 +417,11 @@ const DRINK_COLORS = [
   "bg-drink-6 text-drink-6-fg",
 ];
 
-/** Bottom strip of a day tile, split down the middle: note preview on the left, drink count on the right. */
+/**
+ * Bottom strip of a day tile: note preview on the left, then bodyweight and drink count.
+ * A phone's month tile is ~48px wide, so there the note shrinks to a dot, the weight to whole
+ * units and the drinks to the coloured number. `roomy` (the week view's full-width rows) keeps it all.
+ */
 function DayFooter({
   date,
   today,
@@ -402,6 +429,7 @@ function DayFooter({
   trackDrinks,
   trackWeight,
   units,
+  roomy,
 }: {
   date: string;
   today: string;
@@ -409,6 +437,7 @@ function DayFooter({
   trackDrinks: boolean;
   trackWeight: boolean;
   units: Units;
+  roomy: boolean;
 }) {
   const note = log?.notes?.trim();
   const weight = log?.weightKg != null ? Math.round(kgToDisplay(log.weightKg, units) * 10) / 10 : null;
@@ -416,8 +445,20 @@ function DayFooter({
   const drinks = today && date <= today ? (log?.drinks ?? 0) : null;
   return (
     <div className="flex h-5 shrink-0 border-t border-border text-[10px] leading-none md:h-7 md:text-[11px]">
-      <span className="flex min-w-0 flex-1 items-center bg-surface px-1 text-muted" title={note}>
-        {note && <span className="truncate">{note}</span>}
+      <span
+        className={cx(
+          "flex min-w-0 flex-1 items-center bg-surface px-1 text-muted",
+          !roomy && "max-md:justify-center max-md:px-0",
+          !roomy && trackWeight && "max-md:w-3 max-md:flex-none",
+        )}
+        title={note}
+      >
+        {note && (
+          <>
+            <span className={cx("truncate", !roomy && "max-md:hidden")}>{note}</span>
+            {!roomy && <span className="size-1.5 shrink-0 rounded-full bg-muted md:hidden" aria-label="Has a note" />}
+          </>
+        )}
       </span>
       {trackWeight && (
         // Always present when tracking so tiles line up; greyed out on days without a weigh-in.
@@ -428,12 +469,19 @@ function DayFooter({
           )}
           title={weight != null ? `Bodyweight ${weight} ${weightUnit(units)}` : "No weight logged"}
         >
-          {weight != null && (
-            <>
-              {weight}
-              <span className="text-muted">{weightUnit(units)}</span>
-            </>
-          )}
+          {weight != null &&
+            (roomy ? (
+              <>
+                {weight}
+                <span className="text-muted">{weightUnit(units)}</span>
+              </>
+            ) : (
+              <>
+                <span className="md:hidden">{Math.round(weight)}</span>
+                <span className="hidden md:inline">{weight}</span>
+                <span className="hidden text-muted md:inline">{weightUnit(units)}</span>
+              </>
+            ))}
         </span>
       )}
       {trackDrinks && (
@@ -447,7 +495,7 @@ function DayFooter({
         >
           {drinks != null && (
             <>
-              <Wine className="size-2.5 shrink-0 opacity-80 md:size-3" aria-hidden />
+              <Wine className={cx("size-2.5 shrink-0 opacity-80 md:size-3", !roomy && "max-md:hidden")} aria-hidden />
               {drinks}
             </>
           )}
@@ -499,14 +547,17 @@ function Block({
       className={cx(
         "relative flex min-h-0 flex-1 flex-col overflow-hidden px-1 py-0.5 text-[11px] leading-tight transition-[filter] group-hover:brightness-95 md:px-1.5 md:py-1 md:text-xs",
         !dayLabel && "border-t border-surface",
-        clearCorner && "pr-5 md:pr-6",
+        // Only the one-line shared layout puts the title beside the star; otherwise it sits below.
+        clearCorner && compact !== "none" && "pr-5 md:pr-6",
         done && "bg-done text-done-fg",
         status === "planned" &&
           "border border-dashed border-done bg-planned-bg text-planned-fg",
         status === "needs_review" && "border border-dashed border-warn bg-warn/15 text-text",
         status === "skipped" && "bg-surface-2 text-muted",
         status === "missed" && "bg-missed text-missed-fg",
-        draggable && "cursor-grab touch-none active:cursor-grabbing",
+        // touch-manipulation (not touch-none) leaves swipes to the page; a long press starts the drag.
+        draggable && "cursor-grab touch-manipulation select-none [-webkit-touch-callout:none] active:cursor-grabbing",
+        detailed && "max-md:min-h-14",
         isDragging && "z-20 opacity-80 shadow-lg",
       )}
       title={[w.title, `${cat.emoji} ${cat.label}`, metrics].filter(Boolean).join(" · ")}
@@ -520,7 +571,8 @@ function Block({
             <span className="shrink-0" aria-hidden>
               {cat.emoji}
             </span>
-            <span className={cx("truncate font-medium", struck)}>{w.title}</span>
+            {/* No room for even a word on a phone's shared tile; the emoji says what it is. */}
+            <span className={cx("truncate font-medium max-md:hidden", struck)}>{w.title}</span>
           </div>
           {compact === "two" && metrics && (
             <span className="hidden truncate tabular-nums opacity-80 md:block">{metrics}</span>
@@ -532,19 +584,38 @@ function Block({
           {/* Title, category and basics, centered in the block. */}
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden text-center">
             {!titleIsCategory && (
-              <span className={cx("max-w-full truncate font-semibold", struck)}>{w.title}</span>
+              <>
+                {/* A phone's month tile: emoji on top, then up to two lines of title. */}
+                {!detailed && (
+                  <span className="text-sm leading-none md:hidden" aria-hidden>
+                    {cat.emoji}
+                  </span>
+                )}
+                <span
+                  className={cx(
+                    "max-w-full font-semibold",
+                    // Hyphenate long words ("Inter-vals") rather than splitting them anywhere.
+                    detailed ? "truncate" : "hyphens-auto max-md:line-clamp-2 md:truncate",
+                    struck,
+                  )}
+                >
+                  {w.title}
+                </span>
+              </>
             )}
             <span
               className={cx(
                 "max-w-full truncate",
-                titleIsCategory ? cx("font-semibold", struck) : "hidden opacity-90 md:block",
+                titleIsCategory ? cx("font-semibold", struck) : cx("opacity-90", !detailed && "hidden md:block"),
               )}
             >
               <span aria-hidden>{cat.emoji}</span> {cat.label}
             </span>
-            {metrics && <span className="hidden max-w-full truncate tabular-nums opacity-80 md:block">{metrics}</span>}
+            {metrics && (
+              <span className={cx("max-w-full truncate tabular-nums opacity-80", !detailed && "hidden md:block")}>{metrics}</span>
+            )}
             {detailed && w.originalDate && (
-              <span className="hidden opacity-70 md:block">moved from {format(parseISO(w.originalDate), "EEE")}</span>
+              <span className="opacity-70">moved from {format(parseISO(w.originalDate), "EEE")}</span>
             )}
           </div>
         </>
@@ -590,7 +661,10 @@ function WeekSummary({
   const drinks = week.reduce((s, d) => s + (logByDay.get(d)?.drinks ?? 0), 0);
 
   return (
-    <div className="col-span-7 flex items-center gap-3 border-t border-border bg-surface-2/40 px-2 py-1.5 text-xs text-muted md:col-span-1 md:flex-col md:items-start md:gap-1 md:border-t-0 md:py-2">
+    // Phones: one wrapping line under the week. Wider screens: a column beside it.
+    <div className="col-span-full flex items-center gap-2 border-t border-border bg-surface-2/40 px-2 py-1.5 text-xs text-muted md:col-span-1 md:flex-col md:items-start md:gap-1 md:border-t-0 md:py-2">
+      {/* The stats wrap among themselves on phones, leaving the copy button at the end of the row. */}
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 md:contents">
       {a.elapsed > 0 ? (
         <div className="whitespace-nowrap" title="Days you trained or rested on purpose, out of the days so far">
           <span className="text-sm font-semibold text-text">{a.onTrack}</span>/{a.elapsed} days
@@ -599,15 +673,22 @@ function WeekSummary({
         <div>{ws.length} planned</div>
       )}
       {parts.length > 0 && <div className="leading-snug">{parts.join(" · ")}</div>}
-      {minutes > 0 && <div>{minutes} min</div>}
-      {meters > 0 && <div>{formatDistance(meters, profile.units)}</div>}
+      {minutes > 0 && <div className="whitespace-nowrap">{minutes} min</div>}
+      {meters > 0 && <div className="whitespace-nowrap">{formatDistance(meters, profile.units)}</div>}
       {profile.trackDrinks && (
         <div className="flex items-center gap-1">
           <Wine className="size-3" /> {drinks}
         </div>
       )}
-      <Button size="sm" variant="ghost" className="-ml-1 ml-auto h-6 px-1.5 text-xs md:ml-0 md:mt-auto" onClick={onCopy}>
-        <Copy className="size-3" /> Copy week
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label="Copy week"
+        className="size-8 shrink-0 px-0 text-xs md:-ml-1 md:mt-auto md:h-6 md:w-auto md:px-1.5"
+        onClick={onCopy}
+      >
+        <Copy className="size-3.5 md:size-3" /> <span className="hidden md:inline">Copy week</span>
       </Button>
     </div>
   );

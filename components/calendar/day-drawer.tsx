@@ -315,7 +315,8 @@ function DayNotes({ date, log, profile }: { date: string; log?: DayLog; profile:
   const dirty = notes !== (log?.notes ?? "") || drinks !== (log?.drinks ?? 0) || weight !== savedWeight;
 
   return (
-    <section className="space-y-3 border-t border-border pt-5">
+    // First section of the drawer: no divider above it, since the sheet header already has one.
+    <section className="space-y-3">
       <h3 className="text-sm font-semibold">Day notes</h3>
       <Textarea
         value={notes}

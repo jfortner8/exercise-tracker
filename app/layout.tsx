@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Color_Emoji } from "next/font/google";
 import { InlineScript } from "@/components/inline-script";
 import { ThemeSync } from "@/components/theme-switch";
@@ -14,6 +14,14 @@ const notoEmoji = Noto_Color_Emoji({ variable: "--font-emoji", weight: "400", su
 export const metadata: Metadata = {
   title: { default: "Exercise Tracker", template: "%s · Exercise Tracker" },
   description: "Plan workouts, log what you actually did, and track personal bests.",
+};
+
+// Phone browser chrome (status bar, toolbar) matches the page background (--bg in globals.css).
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#111110" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
