@@ -69,10 +69,22 @@ export const CATEGORY_LABEL: Record<BenchmarkCategory, string> = {
 };
 
 export const METRIC_LABEL: Record<MetricKind, string> = {
-  time: "Time (faster is better)",
+  time: "Time",
   duration: "Duration held",
   distance: "Distance",
   weight_reps: "Weight × reps (est. 1RM)",
   reps: "Reps",
   number: "Number (custom unit)",
 };
+
+const BETTER: Record<MetricKind, { lower: string; higher: string }> = {
+  time: { lower: "Faster is better", higher: "Slower is better" },
+  duration: { lower: "Shorter is better", higher: "Longer is better" },
+  distance: { lower: "Shorter is better", higher: "Farther is better" },
+  weight_reps: { lower: "Lighter is better", higher: "Heavier is better" },
+  reps: { lower: "Fewer is better", higher: "More is better" },
+  number: { lower: "Lower is better", higher: "Higher is better" },
+};
+
+/** Plain wording for which way a benchmark improves: "Faster is better". */
+export const betterLabel = (metricKind: MetricKind, direction: Direction) => BETTER[metricKind][direction];
