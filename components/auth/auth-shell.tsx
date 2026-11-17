@@ -20,17 +20,17 @@ export function AuthShell({ title, subtitle, children, footer }: {
 }) {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-      <aside className="relative hidden overflow-hidden bg-[#1c1209] p-12 text-white lg:flex lg:flex-col">
+      <aside className="relative hidden overflow-hidden bg-[#15140f] p-12 text-white lg:flex lg:flex-col">
         <div
           aria-hidden
           className="absolute inset-0 opacity-60"
           style={{
             background:
-              "radial-gradient(60% 50% at 20% 10%, rgba(234,88,12,.55), transparent 70%), radial-gradient(50% 40% at 90% 90%, rgba(251,146,60,.35), transparent 70%)",
+              "radial-gradient(60% 50% at 20% 10%, rgba(179,163,105,.45), transparent 70%), radial-gradient(50% 40% at 90% 90%, rgba(234,170,0,.22), transparent 70%)",
           }}
         />
         <div className="relative flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <span className="grid size-8 place-items-center rounded-lg bg-orange-500">
+          <span className="grid size-8 place-items-center rounded-lg bg-[#b3a369] text-[#17150e]">
             <Activity className="size-4" />
           </span>
           Exercise Tracker
@@ -40,7 +40,7 @@ export function AuthShell({ title, subtitle, children, footer }: {
           <h2 className="text-4xl font-semibold leading-tight tracking-tight">
             See what you planned.
             <br />
-            <span className="text-orange-300">Log what you actually did.</span>
+            <span className="text-[#d6c99a]">Log what you did.</span>
           </h2>
           <p className="mt-4 text-white/70">
             A training calendar that keeps your plan and your reality side by side, plus injuries, notes, and
@@ -55,9 +55,9 @@ export function AuthShell({ title, subtitle, children, footer }: {
                   className={
                     "flex h-16 items-end rounded-lg p-1.5 text-[10px] font-medium leading-tight " +
                     (w.state === "done"
-                      ? "bg-orange-500 text-white"
+                      ? "bg-[#b3a369] text-[#17150e]"
                       : w.state === "today"
-                        ? "border border-orange-300 bg-orange-300/15 text-orange-100 ring-2 ring-orange-400/40"
+                        ? "border border-[#d6c99a] bg-[#b3a369]/15 text-[#efe8cf] ring-2 ring-[#b3a369]/40"
                         : "border border-dashed border-white/30 text-white/70")
                   }
                 >

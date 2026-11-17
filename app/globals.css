@@ -14,9 +14,11 @@
   --border: #e4e4df;
   --text: #1c1c1a;
   --muted: #6b6b66;
-  --accent: #ea580c;
-  --accent-fg: #ffffff;
-  --today: #ea580c;
+  /* Georgia Tech gold. Too light for text on a light page (2.3:1), so text uses --accent-ink. */
+  --accent: #b3a369;
+  --accent-fg: #1c1c1a;
+  --accent-ink: #857437;
+  --today: #b3a369;
   --danger: #dc2626;
   --warn: #d97706;
   --injury: rgba(220, 38, 38, 0.07);
@@ -54,9 +56,10 @@
   --border: #2e2e2a;
   --text: #ededea;
   --muted: #9a9a93;
-  --accent: #fb923c;
-  --accent-fg: #1c1209;
-  --today: #fb923c;
+  --accent: #b3a369;
+  --accent-fg: #17150e;
+  --accent-ink: #c4b47c;
+  --today: #b3a369;
   --danger: #f87171;
   --warn: #fbbf24;
   --injury: rgba(248, 113, 113, 0.09);
@@ -87,9 +90,10 @@
     --border: #2e2e2a;
     --text: #ededea;
     --muted: #9a9a93;
-    --accent: #fb923c;
-    --accent-fg: #1c1209;
-    --today: #fb923c;
+    --accent: #b3a369;
+    --accent-fg: #17150e;
+    --accent-ink: #c4b47c;
+    --today: #b3a369;
     --danger: #f87171;
     --warn: #fbbf24;
     --injury: rgba(248, 113, 113, 0.09);
@@ -133,6 +137,7 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
+  --color-accent-ink: var(--accent-ink);
   --color-today: var(--today);
   --color-danger: var(--danger);
   --color-warn: var(--warn);

@@ -183,7 +183,7 @@ function DetailsFields({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className="h-6 px-1.5 text-xs text-accent"
+                    className="h-6 px-1.5 text-xs text-accent-ink"
                     onClick={() =>
                       onChange({ ...value, cooldownMin: formatMinutesInput((minutesField(value.cooldownMin) ?? 0) + gap) })
                     }
@@ -410,7 +410,7 @@ export function WorkoutForm({
                   onClick={() => setSportSession(sportSession === s.key ? "" : s.key)}
                   className={cx(
                     "rounded-full border px-3 py-1 text-xs font-medium",
-                    sportSession === s.key ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:text-text",
+                    sportSession === s.key ? "border-accent bg-accent/10 text-accent-ink" : "border-border text-muted hover:text-text",
                   )}
                 >
                   {s.label}
@@ -447,7 +447,7 @@ export function WorkoutForm({
               onClick={() => setStatus(s)}
               className={cx(
                 "rounded-full border px-2.5 py-1 text-xs font-medium",
-                status === s ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:text-text",
+                status === s ? "border-accent bg-accent/10 text-accent-ink" : "border-border text-muted hover:text-text",
               )}
             >
               {STATUS_LABEL[s]}

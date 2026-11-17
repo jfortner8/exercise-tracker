@@ -87,7 +87,7 @@ export function BottomNav(flags: NavFlags) {
           href={href}
           className={cx(
             "flex min-w-0 flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
-            matches(path, href) ? "text-accent" : "text-muted",
+            matches(path, href) ? "text-accent-ink" : "text-muted",
           )}
         >
           <Icon className="size-5" />

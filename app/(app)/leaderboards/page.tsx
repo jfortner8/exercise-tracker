@@ -47,7 +47,7 @@ async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards
       {!profile.leaderboard && (
         <div className="rounded-xl border border-border bg-surface-2/60 px-4 py-3 text-sm">
           You&apos;re not on the leaderboards.{" "}
-          <Link href="/settings" className="font-medium text-accent hover:underline">
+          <Link href="/settings" className="font-medium text-accent-ink hover:underline">
             Turn on &ldquo;Show my PBs on leaderboards&rdquo; in Settings
           </Link>{" "}
           to join.
@@ -75,7 +75,7 @@ async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards
                       href={href(b.c.key, view)}
                       className={
                         b.c.key === selected.c.key
-                          ? "rounded-full border border-accent bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
+                          ? "rounded-full border border-accent bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent-ink"
                           : "rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted hover:text-text"
                       }
                     >
@@ -173,7 +173,7 @@ function Board({
               <span className="w-6 text-right text-sm font-semibold tabular-nums text-muted">{i + 1}</span>
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 {e.displayName}
-                {e.sub === me && <span className="ml-1.5 text-xs font-normal text-accent">You</span>}
+                {e.sub === me && <span className="ml-1.5 text-xs font-normal text-accent-ink">You</span>}
               </span>
               {pct != null && then ? (
                 <span className="text-right">
