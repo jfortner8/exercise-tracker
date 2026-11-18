@@ -21,6 +21,7 @@ import {
   WORKOUT_STATUSES,
   WEIGHT_UNITS,
   WORKOUT_TYPES,
+  type Clock,
   type Share,
   type Units,
   type Workout,
@@ -387,6 +388,7 @@ export async function saveProfileAction(raw: {
   displayName: string;
   units: Units;
   weekStartsOn: 0 | 1;
+  clock: Clock;
   trackDrinks: boolean;
   share: Share;
   trackWeight: boolean;
@@ -398,6 +400,7 @@ export async function saveProfileAction(raw: {
       displayName: z.string().trim().min(1).max(80),
       units: z.object({ distance: z.enum(DISTANCE_UNITS), weight: z.enum(WEIGHT_UNITS) }),
       weekStartsOn: z.union([z.literal(0), z.literal(1)]),
+      clock: z.enum(["12h", "24h"]),
       trackDrinks: z.boolean(),
       share: z.enum(SHARE_LEVELS),
       trackWeight: z.boolean(),

@@ -118,11 +118,16 @@ export interface Units {
   weight: WeightUnit;
 }
 
+/** How start times are shown: "6:30 PM" or "18:30". */
+export type Clock = "12h" | "24h";
+
 export interface Profile {
   displayName: string;
   email: string;
   units: Units;
   weekStartsOn: 0 | 1; // 0 Sunday, 1 Monday
+  /** Start-time format; absent means 12-hour. */
+  clock?: Clock;
   trackDrinks: boolean;
   /** Who sees this user's PBs on built-in benchmarks. See SHARE_LEVELS. */
   share: Share;

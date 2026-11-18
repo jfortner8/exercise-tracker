@@ -29,7 +29,7 @@ import {
   weekAdherence,
   ymd,
 } from "@/lib/domain";
-import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Routine, Units, Workout } from "@/lib/types";
+import type { BenchmarkDef, Clock, DayLog, DayResult, Injury, Profile, Routine, Units, Workout } from "@/lib/types";
 import { blockMetrics, workoutCategory, type ActivityKey } from "@/lib/activities";
 import { Button, cx } from "../ui";
 import { Sheet } from "../sheet";
@@ -209,6 +209,7 @@ export function CalendarView(props: CalendarProps) {
                   trackDrinks={profile.trackDrinks}
                   trackWeight={profile.trackWeight}
                   units={profile.units}
+                  clock={profile.clock}
                   pb={(resultsByDay.get(d) ?? []).some((r) => r.isPb)}
                   onOpen={() => setSelected(d)}
                 />
@@ -313,6 +314,7 @@ function DayCell({
   trackDrinks,
   trackWeight,
   units,
+  clock,
   pb,
   onOpen,
 }: {
@@ -327,6 +329,7 @@ function DayCell({
   trackDrinks: boolean;
   trackWeight: boolean;
   units: Units;
+  clock?: Clock;
   /** A benchmark result on this day set a new PB. */
   pb: boolean;
   onOpen: () => void;
@@ -392,6 +395,7 @@ function DayCell({
               detailed={view === "week"}
               dayLabel={i === 0 ? dayLabel : null}
               units={units}
+              clock={clock}
               compact={view === "week" || workouts.length < 2 ? "none" : workouts.length === 2 ? "two" : "three"}
               clearCorner={i === 0 && pb}
             />
@@ -516,6 +520,7 @@ function Block({
   detailed,
   dayLabel,
   units,
+  clock,
   compact,
   clearCorner = false,
 }: {
@@ -524,6 +529,7 @@ function Block({
   detailed: boolean;
   dayLabel: React.ReactNode;
   units: Units;
+  clock?: Clock;
   /** Several workouts share a month tile: keep to the most important line(s). */
   compact: "none" | "two" | "three";
   /** Leave room in the top-right for the PB star. */
@@ -538,7 +544,7 @@ function Block({
   });
   const done = DONE_STATUSES.has(status);
   const cat = workoutCategory(w);
-  const metrics = [w.startTime && formatStartTime(w.startTime), blockMetrics(w, units)].filter(Boolean).join(" · ") || undefined;
+  const metrics = [w.startTime && formatStartTime(w.startTime, clock), blockMetrics(w, units)].filter(Boolean).join(" · ") || undefined;
   // Don't repeat "Run" twice when the title is just the category.
   const titleIsCategory = w.title.trim().toLowerCase() === cat.label.toLowerCase();
   const struck = status === "skipped" && "line-through";

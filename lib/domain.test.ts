@@ -3,6 +3,7 @@ import type { Workout } from "./types";
 import {
   calendarResults,
   clockEntry,
+  formatStartTime,
   clockEntryError,
   describeDuration,
   improvementPct,
@@ -321,5 +322,17 @@ describe("repeatDates", () => {
   it("counts calendar weeks by the user's week start", () => {
     // Starting Saturday, Sun-start weeks: Sat is week 0, the next Sun is week 1 (skipped every other week).
     expect(repeatDates("2026-11-21", [0, 6], 2, 2, 0)).toEqual(["2026-11-21", "2026-11-29"]);
+  });
+});
+
+describe("formatStartTime", () => {
+  it("uses AM/PM by default", () => {
+    expect(formatStartTime("06:30")).toBe("6:30 AM");
+    expect(formatStartTime("00:05")).toBe("12:05 AM");
+    expect(formatStartTime("18:05")).toBe("6:05 PM");
+  });
+  it("uses a 24-hour clock when asked", () => {
+    expect(formatStartTime("06:30", "24h")).toBe("06:30");
+    expect(formatStartTime("18:05", "24h")).toBe("18:05");
   });
 });
