@@ -367,7 +367,11 @@ export function WorkoutForm({
   const [location, setLocation] = useState(workout?.location ?? "");
   const [startTime, setStartTime] = useState(workout?.startTime ?? "");
   const [day, setDay] = useState(workout?.date ?? date);
-  const [status, setStatus] = useState<Workout["status"]>(presetStatus ?? workout?.status ?? "planned");
+  // A new workout on a past day was most likely done, so it starts as Completed; today and later start as Planned.
+  // Follows the date until the user picks a status themselves.
+  const statusForDay = (d: string): Workout["status"] => (d < format(new Date(), "yyyy-MM-dd") ? "completed" : "planned");
+  const [status, setStatus] = useState<Workout["status"]>(() => presetStatus ?? workout?.status ?? statusForDay(date));
+  const [statusChosen, setStatusChosen] = useState(!!workout || !!presetStatus);
   const [planned, setPlanned] = useState(toDraft(workout?.planned, units));
   const [actual, setActual] = useState(toDraft(workout?.actual, units));
   const [reason, setReason] = useState(workout?.reason ?? "");
@@ -483,7 +487,15 @@ export function WorkoutForm({
           </Select>
         </Field>
         <Field label="Date">
-          <Input type="date" value={day} onChange={(e) => setDay(e.target.value)} required />
+          <Input
+            type="date"
+            value={day}
+            onChange={(e) => {
+              setDay(e.target.value);
+              if (!statusChosen && /^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) setStatus(statusForDay(e.target.value));
+            }}
+            required
+          />
         </Field>
       </div>
       {type === "sport" && (
@@ -611,7 +623,10 @@ export function WorkoutForm({
             <button
               type="button"
               key={s}
-              onClick={() => setStatus(s)}
+              onClick={() => {
+                setStatus(s);
+                setStatusChosen(true);
+              }}
               className={cx(
                 "rounded-full border px-2.5 py-1 text-xs font-medium",
                 status === s ? "border-accent bg-accent/10 text-accent-ink" : "border-border text-muted hover:text-text",
