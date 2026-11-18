@@ -6,7 +6,7 @@ import { ulid } from "ulid";
 import { z } from "zod";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { requireUser } from "@/lib/dal";
-import { repeatDates } from "@/lib/domain";
+import { repeatDates, START_TIME_RE, validTimeZone } from "@/lib/domain";
 import { linkableWorkouts } from "@/lib/benchmarks/linking";
 import * as repo from "@/lib/db/repo";
 import { syncLeaderboard } from "@/lib/leaderboard";
@@ -57,6 +57,7 @@ const details = z
 const workoutInput = z.object({
   id: id.optional(),
   date: day,
+  startTime: z.string().regex(START_TIME_RE).optional(),
   originalDate: day.optional(), // the workout's current key date when editing
   type: z.enum(WORKOUT_TYPES),
   title: z.string().trim().min(1).max(200),
@@ -264,6 +265,7 @@ export async function copyWeekAction(fromStart: string, toStart: string, times: 
       copies.push({
         id: ulid(),
         date: format(addDays(parseISO(w.date), offset), "yyyy-MM-dd"),
+        startTime: w.startTime,
         type: w.type,
         title: w.title,
         location: w.location,
@@ -322,6 +324,7 @@ export async function saveProfileAction(raw: {
   trackDrinks: boolean;
   share: Share;
   trackWeight: boolean;
+  timeZone?: string;
 }) {
   const { sub, email } = await requireUser();
   const p = z
@@ -332,11 +335,21 @@ export async function saveProfileAction(raw: {
       trackDrinks: z.boolean(),
       share: z.enum(SHARE_LEVELS),
       trackWeight: z.boolean(),
+      timeZone: z.string().max(64).optional(),
     })
     .parse(raw);
   const existing = await repo.getProfile(sub);
   // Keep internal fields that aren't part of the settings form.
-  await repo.saveProfile(sub, { ...p, email, hasSports: existing?.hasSports, friendCode: existing?.friendCode });
+  await repo.saveProfile(sub, {
+    ...p,
+    email,
+    timeZone: validTimeZone(p.timeZone) ? p.timeZone : existing?.timeZone,
+    hasSports: existing?.hasSports,
+    friendCode: existing?.friendCode,
+    calendarToken: existing?.calendarToken,
+    calendarIncludeNotes: existing?.calendarIncludeNotes,
+    calendarPlannedOnly: existing?.calendarPlannedOnly,
+  });
   // Opting in/out or renaming changes what others see on leaderboards.
   await syncLeaderboard(sub);
   if (existing && existing.displayName !== p.displayName) await repo.updateSocialName(sub, p.displayName);

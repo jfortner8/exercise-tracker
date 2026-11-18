@@ -34,6 +34,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             trackDrinks: p.trackDrinks,
             share: p.share,
             trackWeight: p.trackWeight,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           });
           setSaved(true);
         });

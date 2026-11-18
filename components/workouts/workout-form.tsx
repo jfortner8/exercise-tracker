@@ -1,7 +1,7 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Repeat } from "lucide-react";
+import { Repeat, X } from "lucide-react";
 import { useState, useTransition } from "react";
 import { saveWorkoutAction, type RepeatInput, type WorkoutInput } from "@/lib/actions";
 import {
@@ -362,6 +362,7 @@ export function WorkoutForm({
   }
   const [title, setTitle] = useState(workout?.title ?? "");
   const [location, setLocation] = useState(workout?.location ?? "");
+  const [startTime, setStartTime] = useState(workout?.startTime ?? "");
   const [day, setDay] = useState(workout?.date ?? date);
   const [status, setStatus] = useState<Workout["status"]>(presetStatus ?? workout?.status ?? "planned");
   const [planned, setPlanned] = useState(toDraft(workout?.planned, units));
@@ -418,6 +419,7 @@ export function WorkoutForm({
       id: workout?.id,
       originalDate: workout?.date,
       date: day,
+      startTime: startTime || undefined,
       type,
       title: title.trim() || autoName,
       location: location.trim() || undefined,
@@ -575,13 +577,30 @@ export function WorkoutForm({
           autoFocus={!workout}
         />
       </Field>
-      <Field label="Location">
-        <Input
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          placeholder={type === "swim" ? "YMCA pool, open water…" : "Piedmont Park, gym, treadmill…"}
-        />
-      </Field>
+      <div className="grid grid-cols-[minmax(0,1fr)_9.5rem] gap-3">
+        <Field label="Location">
+          <Input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder={type === "swim" ? "YMCA pool, open water…" : "Piedmont Park, gym, treadmill…"}
+          />
+        </Field>
+        <Field label="Start time (optional)">
+          <div className="flex items-center gap-1">
+            <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="min-w-0" />
+            {startTime && (
+              <button
+                type="button"
+                onClick={() => setStartTime("")}
+                aria-label="Clear start time"
+                className="shrink-0 rounded-md p-1 text-muted hover:bg-surface-2 hover:text-text"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+        </Field>
+      </div>
 
       <Field label="Status">
         <div className="flex flex-wrap gap-1.5">

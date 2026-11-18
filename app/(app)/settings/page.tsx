@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { CalendarFeed } from "@/components/calendar-feed";
 import { SettingsForm } from "@/components/settings-form";
 import { PageHeader } from "@/components/ui";
 import { requireProfile } from "@/lib/dal";
@@ -9,7 +10,12 @@ export const metadata: Metadata = { title: "Settings" };
 
 async function Settings() {
   const { profile } = await requireProfile();
-  return <SettingsForm profile={profile} />;
+  return (
+    <>
+      <SettingsForm profile={profile} />
+      <CalendarFeed profile={profile} />
+    </>
+  );
 }
 
 export default function SettingsPage() {
