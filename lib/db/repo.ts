@@ -37,6 +37,7 @@ import { db } from "./client";
  * plus club and code partitions (see "Friends and clubs" at the end):
  *   PK = CLUB#<id>   SK = META | MEMBER#<sub>
  *   PK = CODE#<code> SK = CODE
+ *   PK = CAL#<token> SK = CAL   (private calendar-feed link -> { sub })
  */
 const pk = (sub: string) => `USER#${sub}`;
 const T = () => env.tableName;
@@ -458,6 +459,79 @@ export const setFriendCode = (sub: string, code: string, old?: string) =>
         ],
       }),
     ),
+  );
+
+// ---------- Calendar feed ----------
+// PK = CAL#<token>, SK = CAL -> { sub }. The token is also kept on the profile as calendarToken.
+const calKey = (token: string) => ({ PK: `CAL#${token}`, SK: "CAL" });
+
+export async function getCalendarFeedOwner(token: string): Promise<string | null> {
+  const res = await db().send(new GetCommand({ TableName: T(), Key: calKey(token) }));
+  return (res.Item?.sub as string | undefined) ?? null;
+}
+
+/**
+ * Points the feed at a new token, retiring `old` (so old subscriptions stop working).
+ * False if the profile's token changed meanwhile (another tab).
+ */
+export const setCalendarToken = (sub: string, token: string, old?: string, timeZone?: string) =>
+  tryWrite(() =>
+    db().send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: T(),
+              Item: { ...calKey(token), entity: "calendarFeed", sub },
+              ConditionExpression: "attribute_not_exists(PK)",
+            },
+          },
+          {
+            Update: {
+              TableName: T(),
+              Key: { PK: pk(sub), SK: "PROFILE" },
+              UpdateExpression: timeZone ? "SET calendarToken = :t, #tz = :z" : "SET calendarToken = :t",
+              ...(timeZone ? { ExpressionAttributeNames: { "#tz": "timeZone" } } : {}), // a reserved word
+              ConditionExpression: old ? "calendarToken = :old" : "attribute_exists(PK) AND attribute_not_exists(calendarToken)",
+              ExpressionAttributeValues: { ":t": token, ...(timeZone ? { ":z": timeZone } : {}), ...(old ? { ":old": old } : {}) },
+            },
+          },
+          ...(old ? [{ Delete: { TableName: T(), Key: calKey(old) } }] : []),
+        ],
+      }),
+    ),
+  );
+
+/** Turns the feed off: the link stops working. */
+export const clearCalendarToken = (sub: string, old: string) =>
+  tryWrite(() =>
+    db().send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Update: {
+              TableName: T(),
+              Key: { PK: pk(sub), SK: "PROFILE" },
+              UpdateExpression: "REMOVE calendarToken",
+              ConditionExpression: "calendarToken = :old",
+              ExpressionAttributeValues: { ":old": old },
+            },
+          },
+          { Delete: { TableName: T(), Key: calKey(old) } },
+        ],
+      }),
+    ),
+  );
+
+export const setCalendarOptions = (sub: string, o: { calendarIncludeNotes: boolean; calendarPlannedOnly: boolean }) =>
+  db().send(
+    new UpdateCommand({
+      TableName: T(),
+      Key: { PK: pk(sub), SK: "PROFILE" },
+      UpdateExpression: "SET calendarIncludeNotes = :n, calendarPlannedOnly = :p",
+      ConditionExpression: "attribute_exists(PK)",
+      ExpressionAttributeValues: { ":n": o.calendarIncludeNotes, ":p": o.calendarPlannedOnly },
+    }),
   );
 
 export const listFriends = (sub: string) => beginsWith<Friend>(sub, "FRIEND#");

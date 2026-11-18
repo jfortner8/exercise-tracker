@@ -83,6 +83,14 @@ describe("autoTitle", () => {
     expect(autoTitle({ type: "sport", sport: "basketball", sportSession: "practice" })).toBe("Basketball Practice");
     expect(autoTitle({ type: "sport", sport: "american-football", sportSession: "game" })).toBe("American Football Game");
     expect(autoTitle({ type: "sport", sport: "combat", sportSession: "sparring" })).toBe("Boxing / Martial Arts Sparring");
+    expect(autoTitle({ type: "sport", sport: "flag-football", sportSession: "game" })).toBe("Flag Football Game");
+    expect(autoTitle({ type: "sport", sport: "physical-therapy", sportSession: "appointment" })).toBe("Physical Therapy Appointment");
+    expect(autoTitle({ type: "sport", sport: "physical-therapy", sportSession: "home exercises" })).toBe("Physical Therapy Home Exercises");
+  });
+  it("ignores a stray distance where distance doesn't apply", () => {
+    const km = { distance: "km", weight: "kg" } as const;
+    expect(autoTitle({ type: "strength", planned: { distanceM: 5000, durationSec: 2700 } }, km)).toBe("45 min Strength");
+    expect(autoTitle({ type: "other", planned: { distanceM: 12000 } }, km)).toBe("12 km Other");
   });
   it("uses the sport alone without a session, and a typed name for Other", () => {
     expect(autoTitle({ type: "sport", sport: "tennis" })).toBe("Tennis");

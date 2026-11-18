@@ -60,9 +60,15 @@ export function workoutCategory(w: CategoryFields) {
 /** Capitalizes each word ("roller derby bout" → "Roller Derby Bout"), leaving the rest as typed. */
 const titleCase = (s: string) => s.replace(/(^|[\s/(-])(\p{Ll})/gu, (_, sep: string, c: string) => sep + c.toUpperCase());
 
+/**
+ * Activities where distance means something: you cover ground. ("Other" can be a hike or a skate.)
+ * Sports, strength, yoga, dance and the like don't ask for one.
+ */
+export const DISTANCE_TYPES = new Set<WorkoutType>(["run", "walk", "swim", "bike", "row", "other"]);
+
 /** A distance or time as a title shows it: "10 km", "6.2 mi", "45 min", "1 h 30 min". */
-function titleAmount(d: WorkoutDetails | undefined, units: Units): string | undefined {
-  if (d?.distanceM) {
+function titleAmount(d: WorkoutDetails | undefined, units: Units, distance = true): string | undefined {
+  if (distance && d?.distanceM) {
     const v = metersToDisplay(d.distanceM, units);
     return `${v >= 1 ? Math.round(v * 10) / 10 : Math.round(v * 100) / 100} ${distanceUnit(units)}`;
   }
@@ -91,7 +97,7 @@ export function autoTitle(
   if (w.type === "sport" || w.type === "rest" || (w.type === "dance" && danceCategory(w))) return titleCase(label);
   const d = w.status && DONE_STATUSES.has(w.status) ? (w.actual ?? w.planned) : w.planned;
   const intervals = (d?.intervals?.reps ?? 0) > 0;
-  const amount = units ? titleAmount(d, units) : undefined;
+  const amount = units ? titleAmount(d, units, DISTANCE_TYPES.has(w.type)) : undefined;
   return [amount, titleCase(intervals ? `${label} intervals` : label)].filter(Boolean).join(" ");
 }
 

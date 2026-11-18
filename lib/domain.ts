@@ -164,6 +164,36 @@ export function intervalTotalSec(iv?: Intervals): number | undefined {
   return total > 0 ? total : undefined;
 }
 
+// ---------- Start times ----------
+export const START_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** "06:30" -> "6:30 AM", "18:05" -> "6:05 PM". */
+export function formatStartTime(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+/** True for a time zone this runtime knows ("America/New_York"). */
+export function validTimeZone(tz?: string): tz is string {
+  if (!tz) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Order for a day's workouts: timed ones by start time, then untimed ones in the order they were added. */
+export function compareWorkouts(
+  a: { startTime?: string; createdAt: string },
+  b: { startTime?: string; createdAt: string },
+): number {
+  if (a.startTime && b.startTime && a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime);
+  if (!!a.startTime !== !!b.startTime) return a.startTime ? -1 : 1;
+  return a.createdAt.localeCompare(b.createdAt);
+}
+
 /** Effective duration of a details block (explicit duration wins, otherwise interval math). */
 export function detailsDurationSec(d?: WorkoutDetails): number | undefined {
   if (!d) return undefined;

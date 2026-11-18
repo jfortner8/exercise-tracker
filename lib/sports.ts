@@ -29,6 +29,7 @@ export const SPORTS: Sport[] = [
   { key: "tennis", label: "Tennis", emoji: "🎾", sessions: [MATCH, PRACTICE] },
   { key: "volleyball", label: "Volleyball", emoji: "🏐", sessions: [MATCH, PRACTICE] },
   { key: "american-football", label: "American football", emoji: "🏈", sessions: [GAME, PRACTICE] },
+  { key: "flag-football", label: "Flag football", emoji: "🏈", sessions: [GAME, PRACTICE] },
   { key: "baseball", label: "Baseball", emoji: "⚾", sessions: [GAME, PRACTICE] },
   { key: "softball", label: "Softball", emoji: "🥎", sessions: [GAME, PRACTICE] },
   { key: "hockey", label: "Hockey", emoji: "🏒", sessions: [GAME, PRACTICE] },
@@ -41,6 +42,12 @@ export const SPORTS: Sport[] = [
   { key: "combat", label: "Boxing / martial arts", emoji: "🥊", sessions: [session("Bout"), session("Sparring", "sparring sessions"), session("Class", "classes")] },
   { key: "golf", label: "Golf", emoji: "⛳", sessions: [session("Round"), session("Range", "range sessions")] },
   { key: "climbing", label: "Climbing", emoji: "🧗", sessions: [session("Session"), session("Competition")] },
+  {
+    key: "physical-therapy",
+    label: "Physical therapy",
+    emoji: "🩺",
+    sessions: [session("Appointment"), session("Home exercises", "home exercise sessions")],
+  },
   { key: "other", label: "Other", emoji: "🏅", sessions: [GAME, PRACTICE] },
 ];
 

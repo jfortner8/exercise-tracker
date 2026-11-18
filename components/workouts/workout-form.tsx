@@ -1,7 +1,7 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Repeat } from "lucide-react";
+import { Repeat, X } from "lucide-react";
 import { useState, useTransition } from "react";
 import { saveWorkoutAction, type RepeatInput, type WorkoutInput } from "@/lib/actions";
 import {
@@ -16,7 +16,7 @@ import {
   repeatDates,
 } from "@/lib/domain";
 import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
-import { activityKey, activityMeta, applyActivity, autoTitle, type ActivityKey } from "@/lib/activities";
+import { activityKey, activityMeta, applyActivity, autoTitle, DISTANCE_TYPES, type ActivityKey } from "@/lib/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@/lib/dance";
 import { SPORTS, sportMeta } from "@/lib/sports";
 import { STATUS_LABEL, TYPE_META } from "@/lib/workout-types";
@@ -160,9 +160,12 @@ function DetailsFields({
             placeholder={total ? formatMinutesInput(total) : "45 or 87:45"}
           />
         </Field>
-        <Field label={`Distance (${distanceUnit(units)})`}>
-          <Input inputMode="decimal" value={value.distance} onChange={set("distance")} />
-        </Field>
+        {/* Only where you cover ground; still shown if an older workout already has one, so it can be cleared. */}
+        {(DISTANCE_TYPES.has(type) || value.distance.trim() !== "") && (
+          <Field label={`Distance (${distanceUnit(units)})`}>
+            <Input inputMode="decimal" value={value.distance} onChange={set("distance")} />
+          </Field>
+        )}
       </div>
       {(INTERVAL_TYPES.has(type) || showIntervals) && (
         <div className="rounded-lg border border-border p-3">
@@ -362,8 +365,13 @@ export function WorkoutForm({
   }
   const [title, setTitle] = useState(workout?.title ?? "");
   const [location, setLocation] = useState(workout?.location ?? "");
+  const [startTime, setStartTime] = useState(workout?.startTime ?? "");
   const [day, setDay] = useState(workout?.date ?? date);
-  const [status, setStatus] = useState<Workout["status"]>(presetStatus ?? workout?.status ?? "planned");
+  // A new workout on a past day was most likely done, so it starts as Completed; today and later start as Planned.
+  // Follows the date until the user picks a status themselves.
+  const statusForDay = (d: string): Workout["status"] => (d < format(new Date(), "yyyy-MM-dd") ? "completed" : "planned");
+  const [status, setStatus] = useState<Workout["status"]>(() => presetStatus ?? workout?.status ?? statusForDay(date));
+  const [statusChosen, setStatusChosen] = useState(!!workout || !!presetStatus);
   const [planned, setPlanned] = useState(toDraft(workout?.planned, units));
   const [actual, setActual] = useState(toDraft(workout?.actual, units));
   const [reason, setReason] = useState(workout?.reason ?? "");
@@ -418,6 +426,7 @@ export function WorkoutForm({
       id: workout?.id,
       originalDate: workout?.date,
       date: day,
+      startTime: startTime || undefined,
       type,
       title: title.trim() || autoName,
       location: location.trim() || undefined,
@@ -478,7 +487,15 @@ export function WorkoutForm({
           </Select>
         </Field>
         <Field label="Date">
-          <Input type="date" value={day} onChange={(e) => setDay(e.target.value)} required />
+          <Input
+            type="date"
+            value={day}
+            onChange={(e) => {
+              setDay(e.target.value);
+              if (!statusChosen && /^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) setStatus(statusForDay(e.target.value));
+            }}
+            required
+          />
         </Field>
       </div>
       {type === "sport" && (
@@ -575,13 +592,30 @@ export function WorkoutForm({
           autoFocus={!workout}
         />
       </Field>
-      <Field label="Location">
-        <Input
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          placeholder={type === "swim" ? "YMCA pool, open water…" : "Piedmont Park, gym, treadmill…"}
-        />
-      </Field>
+      <div className="grid grid-cols-[minmax(0,1fr)_9.5rem] gap-3">
+        <Field label="Location">
+          <Input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder={type === "swim" ? "YMCA pool, open water…" : "Piedmont Park, gym, treadmill…"}
+          />
+        </Field>
+        <Field label="Start time (optional)">
+          <div className="flex items-center gap-1">
+            <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="min-w-0" />
+            {startTime && (
+              <button
+                type="button"
+                onClick={() => setStartTime("")}
+                aria-label="Clear start time"
+                className="shrink-0 rounded-md p-1 text-muted hover:bg-surface-2 hover:text-text"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+        </Field>
+      </div>
 
       <Field label="Status">
         <div className="flex flex-wrap gap-1.5">
@@ -589,7 +623,10 @@ export function WorkoutForm({
             <button
               type="button"
               key={s}
-              onClick={() => setStatus(s)}
+              onClick={() => {
+                setStatus(s);
+                setStatusChosen(true);
+              }}
               className={cx(
                 "rounded-full border px-2.5 py-1 text-xs font-medium",
                 status === s ? "border-accent bg-accent/10 text-accent-ink" : "border-border text-muted hover:text-text",

@@ -47,6 +47,8 @@ export interface WorkoutDetails {
 export interface Workout {
   id: string;
   date: string; // yyyy-MM-dd
+  /** Optional start time, "HH:mm" (24 h) in the user's own time zone. Untimed workouts are all-day. */
+  startTime?: string;
   originalDate?: string; // set when a planned workout is moved
   /** Shared by the workouts created together by one weekly repeat. */
   seriesId?: string;
@@ -108,6 +110,13 @@ export interface Profile {
   trackWeight: boolean;
   /** Set once the user completes a sport workout; shows the Sports tab. Not a setting. */
   hasSports?: boolean;
+  /** IANA zone from the browser ("America/New_York"); says what a workout's start time means in the calendar feed. */
+  timeZone?: string;
+  /** Secret token in the private calendar-feed link. Absent while the feed is off. */
+  calendarToken?: string;
+  /** Feed options: include workout notes, and include only planned (upcoming) workouts. */
+  calendarIncludeNotes?: boolean;
+  calendarPlannedOnly?: boolean;
 }
 
 /**

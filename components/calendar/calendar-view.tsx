@@ -17,10 +17,12 @@ import { useId, useMemo, useOptimistic, useState, useSyncExternalStore, useTrans
 import { moveWorkoutAction, swapDaysAction } from "@/lib/actions";
 import {
   chunkWeeks,
+  compareWorkouts,
   detailsDurationSec,
   displayStatus,
   DONE_STATUSES,
   formatDistance,
+  formatStartTime,
   isMissedDay,
   kgToDisplay,
   weightUnit,
@@ -86,7 +88,7 @@ export function CalendarView(props: CalendarProps) {
   const byDay = useMemo(() => {
     const map = new Map<string, Workout[]>();
     for (const w of workouts) map.set(w.date, [...(map.get(w.date) ?? []), w]);
-    for (const list of map.values()) list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    for (const list of map.values()) list.sort(compareWorkouts);
     return map;
   }, [workouts]);
   const logByDay = useMemo(() => new Map(props.dayLogs.map((d) => [d.date, d])), [props.dayLogs]);
@@ -533,7 +535,7 @@ function Block({
   });
   const done = DONE_STATUSES.has(status);
   const cat = workoutCategory(w);
-  const metrics = blockMetrics(w, units);
+  const metrics = [w.startTime && formatStartTime(w.startTime), blockMetrics(w, units)].filter(Boolean).join(" · ") || undefined;
   // Don't repeat "Run" twice when the title is just the category.
   const titleIsCategory = w.title.trim().toLowerCase() === cat.label.toLowerCase();
   const struck = status === "skipped" && "line-through";
