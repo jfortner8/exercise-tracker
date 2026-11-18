@@ -207,6 +207,7 @@ export function CalendarView(props: CalendarProps) {
                   injured={injuriesOn(d).length > 0}
                   missed={isMissedDay(d, today, props.startDate, activityOn(d), injuriesOn(d).length > 0)}
                   trackDrinks={profile.trackDrinks}
+                  startDate={props.startDate}
                   trackWeight={profile.trackWeight}
                   units={profile.units}
                   clock={profile.clock}
@@ -312,6 +313,7 @@ function DayCell({
   injured,
   missed,
   trackDrinks,
+  startDate,
   trackWeight,
   units,
   clock,
@@ -327,6 +329,7 @@ function DayCell({
   injured: boolean;
   missed: boolean;
   trackDrinks: boolean;
+  startDate: string | null;
   trackWeight: boolean;
   units: Units;
   clock?: Clock;
@@ -407,12 +410,23 @@ function DayCell({
         today={today}
         log={log}
         trackDrinks={trackDrinks}
+        startDate={startDate}
         trackWeight={trackWeight}
         units={units}
         roomy={view === "week"}
       />
     </div>
   );
+}
+
+/**
+ * Drinks to show for a day, or null for blank. Logged counts always show; otherwise an unlogged day
+ * counts as 0 from the user's first day through today, and stays blank before it and in the future.
+ */
+function drinksOn(date: string, today: string, startDate: string | null, log?: DayLog): number | null {
+  if (log?.drinks != null) return log.drinks;
+  if (!today || date > today || !startDate || date < startDate) return null;
+  return 0;
 }
 
 /** Drink count background: green at 0 through intense red at 6+ (theme tokens in globals.css). */
@@ -436,6 +450,7 @@ function DayFooter({
   today,
   log,
   trackDrinks,
+  startDate,
   trackWeight,
   units,
   roomy,
@@ -444,14 +459,15 @@ function DayFooter({
   today: string;
   log?: DayLog;
   trackDrinks: boolean;
+  /** The user's first day in the app; drinks before it stay blank rather than 0. */
+  startDate: string | null;
   trackWeight: boolean;
   units: Units;
   roomy: boolean;
 }) {
   const note = log?.notes?.trim();
   const weight = log?.weightKg != null ? Math.round(kgToDisplay(log.weightKg, units) * 10) / 10 : null;
-  // Future days stay blank; from the day itself onward an unlogged day counts as 0.
-  const drinks = today && date <= today ? (log?.drinks ?? 0) : null;
+  const drinks = drinksOn(date, today, startDate, log);
   return (
     <div className="flex h-5 shrink-0 border-t border-border text-[10px] leading-none md:h-7 md:text-[11px]">
       <span
@@ -674,7 +690,9 @@ function WeekSummary({
   ].filter(Boolean);
   const minutes = Math.round(done.reduce((s, w) => s + (detailsDurationSec(w.actual ?? w.planned) ?? 0), 0) / 60);
   const meters = done.reduce((s, w) => s + ((w.actual ?? w.planned)?.distanceM ?? 0), 0);
-  const drinks = week.reduce((s, d) => s + (logByDay.get(d)?.drinks ?? 0), 0);
+  // Weeks entirely before the first day (or in the future) have no drinks to count.
+  const drinkDays = week.map((d) => drinksOn(d, today, startDate, logByDay.get(d))).filter((n) => n != null);
+  const drinks = drinkDays.reduce((s, n) => s + n, 0);
 
   return (
     // Phones: one wrapping line under the week. Wider screens: a column beside it.
@@ -691,7 +709,7 @@ function WeekSummary({
       {parts.length > 0 && <div className="leading-snug">{parts.join(" · ")}</div>}
       {minutes > 0 && <div className="whitespace-nowrap">{minutes} min</div>}
       {meters > 0 && <div className="whitespace-nowrap">{formatDistance(meters, profile.units)}</div>}
-      {profile.trackDrinks && (
+      {profile.trackDrinks && drinkDays.length > 0 && (
         <div className="flex items-center gap-1">
           <Wine className="size-3" /> {drinks}
         </div>
