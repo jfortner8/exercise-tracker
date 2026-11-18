@@ -5,6 +5,7 @@
 import { addDays, format, parseISO } from "date-fns";
 import { autoTitle, workoutCategory } from "./activities";
 import { describeDuration, describeIntervals, detailsDurationSec, DONE_STATUSES, formatDistance } from "./domain";
+import { describeExercise } from "./routines";
 import type { Units, Workout, WorkoutDetails } from "./types";
 
 /** Length of a timed event when the workout has no duration. */
@@ -90,7 +91,9 @@ function detailLine(label: string, d: WorkoutDetails | undefined, units: Units):
     describeIntervals(d.intervals) ?? "",
   ].filter(Boolean);
   const head = parts.length ? `${label}: ${parts.join(" · ")}` : "";
-  return [head, d.description?.trim()].filter(Boolean).join("\n") || undefined;
+  const exercises = (d.exercises ?? []).map((e) => `• ${describeExercise(e, units)}`);
+  const lines = [head || (exercises.length ? `${label}:` : ""), ...exercises, d.description?.trim()];
+  return lines.filter(Boolean).join("\n") || undefined;
 }
 
 export interface FeedOptions {

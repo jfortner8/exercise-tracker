@@ -2,6 +2,7 @@
 
 import { format, parseISO } from "date-fns";
 import { Repeat, X } from "lucide-react";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { saveWorkoutAction, type RepeatInput, type WorkoutInput } from "@/lib/actions";
 import {
@@ -15,12 +16,14 @@ import {
   parseMinutesInput,
   repeatDates,
 } from "@/lib/domain";
-import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
+import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Routine, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
 import { activityKey, activityMeta, applyActivity, autoTitle, DISTANCE_TYPES, type ActivityKey } from "@/lib/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@/lib/dance";
+import { findRoutineByName, sameExercises } from "@/lib/routines";
 import { SPORTS, sportMeta } from "@/lib/sports";
 import { STATUS_LABEL, TYPE_META } from "@/lib/workout-types";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
+import { ExerciseRows, fromExerciseDrafts, toExerciseDrafts, type ExerciseDraft } from "./exercise-rows";
 
 /** Form-friendly representation of WorkoutDetails (strings, display units). */
 interface DetailsDraft {
@@ -33,6 +36,7 @@ interface DetailsDraft {
   cooldownMin: string;
   description: string;
   hr: string;
+  exercises: ExerciseDraft[];
 }
 
 const num = (s: string) => (s.trim() === "" || isNaN(Number(s)) ? undefined : Number(s));
@@ -49,6 +53,7 @@ function toDraft(d: WorkoutDetails | undefined, units: Units): DetailsDraft {
     cooldownMin: formatMinutesInput(d?.intervals?.cooldownSec),
     description: d?.description ?? "",
     hr: str(d?.avgHeartRate, 0),
+    exercises: toExerciseDrafts(d?.exercises, units),
   };
 }
 
@@ -86,7 +91,9 @@ function fromDraft(d: DetailsDraft, units: Units): WorkoutDetails | undefined {
     cooldownSec: minutesField(d.cooldownMin),
   };
   const hasIntervals = Object.values(intervals).some((v) => v != null);
+  const exercises = fromExerciseDrafts(d.exercises, units);
   const out: WorkoutDetails = {
+    exercises: exercises.length ? exercises : undefined,
     durationSec,
     distanceM: dist != null ? Math.round(displayToMeters(dist, units)) : undefined,
     intervals: hasIntervals ? intervals : undefined,
@@ -152,6 +159,9 @@ function DetailsFields({
 
   return (
     <div className="space-y-3">
+      {type === "strength" && (
+        <ExerciseRows value={value.exercises} onChange={(exercises) => onChange({ ...value, exercises })} units={units} />
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Duration (min)">
           <MinutesInput
@@ -329,6 +339,7 @@ export function WorkoutForm({
   onDone,
   presetStatus,
   recent = [],
+  routines = [],
 }: {
   date: string;
   workout?: Workout;
@@ -340,6 +351,8 @@ export function WorkoutForm({
   presetStatus?: Workout["status"];
   /** The user's most recent activities, shown first in the picker. */
   recent?: ActivityKey[];
+  /** Saved strength routines, for the Routine dropdown. */
+  routines?: Routine[];
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -385,6 +398,27 @@ export function WorkoutForm({
 
   const showActual = status !== "planned" && status !== "skipped" && status !== "missed";
   const showReason = status !== "planned" && status !== "completed";
+
+  // Routine: picking one fills the exercises. It stays selected only while the list still matches it;
+  // any edit makes the workout one-off and the dropdown goes back to "New routine".
+  const [routineSel, setRoutineSel] = useState(workout?.routineId ?? "");
+  const [saveRoutine, setSaveRoutine] = useState(false);
+  const [newRoutineName, setNewRoutineName] = useState("");
+  const primary = showActual ? actual : planned; // the list that's saved as a routine: what was done once logged
+  const primaryExercises = fromExerciseDrafts(primary.exercises, units);
+  const selectedRoutine = routines.find((r) => r.id === routineSel);
+  const linkedRoutine =
+    type === "strength" && selectedRoutine && sameExercises(primaryExercises, selectedRoutine.exercises) ? selectedRoutine : undefined;
+  const canSaveRoutine = type === "strength" && !linkedRoutine && primaryExercises.length > 0;
+  function pickRoutine(id: string) {
+    setRoutineSel(id);
+    const r = routines.find((x) => x.id === id);
+    if (!r) return;
+    const drafts = toExerciseDrafts(r.exercises, units);
+    setPlanned((d) => ({ ...d, exercises: drafts }));
+    setActual((d) => ({ ...d, exercises: toExerciseDrafts(r.exercises, units) }));
+    setSaveRoutine(false);
+  }
   // What the title becomes if left blank, from the choices so far: "10 km Run", "Roller Derby Bout".
   const autoName = autoTitle(
     {
@@ -398,6 +432,7 @@ export function WorkoutForm({
       status,
       planned: fromDraft(planned, units),
       actual: showActual ? fromDraft(actual, units) : undefined,
+      routineName: linkedRoutine?.name ?? (canSaveRoutine && saveRoutine ? newRoutineName.trim() || undefined : undefined),
     },
     units,
   );
@@ -411,6 +446,16 @@ export function WorkoutForm({
     }
     if (type === "sport" && sport === "other" && !sportName.trim()) {
       setError("Name the sport (or pick one from the list).");
+      return;
+    }
+    const savingRoutine = canSaveRoutine && saveRoutine;
+    if (savingRoutine && !newRoutineName.trim()) {
+      setError("Give the routine a name to save it.");
+      return;
+    }
+    const taken = savingRoutine ? findRoutineByName(routines, newRoutineName) : undefined;
+    if (taken) {
+      setError(`You already have "${taken.name}". Pick another name, or change it on the Routines tab.`);
       return;
     }
     if (canRepeat && repeating && !repeat.weekdays.length) {
@@ -444,6 +489,7 @@ export function WorkoutForm({
             danceSession: danceSession || undefined,
           }
         : {}),
+      ...(linkedRoutine ? { routineId: linkedRoutine.id, routineName: linkedRoutine.name } : {}),
       status,
       planned: fromDraft(planned, units),
       actual: showActual ? fromDraft(actual, units) : undefined,
@@ -455,7 +501,11 @@ export function WorkoutForm({
     };
     start(async () => {
       try {
-        await saveWorkoutAction(input, canRepeat && repeating ? repeat : undefined);
+        await saveWorkoutAction(
+          input,
+          canRepeat && repeating ? repeat : undefined,
+          savingRoutine ? { name: newRoutineName.trim() } : undefined,
+        );
         onDone();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save");
@@ -650,6 +700,51 @@ export function WorkoutForm({
             <Repeat className="size-4 text-muted" /> Repeat weekly
           </label>
           {repeating && <RepeatFields start={day} value={repeat} onChange={setRepeat} weekStartsOn={weekStartsOn} />}
+        </div>
+      )}
+
+      {type === "strength" && (
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <Field label="Routine">
+            <Select value={linkedRoutine?.id ?? ""} onChange={(e) => pickRoutine(e.target.value)}>
+              <option value="">New routine</option>
+              {routines.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {canSaveRoutine && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={saveRoutine}
+                  onChange={(e) => setSaveRoutine(e.target.checked)}
+                  className="size-4 accent-[var(--accent)]"
+                />
+                Save as a routine
+              </label>
+              {saveRoutine && (
+                <Input
+                  value={newRoutineName}
+                  onChange={(e) => setNewRoutineName(e.target.value)}
+                  placeholder="Routine name, e.g. Push day"
+                  aria-label="Routine name"
+                  maxLength={60}
+                />
+              )}
+            </div>
+          )}
+          {!routines.length && !canSaveRoutine && (
+            <p className="text-xs text-muted">Add exercises below; you can save them as a routine to reuse.</p>
+          )}
+          {routines.length > 0 && (
+            <Link href="/routines" className="inline-block text-xs font-medium text-accent-ink hover:underline">
+              Edit routines →
+            </Link>
+          )}
         </div>
       )}
 

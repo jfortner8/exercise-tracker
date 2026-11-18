@@ -29,7 +29,8 @@ import {
   kgToDisplay,
   weightUnit,
 } from "@/lib/domain";
-import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Workout, WorkoutDetails } from "@/lib/types";
+import { describeExercise } from "@/lib/routines";
+import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Routine, Workout, WorkoutDetails } from "@/lib/types";
 import { STATUS_LABEL } from "@/lib/workout-types";
 import { Sheet } from "../sheet";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
@@ -47,6 +48,13 @@ function summarize(d: WorkoutDetails | undefined, profile: Profile) {
   if (d.avgHeartRate) parts.push(`${d.avgHeartRate} bpm`);
   return (
     <>
+      {d.exercises && d.exercises.length > 0 && (
+        <ul className="space-y-0.5">
+          {d.exercises.map((e, i) => (
+            <li key={i}>{describeExercise(e, profile.units)}</li>
+          ))}
+        </ul>
+      )}
       {parts.length > 0 && <div>{parts.join(" · ")}</div>}
       {d.description && <div className="whitespace-pre-wrap text-muted">{d.description}</div>}
     </>
@@ -64,6 +72,7 @@ export function DayDrawer({
   benchmarks,
   results,
   recent,
+  routines,
   profile,
   onClose,
 }: {
@@ -80,6 +89,7 @@ export function DayDrawer({
   results: DayResult[];
   /** Most recent activities, offered first in the workout form. */
   recent: ActivityKey[];
+  routines: Routine[];
   profile: Profile;
   onClose: () => void;
 }) {
@@ -121,6 +131,7 @@ export function DayDrawer({
           injuries={injuries}
           presetStatus={preset}
           recent={recent}
+          routines={routines}
           onDone={() => edit(null)}
         />
       ) : (

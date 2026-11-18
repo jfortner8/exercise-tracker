@@ -38,7 +38,7 @@ const sidebarFooter = (
 /** Nav with the optional tabs: Sports (after a completed sport workout) and Weight (when tracking it). */
 async function Nav({ part }: { part: "sidebar" | "bottom" }) {
   const { profile } = await requireProfile();
-  const flags = { showSports: profile.hasSports === true, showWeight: profile.trackWeight };
+  const flags = { showSports: profile.hasSports === true, showWeight: profile.trackWeight, showRoutines: profile.hasRoutines === true };
   return part === "sidebar" ? <Sidebar footer={sidebarFooter} {...flags} /> : <BottomNav {...flags} />;
 }
 

@@ -127,3 +127,13 @@ describe("buildCalendar", () => {
     expect(ics.replace(/\r\n/g, "")).not.toContain("\n");
   });
 });
+
+describe("exercises in the feed", () => {
+  it("lists a strength workout's exercises", () => {
+    const l = workoutEventLines(
+      { ...base, type: "strength", title: "Push day", planned: { exercises: [{ name: "Bench press", sets: 3, reps: "8", weightKg: 100 }, { name: "Plank", reps: "60 s" }] } },
+      opts,
+    );
+    expect(l.find((x) => x.startsWith("DESCRIPTION:"))).toContain("Plan:\\n• Bench press 3×8 @ 100 kg\\n• Plank ×60 s");
+  });
+});

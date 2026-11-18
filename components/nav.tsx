@@ -1,10 +1,13 @@
 "use client";
 
-import { Activity, CalendarDays, HeartPulse, Medal, Scale, Settings, Trophy, Users, Volleyball } from "lucide-react";
+import { Activity, CalendarDays, Dumbbell, HeartPulse, Medal, Scale, Settings, Trophy, Users, Volleyball } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
+import { phoneHidesInjuries, type NavFlags } from "@/lib/nav-flags";
 import { cx } from "./ui";
+
+export type { NavFlags };
 
 /**
  * `short` is the label in the phone's bottom bar, where up to seven tabs share the width.
@@ -23,19 +26,14 @@ const BASE: NavItem[] = [
 ];
 const SPORTS_ITEM: NavItem = { href: "/sports", label: "Sports", icon: Volleyball };
 const WEIGHT_ITEM: NavItem = { href: "/weight", label: "Weight", icon: Scale };
+const ROUTINES_ITEM: NavItem = { href: "/routines", label: "Routines", icon: Dumbbell };
 
-export interface NavFlags {
-  /** Has completed a sport workout. */
-  showSports?: boolean;
-  /** Has bodyweight tracking turned on. */
-  showWeight?: boolean;
-}
-
-/** Optional tabs only show for people who use them. */
-const navItems = ({ showSports, showWeight }: NavFlags): NavItem[] => [
+/** Optional tabs only show for people who use them, so the menu grows as they find their footing. */
+const navItems = ({ showSports, showWeight, showRoutines }: NavFlags): NavItem[] => [
   ...BASE.slice(0, 4), // Calendar, Benchmarks, Leaderboards, Friends & clubs
   ...(showSports ? [SPORTS_ITEM] : []),
   ...(showWeight ? [WEIGHT_ITEM] : []),
+  ...(showRoutines ? [ROUTINES_ITEM] : []),
   ...BASE.slice(4),
 ];
 
@@ -81,7 +79,8 @@ export function Sidebar({ footer, ...flags }: { footer: ReactNode } & NavFlags) 
 }
 
 export function BottomNav(flags: NavFlags) {
-  const ITEMS = navItems(flags).filter((i) => !i.desktopOnly);
+  // With every optional tab on, Injuries moves to the top of Settings so the bar keeps 7 tabs.
+  const ITEMS = navItems(flags).filter((i) => !i.desktopOnly && !(i.href === "/injuries" && phoneHidesInjuries(flags)));
   return <WithPath>{(path) => (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"

@@ -34,8 +34,27 @@ export interface Intervals {
   cooldownSec?: number;
 }
 
+/** One exercise in a strength routine. Reps is free text: "8", "8–12", "60 s", "to failure". */
+export interface Exercise {
+  name: string;
+  sets?: number;
+  reps?: string;
+  weightKg?: number;
+}
+
+/** A named list of exercises the user saved, to fill in Strength workouts. */
+export interface Routine {
+  id: string;
+  name: string;
+  exercises: Exercise[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Shape shared by a workout's plan and what was actually done. All optional. */
 export interface WorkoutDetails {
+  /** Strength only: the exercises (planned, or done). */
+  exercises?: Exercise[];
   durationSec?: number;
   distanceM?: number;
   intervals?: Intervals;
@@ -67,6 +86,9 @@ export interface Workout {
   danceStyleName?: string;
   /** "practice", "class", "show" or "social". */
   danceSession?: string;
+  /** Strength only: the saved routine this was filled from, unchanged. A copy of the name, not a live link. */
+  routineId?: string;
+  routineName?: string;
   status: WorkoutStatus;
   planned?: WorkoutDetails;
   actual?: WorkoutDetails;
@@ -110,6 +132,8 @@ export interface Profile {
   trackWeight: boolean;
   /** Set once the user completes a sport workout; shows the Sports tab. Not a setting. */
   hasSports?: boolean;
+  /** Set while the user has at least one saved routine; shows the Routines tab. Not a setting. */
+  hasRoutines?: boolean;
   /** IANA zone from the browser ("America/New_York"); says what a workout's start time means in the calendar feed. */
   timeZone?: string;
   /** Secret token in the private calendar-feed link. Absent while the feed is off. */

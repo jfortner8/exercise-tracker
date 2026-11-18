@@ -29,7 +29,7 @@ import {
   weekAdherence,
   ymd,
 } from "@/lib/domain";
-import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Units, Workout } from "@/lib/types";
+import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Routine, Units, Workout } from "@/lib/types";
 import { blockMetrics, workoutCategory, type ActivityKey } from "@/lib/activities";
 import { Button, cx } from "../ui";
 import { Sheet } from "../sheet";
@@ -55,6 +55,8 @@ export interface CalendarProps {
   results: DayResult[];
   /** The user's most recent activities (for the workout form's picker). */
   recent: ActivityKey[];
+  /** Saved strength routines (for the workout form). */
+  routines: Routine[];
 }
 
 /** Local "today" (browser timezone), stable across renders; empty during SSR. */
@@ -240,6 +242,7 @@ export function CalendarView(props: CalendarProps) {
           benchmarks={props.benchmarks}
           results={resultsByDay.get(selected) ?? []}
           recent={props.recent}
+          routines={props.routines}
           profile={profile}
           onClose={() => setSelected(null)}
         />

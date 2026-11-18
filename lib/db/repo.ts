@@ -25,6 +25,7 @@ import type {
   LeaderboardEntry,
   MyClub,
   Profile,
+  Routine,
   Workout,
 } from "@/lib/types";
 import { db } from "./client";
@@ -33,7 +34,7 @@ import { db } from "./client";
  * Single-table layout, everything partitioned by user:
  *   PK = USER#<sub>
  *   SK = PROFILE | DAY#<date> | WO#<date>#<id> | INJ#<id> | BM#<id> | BMR#<bmId>#<date>#<id>
- *        | LBPB#<catalogKey> | FRIEND#<sub> | CLUB#<clubId>
+ *        | LBPB#<catalogKey> | FRIEND#<sub> | CLUB#<clubId> | ROUTINE#<id>
  * plus club and code partitions (see "Friends and clubs" at the end):
  *   PK = CLUB#<id>   SK = META | MEMBER#<sub>
  *   PK = CODE#<code> SK = CODE
@@ -127,6 +128,7 @@ export async function getProfile(sub: string): Promise<Profile | null> {
     share: shareOf(res.Item),
     trackWeight: p.trackWeight === true,
     hasSports: p.hasSports === true,
+    hasRoutines: p.hasRoutines === true,
   };
 }
 
@@ -261,6 +263,28 @@ export async function saveDay(sub: string, d: DayLog) {
 export const listInjuries = (sub: string) => beginsWith<Injury>(sub, "INJ#");
 export const saveInjury = (sub: string, i: Injury) => put(sub, `INJ#${i.id}`, "injury", i);
 export const deleteInjury = (sub: string, id: string) => del(sub, `INJ#${id}`);
+
+// ---------- Routines ----------
+export const listRoutines = async (sub: string) =>
+  (await beginsWith<Routine>(sub, "ROUTINE#")).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+export const saveRoutine = (sub: string, r: Routine) => put(sub, `ROUTINE#${r.id}`, "routine", r);
+export const deleteRoutine = (sub: string, id: string) => del(sub, `ROUTINE#${id}`);
+
+/** Shows or hides the Routines tab. */
+export const setHasRoutines = (sub: string, on: boolean) =>
+  db()
+    .send(
+      new UpdateCommand({
+        TableName: T(),
+        Key: { PK: pk(sub), SK: "PROFILE" },
+        UpdateExpression: on ? "SET hasRoutines = :t" : "REMOVE hasRoutines",
+        ConditionExpression: "attribute_exists(PK)",
+        ...(on ? { ExpressionAttributeValues: { ":t": true } } : {}),
+      }),
+    )
+    .catch((e: Error) => {
+      if (e.name !== "ConditionalCheckFailedException") throw e;
+    });
 
 // ---------- Benchmarks ----------
 export const listBenchmarks = (sub: string) => beginsWith<BenchmarkDef>(sub, "BM#");
