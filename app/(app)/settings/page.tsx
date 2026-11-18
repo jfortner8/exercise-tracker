@@ -1,33 +1,17 @@
-import { ChevronRight, HeartPulse, LogOut } from "lucide-react";
-import Link from "next/link";
+import { LogOut } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CalendarFeed } from "@/components/calendar-feed";
 import { SettingsForm } from "@/components/settings-form";
 import { PageHeader } from "@/components/ui";
 import { requireProfile } from "@/lib/dal";
-import { phoneHidesInjuries } from "@/lib/nav-flags";
 
 export const metadata: Metadata = { title: "Settings" };
 
 async function Settings() {
   const { profile } = await requireProfile();
-  const injuriesHere = phoneHidesInjuries({
-    showSports: profile.hasSports === true,
-    showWeight: profile.trackWeight,
-    showRoutines: profile.hasRoutines === true,
-  });
   return (
     <>
-      {/* On phones with every optional tab on, the bottom bar has no room for Injuries; it lives here instead. */}
-      {injuriesHere && (
-        <Link
-          href="/injuries"
-          className="mb-4 flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium hover:bg-surface-2 md:hidden"
-        >
-          <HeartPulse className="size-4 text-muted" /> Injuries <ChevronRight className="ml-auto size-4 text-muted" />
-        </Link>
-      )}
       <SettingsForm profile={profile} />
       <CalendarFeed profile={profile} />
     </>

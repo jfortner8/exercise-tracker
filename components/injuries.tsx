@@ -109,11 +109,11 @@ export function InjuryList({ injuries, pain }: { injuries: Injury[]; pain: Recor
   );
 }
 
-function InjuryForm({ injury, onClose }: { injury?: Injury; onClose: () => void }) {
+export function InjuryForm({ injury, onClose, startDate }: { injury?: Injury; onClose: () => void; startDate?: string }) {
   const [v, setV] = useState({
     name: injury?.name ?? "",
     bodyPart: injury?.bodyPart ?? "",
-    startDate: injury?.startDate ?? ymd(new Date()),
+    startDate: injury?.startDate ?? startDate ?? ymd(new Date()),
     endDate: injury?.endDate ?? "",
     status: injury?.status ?? ("active" as Injury["status"]),
     notes: injury?.notes ?? "",

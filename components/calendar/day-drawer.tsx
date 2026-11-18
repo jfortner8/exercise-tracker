@@ -35,6 +35,7 @@ import { STATUS_LABEL } from "@/lib/workout-types";
 import { Sheet } from "../sheet";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
 import { WorkoutLinkField } from "../benchmarks/workout-link-field";
+import { InjuryForm } from "../injuries";
 import { WorkoutForm } from "../workouts/workout-form";
 
 function summarize(d: WorkoutDetails | undefined, profile: Profile) {
@@ -97,6 +98,7 @@ export function DayDrawer({
   const [preset, setPreset] = useState<Workout["status"] | undefined>();
   const [skipping, setSkipping] = useState<string | null>(null); // workout id with the reason field open
   const [skipReason, setSkipReason] = useState("");
+  const [loggingInjury, setLoggingInjury] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null); // repeating workout id with the delete choice open
   const edit = (w: Workout | "new" | null, status?: Workout["status"]) => {
     setPreset(status);
@@ -344,7 +346,16 @@ export function DayDrawer({
                 <Plus className="size-4" /> Add workout
               </Button>
             )}
+            {/* Injuries are logged from where you notice them; the Injuries tab appears once there's one. */}
+            <button
+              type="button"
+              onClick={() => setLoggingInjury(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-text"
+            >
+              <HeartPulse className="size-3.5" /> {activeInjuries.length ? "Log another injury" : "Hurt? Log an injury"}
+            </button>
           </section>
+          {loggingInjury && <InjuryForm startDate={date} onClose={() => setLoggingInjury(false)} />}
 
           <DayResults
             results={results.filter((r) => !r.workoutId || !workouts.some((w) => w.id === r.workoutId))}

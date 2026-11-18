@@ -1,7 +1,7 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Repeat, X } from "lucide-react";
+import { HeartPulse, Repeat, X } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { saveWorkoutAction, type RepeatInput, type WorkoutInput } from "@/lib/actions";
@@ -19,10 +19,12 @@ import {
 import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Routine, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
 import { activityKey, activityMeta, applyActivity, autoTitle, DISTANCE_TYPES, type ActivityKey } from "@/lib/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@/lib/dance";
+import { currentInjuries } from "@/lib/injuries";
 import { findRoutineByName, sameExercises } from "@/lib/routines";
 import { SPORTS, sportMeta } from "@/lib/sports";
 import { STATUS_LABEL, TYPE_META } from "@/lib/workout-types";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
+import { InjuryForm } from "../injuries";
 import { ExerciseRows, fromExerciseDrafts, toExerciseDrafts, type ExerciseDraft } from "./exercise-rows";
 
 /** Form-friendly representation of WorkoutDetails (strings, display units). */
@@ -275,6 +277,7 @@ function RepeatFields({
   weekStartsOn: 0 | 1;
 }) {
   const order = Array.from({ length: 7 }, (_, i) => (i + weekStartsOn) % 7);
+  const [weeksText, setWeeksText] = useState(String(value.weeks));
   const toggle = (d: number) =>
     onChange({ ...value, weekdays: value.weekdays.includes(d) ? value.weekdays.filter((x) => x !== d) : [...value.weekdays, d] });
   const dates = /^\d{4}-\d{2}-\d{2}$/.test(start) && value.weekdays.length ? repeatDates(start, value.weekdays, value.every, value.weeks, weekStartsOn) : [];
@@ -308,12 +311,17 @@ function RepeatFields({
         </Field>
         <Field label="For how many weeks">
           <Input
-            type="number"
             inputMode="numeric"
-            min={1}
-            max={52}
-            value={value.weeks}
-            onChange={(e) => onChange({ ...value, weeks: Math.min(52, Math.max(1, Math.floor(Number(e.target.value) || 1))) })}
+            pattern="[0-9]*"
+            value={weeksText}
+            onChange={(e) => {
+              // Let the box be emptied while typing; only a whole number 1–52 changes the plan.
+              const t = e.target.value.replace(/\D/g, "").slice(0, 2);
+              setWeeksText(t);
+              const n = Number(t);
+              if (t && n >= 1) onChange({ ...value, weeks: Math.min(52, n) });
+            }}
+            onBlur={() => setWeeksText(String(value.weeks))}
           />
         </Field>
       </div>
@@ -390,6 +398,13 @@ export function WorkoutForm({
   const [reason, setReason] = useState(workout?.reason ?? "");
   const [pain, setPain] = useState(workout?.painLevel != null ? String(workout.painLevel) : "");
   const [injuryId, setInjuryId] = useState(workout?.injuryId ?? "");
+  // Pain and injury fields only show while something is bothering you (or this workout already has them);
+  // otherwise a "Something hurt?" link opens them.
+  const [injuryFieldsOpen, setInjuryFieldsOpen] = useState(false);
+  const [loggingInjury, setLoggingInjury] = useState(false);
+  const current = currentInjuries(injuries, day);
+  const injuryChoices = injuries.filter((i) => i.status !== "healed" || i.id === injuryId);
+  const showInjuryFields = injuryFieldsOpen || current.length > 0 || pain.trim() !== "" || injuryId !== "";
   const [rpe, setRpe] = useState(workout?.rpe != null ? String(workout.rpe) : "");
   const [notes, setNotes] = useState(workout?.notes ?? "");
   const [repeating, setRepeating] = useState(false);
@@ -514,6 +529,7 @@ export function WorkoutForm({
   }
 
   return (
+    <>
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <Field label="Activity">
@@ -771,24 +787,48 @@ export function WorkoutForm({
         </Field>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Effort (1–10)">
-          <Input inputMode="numeric" value={rpe} onChange={(e) => setRpe(e.target.value)} />
-        </Field>
-        <Field label="Pain (0–10)">
-          <Input inputMode="numeric" value={pain} onChange={(e) => setPain(e.target.value)} />
-        </Field>
-        <Field label="Injury">
-          <Select value={injuryId} onChange={(e) => setInjuryId(e.target.value)}>
-            <option value="">None</option>
-            {injuries.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
+      {showInjuryFields ? (
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Effort (1–10)">
+              <Input inputMode="numeric" value={rpe} onChange={(e) => setRpe(e.target.value)} />
+            </Field>
+            <Field label="Pain (0–10)">
+              <Input inputMode="numeric" value={pain} onChange={(e) => setPain(e.target.value)} />
+            </Field>
+            <Field label="Injury">
+              <Select value={injuryId} onChange={(e) => setInjuryId(e.target.value)}>
+                <option value="">None</option>
+                {injuryChoices.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLoggingInjury(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-text"
+          >
+            <HeartPulse className="size-3.5" /> Log a new injury
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-end gap-3">
+          <Field label="Effort (1–10)" className="w-1/3">
+            <Input inputMode="numeric" value={rpe} onChange={(e) => setRpe(e.target.value)} />
+          </Field>
+          <button
+            type="button"
+            onClick={() => setInjuryFieldsOpen(true)}
+            className="mb-2.5 flex items-center gap-1.5 text-sm font-medium text-muted hover:text-text"
+          >
+            <HeartPulse className="size-4" /> Something hurt?
+          </button>
+        </div>
+      )}
 
       <Field label="Notes">
         <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Heart rate was high, felt great…" />
@@ -804,5 +844,8 @@ export function WorkoutForm({
         </Button>
       </div>
     </form>
+    {/* Outside the form: the injury dialog has a form of its own. */}
+    {loggingInjury && <InjuryForm startDate={day} onClose={() => setLoggingInjury(false)} />}
+    </>
   );
 }

@@ -3,6 +3,9 @@ import { Suspense } from "react";
 import { BottomNav, Sidebar } from "@/components/nav";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { requireProfile } from "@/lib/dal";
+import { listInjuries } from "@/lib/db/repo";
+import { ymd } from "@/lib/domain";
+import { showInjuriesTab } from "@/lib/injuries";
 
 async function UserFooter() {
   const { profile, user } = await requireProfile();
@@ -37,8 +40,13 @@ const sidebarFooter = (
 
 /** Nav with the optional tabs: Sports (after a completed sport workout) and Weight (when tracking it). */
 async function Nav({ part }: { part: "sidebar" | "bottom" }) {
-  const { profile } = await requireProfile();
-  const flags = { showSports: profile.hasSports === true, showWeight: profile.trackWeight, showRoutines: profile.hasRoutines === true };
+  const { user, profile } = await requireProfile();
+  const flags = {
+    showSports: profile.hasSports === true,
+    showWeight: profile.trackWeight,
+    showRoutines: profile.hasRoutines === true,
+    showInjuries: showInjuriesTab(await listInjuries(user.sub), ymd(new Date())),
+  };
   return part === "sidebar" ? <Sidebar footer={sidebarFooter} {...flags} /> : <BottomNav {...flags} />;
 }
 
