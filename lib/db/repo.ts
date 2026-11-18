@@ -127,6 +127,7 @@ export async function getProfile(sub: string): Promise<Profile | null> {
     units: normalizeUnits(p.units),
     share: shareOf(res.Item),
     trackWeight: p.trackWeight === true,
+    clock: p.clock === "24h" ? "24h" : "12h",
     hasSports: p.hasSports === true,
     hasRoutines: p.hasRoutines === true,
   };

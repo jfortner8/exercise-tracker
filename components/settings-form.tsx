@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { saveProfileAction } from "@/lib/actions";
-import type { DistanceUnit, Profile, Share, WeightUnit } from "@/lib/types";
+import type { Clock, DistanceUnit, Profile, Share, WeightUnit } from "@/lib/types";
 import { ThemeSwitch } from "./theme-switch";
 import { Button, Card, Field, Input, Select, cx } from "./ui";
 
@@ -31,6 +31,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             displayName: p.displayName,
             units: p.units,
             weekStartsOn: p.weekStartsOn,
+            clock: p.clock ?? "12h",
             trackDrinks: p.trackDrinks,
             share: p.share,
             trackWeight: p.trackWeight,
@@ -48,7 +49,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
           <Field label="Email">
             <Input value={p.email} disabled />
           </Field>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label="Distance">
               <Select
                 value={p.units.distance}
@@ -74,6 +75,12 @@ export function SettingsForm({ profile }: { profile: Profile }) {
               >
                 <option value={1}>Monday</option>
                 <option value={0}>Sunday</option>
+              </Select>
+            </Field>
+            <Field label="Time format">
+              <Select value={p.clock ?? "12h"} onChange={(e) => setP({ ...p, clock: e.target.value as Clock })}>
+                <option value="12h">12-hour (6:30 PM)</option>
+                <option value="24h">24-hour (18:30)</option>
               </Select>
             </Field>
           </div>

@@ -167,9 +167,10 @@ export function intervalTotalSec(iv?: Intervals): number | undefined {
 // ---------- Start times ----------
 export const START_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-/** "06:30" -> "6:30 AM", "18:05" -> "6:05 PM". */
-export function formatStartTime(hhmm: string): string {
+/** "06:30" -> "6:30 AM", "18:05" -> "6:05 PM"; on a 24-hour clock "06:30", "18:05". */
+export function formatStartTime(hhmm: string, clock: "12h" | "24h" = "12h"): string {
   const [h, m] = hhmm.split(":").map(Number);
+  if (clock === "24h") return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 

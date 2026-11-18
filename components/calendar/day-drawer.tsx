@@ -154,7 +154,7 @@ export function DayDrawer({
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2">
-                        {w.startTime && <span className="text-sm tabular-nums text-muted">{formatStartTime(w.startTime)}</span>}
+                        {w.startTime && <span className="text-sm tabular-nums text-muted">{formatStartTime(w.startTime, profile.clock)}</span>}
                         <span className="font-medium">{w.title}</span>
                         <span
                           className={cx(
