@@ -233,7 +233,7 @@ function GuideSheet({ guide, url, onClose }: { guide: GuideKey; url: string; onC
         {guide === "google" && (
           <>
             <Steps
-              title="On a computer or in your phone's browser"
+              title="On a computer"
               steps={[
                 <>Copy the link above.</>,
                 <>
@@ -249,8 +249,8 @@ function GuideSheet({ guide, url, onClose }: { guide: GuideKey; url: string; onC
             />
             <OutLink href="https://calendar.google.com/calendar/r/settings/addbyurl">Open Google Calendar</OutLink>
             <p className="text-sm text-muted">
-              The Google Calendar phone app can&apos;t add a calendar by link, but once it&apos;s added on the web it shows
-              up in the app too. If it doesn&apos;t, open the app&apos;s <B>Settings</B>, tap the <B>Workouts</B> calendar
+              Google can&apos;t add a calendar by link on a phone, so do it once on a computer. It then shows up in the
+              Google Calendar app on your phone too. If it doesn&apos;t, open the app&apos;s <B>Settings</B>, tap the <B>Workouts</B> calendar
               and turn on <B>Sync</B>.
             </p>
             <p className="text-xs text-muted">Google checks for changes every several hours, so edits can take up to a day to appear.</p>
@@ -259,11 +259,12 @@ function GuideSheet({ guide, url, onClose }: { guide: GuideKey; url: string; onC
         {guide === "outlook" && (
           <>
             <p className="text-sm text-muted">
-              The Outlook phone app can&apos;t add a calendar from a link, so add it once in a web browser. It then shows
-              up in the Outlook app too.
+              Outlook can&apos;t add a calendar from a link on a phone, in the app or in a phone&apos;s browser. Do it once
+              on a computer, and it then shows up in the Outlook app on your phone too. Copy the link here, then send it
+              to yourself or open this page on the computer.
             </p>
             <Steps
-              title="In a browser (best on a computer)"
+              title="On a computer"
               steps={[
                 <>Copy the link above.</>,
                 <>
@@ -281,9 +282,7 @@ function GuideSheet({ guide, url, onClose }: { guide: GuideKey; url: string; onC
               ]}
             />
             <p className="text-sm text-muted">
-              On a phone browser, Outlook may push you to the app; switch the browser to its desktop site if it does.
-              Some workplaces turn off
-              outside calendars; if you can&apos;t find <B>Subscribe from web</B>, that&apos;s probably why.
+              Some workplaces turn off outside calendars; if you can&apos;t find <B>Subscribe from web</B>, that&apos;s probably why.
             </p>
             <p className="text-xs text-muted">Outlook checks for changes every few hours.</p>
           </>
