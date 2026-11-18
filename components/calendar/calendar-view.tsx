@@ -577,7 +577,7 @@ function Block({
               {cat.emoji}
             </span>
             {/* No room for even a word on a phone's shared tile; the emoji says what it is. */}
-            <span className={cx("truncate font-medium max-md:hidden", struck)}>{w.title}</span>
+            <span className={cx("truncate font-medium max-md:hidden md:text-[11px]", struck)}>{w.title}</span>
           </div>
           {compact === "two" && metrics && (
             <span className="hidden truncate tabular-nums opacity-80 md:block">{metrics}</span>
@@ -588,33 +588,38 @@ function Block({
           {dayLabel && <div className="flex shrink-0">{dayLabel}</div>}
           {/* Title, category and basics, centered in the block. */}
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden text-center">
+            {/* A phone's month tile: emoji on top, then up to two lines of title. */}
+            {!detailed && (
+              <span className="text-sm leading-none md:hidden" aria-hidden>
+                {cat.emoji}
+              </span>
+            )}
             {!titleIsCategory && (
-              <>
-                {/* A phone's month tile: emoji on top, then up to two lines of title. */}
-                {!detailed && (
-                  <span className="text-sm leading-none md:hidden" aria-hidden>
-                    {cat.emoji}
-                  </span>
+              <span
+                className={cx(
+                  "max-w-full font-semibold",
+                  // Hyphenate long words ("Inter-vals") rather than splitting them anywhere.
+                  // Month titles run a size smaller so more of them fits.
+                  detailed ? "truncate" : "hyphens-auto text-[10px] max-md:line-clamp-2 md:truncate md:text-[11px]",
+                  struck,
                 )}
-                <span
-                  className={cx(
-                    "max-w-full font-semibold",
-                    // Hyphenate long words ("Inter-vals") rather than splitting them anywhere.
-                    detailed ? "truncate" : "hyphens-auto max-md:line-clamp-2 md:truncate",
-                    struck,
-                  )}
-                >
-                  {w.title}
-                </span>
-              </>
+              >
+                {w.title}
+              </span>
             )}
             <span
               className={cx(
                 "max-w-full truncate",
-                titleIsCategory ? cx("font-semibold", struck) : cx("opacity-90", !detailed && "hidden md:block"),
+                titleIsCategory
+                  ? cx("font-semibold", !detailed && "text-[10px] md:text-[11px]", struck)
+                  : cx("opacity-90", !detailed && "hidden md:block"),
               )}
             >
-              <span aria-hidden>{cat.emoji}</span> {cat.label}
+              {/* On a phone's month tile the emoji already sits on top. */}
+              <span className={cx(!detailed && "max-md:hidden")} aria-hidden>
+                {cat.emoji}
+              </span>{" "}
+              {cat.label}
             </span>
             {metrics && (
               <span className={cx("max-w-full truncate tabular-nums opacity-80", !detailed && "hidden md:block")}>{metrics}</span>
