@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, Check, Copy, ExternalLink } from "lucide-react";
+import { CalendarPlus, Check, ChevronRight, Copy, ExternalLink } from "lucide-react";
 import { useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import {
   disableCalendarFeedAction,
@@ -9,6 +9,7 @@ import {
   saveCalendarOptionsAction,
 } from "@/lib/calendar-actions";
 import type { Profile } from "@/lib/types";
+import { Sheet } from "./sheet";
 import { Button, Card, cx } from "./ui";
 
 const noSubscribe = () => () => {};
@@ -20,7 +21,7 @@ export function CalendarFeed({ profile }: { profile: Profile }) {
   const origin = useOrigin();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [guide, setGuide] = useState<GuideKey | null>(null);
   const [includeNotes, setIncludeNotes] = useState(profile.calendarIncludeNotes === true);
   const [plannedOnly, setPlannedOnly] = useState(profile.calendarPlannedOnly === true);
   const token = profile.calendarToken;
@@ -41,15 +42,6 @@ export function CalendarFeed({ profile }: { profile: Profile }) {
   };
 
   const url = token && origin ? `${origin}/cal/${token}.ics` : "";
-  const webcal = url.replace(/^https?:/, "webcal:");
-  const links = url
-    ? [
-        { label: "Google Calendar", href: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}` },
-        { label: "Outlook.com", href: `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(url)}&name=Workouts` },
-        { label: "Outlook (work or school)", href: `https://outlook.office.com/calendar/0/addfromweb?url=${encodeURIComponent(url)}&name=Workouts` },
-        { label: "Apple Calendar", href: webcal },
-      ]
-    : [];
 
   return (
     <Card className="mt-6 space-y-4 p-5">
@@ -76,20 +68,7 @@ export function CalendarFeed({ profile }: { profile: Profile }) {
                 onFocus={(e) => e.currentTarget.select()}
                 className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 font-mono text-xs"
               />
-              <Button
-                type="button"
-                size="sm"
-                disabled={!url}
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(url);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  } catch {}
-                }}
-              >
-                {copied ? <Check className="size-4" /> : <Copy className="size-4" />} {copied ? "Copied" : "Copy"}
-              </Button>
+              <CopyButton text={url} />
             </div>
             <p className="text-xs text-muted">
               Anyone with this link can see these workouts. Keep it to yourself, or reset it to cut off old copies.
@@ -97,24 +76,21 @@ export function CalendarFeed({ profile }: { profile: Profile }) {
           </div>
 
           <div>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Add it to</h3>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">How to add it</h3>
             <div className="grid grid-cols-2 gap-2">
-              {links.map((l) => (
-                <a
-                  key={l.label}
-                  href={l.href}
-                  target={l.href.startsWith("webcal:") ? undefined : "_blank"}
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface-2"
+              {GUIDES.map((g) => (
+                <button
+                  key={g.key}
+                  type="button"
+                  onClick={() => setGuide(g.key)}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm hover:bg-surface-2"
                 >
-                  {l.label} <ExternalLink className="size-3.5 shrink-0 text-muted" aria-hidden />
-                </a>
+                  {g.label} <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden />
+                </button>
               ))}
             </div>
-            <p className="mt-2 text-xs text-muted">
-              Anywhere else: paste the link into its &ldquo;subscribe&rdquo; or &ldquo;add calendar from URL&rdquo; option.
-            </p>
           </div>
+          {guide && url && <GuideSheet guide={guide} url={url} onClose={() => setGuide(null)} />}
 
           <div className="space-y-3">
             <Checkbox checked={plannedOnly} onChange={(v) => saveOptions({ includeNotes, plannedOnly: v })} disabled={pending}>
@@ -178,5 +154,178 @@ function Checkbox({
       />
       <span>{children}</span>
     </label>
+  );
+}
+
+function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      type="button"
+      size="sm"
+      disabled={!text}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {}
+      }}
+    >
+      {copied ? <Check className="size-4" /> : <Copy className="size-4" />} {copied ? "Copied" : label}
+    </Button>
+  );
+}
+
+type GuideKey = "google" | "outlook" | "apple" | "other";
+const GUIDES: { key: GuideKey; label: string }[] = [
+  { key: "google", label: "Google Calendar" },
+  { key: "outlook", label: "Outlook" },
+  { key: "apple", label: "iPhone / Mac" },
+  { key: "other", label: "Something else" },
+];
+
+const B = ({ children }: { children: ReactNode }) => <strong className="font-semibold text-text">{children}</strong>;
+
+function Steps({ title, steps }: { title?: string; steps: ReactNode[] }) {
+  return (
+    <div className="space-y-2">
+      {title && <h3 className="text-sm font-semibold">{title}</h3>}
+      <ol className="list-decimal space-y-1.5 pl-5 text-sm text-muted">
+        {steps.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function OutLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a
+      href={href}
+      target={href.startsWith("webcal:") ? undefined : "_blank"}
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-surface-2"
+    >
+      {children} <ExternalLink className="size-3.5 text-muted" aria-hidden />
+    </a>
+  );
+}
+
+const GUIDE_TITLE: Record<GuideKey, string> = {
+  google: "Add to Google Calendar",
+  outlook: "Add to Outlook",
+  apple: "Add to iPhone or Mac",
+  other: "Add to another calendar",
+};
+
+/** Step-by-step instructions for one calendar app, with the link to copy right there. */
+function GuideSheet({ guide, url, onClose }: { guide: GuideKey; url: string; onClose: () => void }) {
+  const webcal = url.replace(/^https?:/, "webcal:");
+  return (
+    <Sheet variant="dialog" title={GUIDE_TITLE[guide]} onClose={onClose}>
+      <div className="space-y-5 pb-2">
+        <div className="flex items-center gap-2 rounded-lg bg-surface-2 p-2">
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted">{url}</span>
+          <CopyButton text={url} label="Copy link" />
+        </div>
+        {guide === "google" && (
+          <>
+            <Steps
+              title="On a computer or in your phone's browser"
+              steps={[
+                <>Copy the link above.</>,
+                <>
+                  Go to <B>calendar.google.com</B> and sign in.
+                </>,
+                <>
+                  Next to <B>Other calendars</B>, click <B>+</B>, then <B>From URL</B>.
+                </>,
+                <>
+                  Paste the link and click <B>Add calendar</B>.
+                </>,
+              ]}
+            />
+            <OutLink href="https://calendar.google.com/calendar/r/settings/addbyurl">Open Google Calendar</OutLink>
+            <p className="text-sm text-muted">
+              The Google Calendar phone app can&apos;t add a calendar by link, but once it&apos;s added on the web it shows
+              up in the app too. If it doesn&apos;t, open the app&apos;s <B>Settings</B>, tap the <B>Workouts</B> calendar
+              and turn on <B>Sync</B>.
+            </p>
+            <p className="text-xs text-muted">Google checks for changes every several hours, so edits can take up to a day to appear.</p>
+          </>
+        )}
+        {guide === "outlook" && (
+          <>
+            <p className="text-sm text-muted">
+              The Outlook phone app can&apos;t add a calendar from a link, so add it once in a web browser. It then shows
+              up in the Outlook app too.
+            </p>
+            <Steps
+              title="In a browser (best on a computer)"
+              steps={[
+                <>Copy the link above.</>,
+                <>
+                  Go to <B>outlook.com</B> (personal) or <B>outlook.office.com</B> (work or school) and sign in.
+                </>,
+                <>
+                  Open <B>Calendar</B>, then <B>Add calendar</B> in the left-hand list.
+                </>,
+                <>
+                  Choose <B>Subscribe from web</B>.
+                </>,
+                <>
+                  Paste the link, name it &ldquo;Workouts&rdquo; and click <B>Import</B>.
+                </>,
+              ]}
+            />
+            <p className="text-sm text-muted">
+              On a phone browser, Outlook may push you to the app; switch the browser to its desktop site if it does.
+              Some workplaces turn off
+              outside calendars; if you can&apos;t find <B>Subscribe from web</B>, that&apos;s probably why.
+            </p>
+            <p className="text-xs text-muted">Outlook checks for changes every few hours.</p>
+          </>
+        )}
+        {guide === "apple" && (
+          <>
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold">On this iPhone, iPad or Mac</h3>
+              <p className="text-sm text-muted">
+                Tap the button below, then <B>Subscribe</B> when your device asks.
+              </p>
+              <OutLink href={webcal}>Subscribe in Calendar</OutLink>
+            </div>
+            <Steps
+              title="Or add it by hand on an iPhone"
+              steps={[
+                <>Copy the link above.</>,
+                <>
+                  Open <B>Settings</B>, then <B>Apps</B> → <B>Calendar</B> (on older iOS, just <B>Calendar</B>).
+                </>,
+                <>
+                  Tap <B>Calendar Accounts</B> → <B>Add Account</B> → <B>Other</B> → <B>Add Subscribed Calendar</B>.
+                </>,
+                <>
+                  Paste the link, tap <B>Next</B>, then <B>Save</B>.
+                </>,
+              ]}
+            />
+          </>
+        )}
+        {guide === "other" && (
+          <Steps
+            steps={[
+              <>Copy the link above.</>,
+              <>
+                In your calendar app, look for <B>Subscribe</B>, <B>Add calendar from URL</B> or <B>Add internet calendar</B>.
+              </>,
+              <>Paste the link and save.</>,
+            ]}
+          />
+        )}
+      </div>
+    </Sheet>
   );
 }
