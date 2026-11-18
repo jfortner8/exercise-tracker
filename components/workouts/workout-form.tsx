@@ -16,7 +16,7 @@ import {
   repeatDates,
 } from "@/lib/domain";
 import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
-import { activityKey, activityMeta, applyActivity, autoTitle, type ActivityKey } from "@/lib/activities";
+import { activityKey, activityMeta, applyActivity, autoTitle, DISTANCE_TYPES, type ActivityKey } from "@/lib/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@/lib/dance";
 import { SPORTS, sportMeta } from "@/lib/sports";
 import { STATUS_LABEL, TYPE_META } from "@/lib/workout-types";
@@ -160,9 +160,12 @@ function DetailsFields({
             placeholder={total ? formatMinutesInput(total) : "45 or 87:45"}
           />
         </Field>
-        <Field label={`Distance (${distanceUnit(units)})`}>
-          <Input inputMode="decimal" value={value.distance} onChange={set("distance")} />
-        </Field>
+        {/* Only where you cover ground; still shown if an older workout already has one, so it can be cleared. */}
+        {(DISTANCE_TYPES.has(type) || value.distance.trim() !== "") && (
+          <Field label={`Distance (${distanceUnit(units)})`}>
+            <Input inputMode="decimal" value={value.distance} onChange={set("distance")} />
+          </Field>
+        )}
       </div>
       {(INTERVAL_TYPES.has(type) || showIntervals) && (
         <div className="rounded-lg border border-border p-3">
