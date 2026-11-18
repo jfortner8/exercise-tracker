@@ -10,6 +10,7 @@ import {
   listBenchmarks,
   listDays,
   listInjuries,
+  listRoutines,
   listWorkouts,
   recentWorkouts,
 } from "@/lib/db/repo";
@@ -34,7 +35,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
     view === "month" ? monthGridRange(anchor, profile.weekStartsOn) : weekRange(anchor, profile.weekStartsOn);
   const [s, e] = [ymd(start), ymd(end)];
 
-  const [workouts, days, injuries, benchmarks, startDate, allResults, recent] = await Promise.all([
+  const [workouts, days, injuries, benchmarks, startDate, allResults, recent, routines] = await Promise.all([
     listWorkouts(user.sub, s, e),
     listDays(user.sub, s, e),
     listInjuries(user.sub),
@@ -43,6 +44,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
     // All results (one small query): earlier history decides whether a result in view was a PB.
     listAllResults(user.sub),
     recentWorkouts(user.sub, ymd(new Date())),
+    profile.hasRoutines ? listRoutines(user.sub) : Promise.resolve([]),
   ]);
 
   const title = view === "month" ? format(anchor, "MMMM yyyy") : `Week of ${format(start, "MMM d, yyyy")}`;
@@ -66,6 +68,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
       startDate={startDate}
       results={calendarResults(benchmarks, allResults, s, e)}
       recent={recentActivities(recent)}
+      routines={routines}
     />
   );
 }

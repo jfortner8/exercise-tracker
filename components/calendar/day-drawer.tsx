@@ -29,11 +29,13 @@ import {
   kgToDisplay,
   weightUnit,
 } from "@/lib/domain";
-import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Workout, WorkoutDetails } from "@/lib/types";
+import { describeExercise } from "@/lib/routines";
+import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Routine, Workout, WorkoutDetails } from "@/lib/types";
 import { STATUS_LABEL } from "@/lib/workout-types";
 import { Sheet } from "../sheet";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
 import { WorkoutLinkField } from "../benchmarks/workout-link-field";
+import { InjuryForm } from "../injuries";
 import { WorkoutForm } from "../workouts/workout-form";
 
 function summarize(d: WorkoutDetails | undefined, profile: Profile) {
@@ -47,6 +49,13 @@ function summarize(d: WorkoutDetails | undefined, profile: Profile) {
   if (d.avgHeartRate) parts.push(`${d.avgHeartRate} bpm`);
   return (
     <>
+      {d.exercises && d.exercises.length > 0 && (
+        <ul className="space-y-0.5">
+          {d.exercises.map((e, i) => (
+            <li key={i}>{describeExercise(e, profile.units)}</li>
+          ))}
+        </ul>
+      )}
       {parts.length > 0 && <div>{parts.join(" · ")}</div>}
       {d.description && <div className="whitespace-pre-wrap text-muted">{d.description}</div>}
     </>
@@ -64,6 +73,7 @@ export function DayDrawer({
   benchmarks,
   results,
   recent,
+  routines,
   profile,
   onClose,
 }: {
@@ -80,6 +90,7 @@ export function DayDrawer({
   results: DayResult[];
   /** Most recent activities, offered first in the workout form. */
   recent: ActivityKey[];
+  routines: Routine[];
   profile: Profile;
   onClose: () => void;
 }) {
@@ -87,6 +98,7 @@ export function DayDrawer({
   const [preset, setPreset] = useState<Workout["status"] | undefined>();
   const [skipping, setSkipping] = useState<string | null>(null); // workout id with the reason field open
   const [skipReason, setSkipReason] = useState("");
+  const [loggingInjury, setLoggingInjury] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null); // repeating workout id with the delete choice open
   const edit = (w: Workout | "new" | null, status?: Workout["status"]) => {
     setPreset(status);
@@ -121,6 +133,7 @@ export function DayDrawer({
           injuries={injuries}
           presetStatus={preset}
           recent={recent}
+          routines={routines}
           onDone={() => edit(null)}
         />
       ) : (
@@ -333,7 +346,16 @@ export function DayDrawer({
                 <Plus className="size-4" /> Add workout
               </Button>
             )}
+            {/* Injuries are logged from where you notice them; the Injuries tab appears once there's one. */}
+            <button
+              type="button"
+              onClick={() => setLoggingInjury(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-text"
+            >
+              <HeartPulse className="size-3.5" /> {activeInjuries.length ? "Log another injury" : "Hurt? Log an injury"}
+            </button>
           </section>
+          {loggingInjury && <InjuryForm startDate={date} onClose={() => setLoggingInjury(false)} />}
 
           <DayResults
             results={results.filter((r) => !r.workoutId || !workouts.some((w) => w.id === r.workoutId))}

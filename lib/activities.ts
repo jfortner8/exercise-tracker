@@ -89,9 +89,12 @@ export function autoTitle(
     status?: Workout["status"];
     planned?: WorkoutDetails;
     actual?: WorkoutDetails;
+    routineName?: string;
   },
   units?: Units,
 ): string {
+  // A strength workout filled from a saved routine is named after it: "Push Day".
+  if (w.type === "strength" && w.routineName?.trim()) return titleCase(w.routineName.trim());
   const label = workoutCategory(w).label;
   // Sports, and dances with a style or session, are named like "Roller Derby Bout" or "Salsa Class".
   if (w.type === "sport" || w.type === "rest" || (w.type === "dance" && danceCategory(w))) return titleCase(label);

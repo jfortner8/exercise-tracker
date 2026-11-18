@@ -7,6 +7,7 @@ import { z } from "zod";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { requireUser } from "@/lib/dal";
 import { repeatDates, START_TIME_RE, validTimeZone } from "@/lib/domain";
+import { cleanExercises, findRoutineByName, MAX_EXERCISES } from "@/lib/routines";
 import { linkableWorkouts } from "@/lib/benchmarks/linking";
 import * as repo from "@/lib/db/repo";
 import { syncLeaderboard } from "@/lib/leaderboard";
@@ -23,6 +24,7 @@ import {
   type Share,
   type Units,
   type Workout,
+  type WorkoutDetails,
 } from "@/lib/types";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -36,8 +38,16 @@ async function noteSport(sub: string, w: Pick<Workout, "type" | "status">) {
 }
 const id = z.string().min(1).max(64);
 const secs = z.number().nonnegative().max(60 * 60 * 48).optional();
+const exercise = z.object({
+  name: z.string().trim().min(1).max(80),
+  sets: z.number().int().min(1).max(50).optional(),
+  reps: z.string().trim().max(20).optional(),
+  weightKg: z.number().positive().max(1000).optional(),
+});
+const exercises = z.array(exercise).max(MAX_EXERCISES);
 const details = z
   .object({
+    exercises: exercises.optional(),
     durationSec: secs,
     distanceM: z.number().nonnegative().max(1_000_000).optional(),
     intervals: z
@@ -68,6 +78,8 @@ const workoutInput = z.object({
   danceStyle: z.enum(DANCE_STYLE_KEYS).optional(),
   danceStyleName: z.string().trim().max(60).optional(),
   danceSession: z.enum(DANCE_SESSION_KEYS).optional(),
+  routineId: z.string().max(64).optional(),
+  routineName: z.string().trim().max(60).optional(),
   status: z.enum(WORKOUT_STATUSES),
   planned: details,
   actual: details,
@@ -86,14 +98,51 @@ const repeatInput = z.object({
 });
 export type RepeatInput = z.infer<typeof repeatInput>;
 
+const routineName = z.string().trim().min(1, "Give the routine a name").max(60);
+
+// ---------- Routines (the Routines tab) ----------
+export async function saveRoutineAction(raw: { id?: string; name: string; exercises: z.input<typeof exercises> }) {
+  const { sub } = await requireUser();
+  const p = z.object({ id: id.optional(), name: routineName, exercises }).parse(raw);
+  const list = cleanExercises(p.exercises);
+  if (!list.length) return { error: "Add at least one exercise." };
+  const all = await repo.listRoutines(sub);
+  const clash = findRoutineByName(all, p.name);
+  if (clash && clash.id !== p.id) return { error: `You already have a routine called "${clash.name}".` };
+  const existing = p.id ? all.find((r) => r.id === p.id) : undefined;
+  if (p.id && !existing) return { error: "That routine no longer exists." };
+  const now = new Date().toISOString();
+  await repo.saveRoutine(sub, { id: existing?.id ?? ulid(), name: p.name, exercises: list, createdAt: existing?.createdAt ?? now, updatedAt: now });
+  await repo.setHasRoutines(sub, true);
+  refresh();
+  return { ok: true as const };
+}
+
+export async function deleteRoutineAction(routineId: string) {
+  const { sub } = await requireUser();
+  await repo.deleteRoutine(sub, id.parse(routineId));
+  if (!(await repo.listRoutines(sub)).length) await repo.setHasRoutines(sub, false);
+  refresh();
+}
+
 /**
  * Save a workout. With `repeat` (new planned workouts only) it is created on each matching day,
  * as separate workouts sharing a seriesId, so each one can be logged, moved or edited on its own.
  */
-export async function saveWorkoutAction(raw: WorkoutInput, rawRepeat?: RepeatInput) {
+export async function saveWorkoutAction(raw: WorkoutInput, rawRepeat?: RepeatInput, rawRoutine?: { name: string }) {
   const { sub } = await requireUser();
   const parsed = workoutInput.parse(raw);
   const repeat = rawRepeat ? repeatInput.parse(rawRepeat) : undefined;
+  const newRoutine = rawRoutine ? routineName.parse(rawRoutine.name) : undefined;
+  const strength = parsed.type === "strength";
+  // Exercises and routines only belong on strength workouts.
+  const keepExercises = (d: typeof parsed.planned): WorkoutDetails | undefined => {
+    if (!d) return d;
+    const list = strength ? cleanExercises(d.exercises) : [];
+    const { exercises: _e, ...rest } = d;
+    void _e;
+    return list.length ? { ...rest, exercises: list } : Object.keys(rest).length ? rest : undefined;
+  };
   if (repeat && (parsed.id || parsed.status !== "planned")) throw new Error("Only new planned workouts can repeat");
   // Sport details only belong on sport workouts; a session must be one the sport offers.
   const sportDef = parsed.type === "sport" ? sportMeta(parsed.sport) : undefined;
@@ -106,8 +155,25 @@ export async function saveWorkoutAction(raw: WorkoutInput, rawRepeat?: RepeatInp
     danceStyle: parsed.type === "dance" ? parsed.danceStyle : undefined,
     danceStyleName: parsed.type === "dance" && parsed.danceStyle === "other" ? parsed.danceStyleName || undefined : undefined,
     danceSession: parsed.type === "dance" ? parsed.danceSession : undefined,
+    planned: keepExercises(parsed.planned),
+    actual: keepExercises(parsed.actual),
+    routineId: strength ? parsed.routineId || undefined : undefined,
+    routineName: strength && parsed.routineId ? parsed.routineName || undefined : undefined,
   };
   const now = new Date().toISOString();
+
+  // "Save as a routine": created from what was done once logged, otherwise the plan.
+  if (newRoutine) {
+    if (!strength) throw new Error("Only strength workouts have routines");
+    const list = input.actual?.exercises?.length ? input.actual.exercises : (input.planned?.exercises ?? []);
+    if (!list.length) throw new Error("Add at least one exercise to save a routine");
+    if (findRoutineByName(await repo.listRoutines(sub), newRoutine)) throw new Error(`You already have a routine called "${newRoutine}"`);
+    const routine = { id: ulid(), name: newRoutine, exercises: list, createdAt: now, updatedAt: now };
+    await repo.saveRoutine(sub, routine);
+    await repo.setHasRoutines(sub, true);
+    input.routineId = routine.id;
+    input.routineName = routine.name;
+  }
 
   if (input.id && input.originalDate) {
     const existing = await repo.getWorkout(sub, input.originalDate, input.id);
@@ -345,6 +411,7 @@ export async function saveProfileAction(raw: {
     email,
     timeZone: validTimeZone(p.timeZone) ? p.timeZone : existing?.timeZone,
     hasSports: existing?.hasSports,
+    hasRoutines: existing?.hasRoutines,
     friendCode: existing?.friendCode,
     calendarToken: existing?.calendarToken,
     calendarIncludeNotes: existing?.calendarIncludeNotes,
