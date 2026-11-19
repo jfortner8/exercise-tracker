@@ -7,6 +7,7 @@ import { z } from "zod";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { requireUser } from "@/lib/dal";
 import { repeatDates, START_TIME_RE, validTimeZone } from "@/lib/domain";
+import { HABIT_KINDS, HABIT_SINCE_FIRST_DAY, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
 import { cleanExercises, findRoutineByName, MAX_EXERCISES } from "@/lib/routines";
 import { linkableWorkouts } from "@/lib/benchmarks/linking";
 import * as repo from "@/lib/db/repo";
@@ -361,14 +362,22 @@ export async function copyWeekAction(fromStart: string, toStart: string, times: 
  */
 export async function saveDayAction(
   date: string,
-  patch: { notes?: string | null; drinks?: number | null; weightKg?: number | null },
+  patch: {
+    notes?: string | null;
+    drinks?: number | null;
+    sugaryDrinks?: number | null;
+    tobacco?: number | null;
+    weightKg?: number | null;
+  },
 ) {
   const { sub } = await requireUser();
   const d = day.parse(date);
   const p = z
     .object({
       notes: z.string().max(5000).nullable().optional(),
-      drinks: z.number().min(0).max(50).nullable().optional(),
+      drinks: z.number().min(0).max(HABITS.alcohol.max).nullable().optional(),
+      sugaryDrinks: z.number().min(0).max(HABITS.sugary.max).nullable().optional(),
+      tobacco: z.number().min(0).max(HABITS.tobacco.max).nullable().optional(),
       weightKg: z.number().positive().max(500).nullable().optional(),
     })
     .parse(patch);
@@ -378,6 +387,8 @@ export async function saveDayAction(
     date: d,
     notes: (pick("notes", existing.notes) as string | undefined)?.trim() || undefined,
     drinks: (pick("drinks", existing.drinks) as number | undefined) || undefined,
+    sugaryDrinks: (pick("sugaryDrinks", existing.sugaryDrinks) as number | undefined) || undefined,
+    tobacco: (pick("tobacco", existing.tobacco) as number | undefined) || undefined,
     weightKg: pick("weightKg", existing.weightKg) as number | undefined,
   });
   refresh();
@@ -389,7 +400,8 @@ export async function saveProfileAction(raw: {
   units: Units;
   weekStartsOn: 0 | 1;
   clock: Clock;
-  trackDrinks: boolean;
+  habits: HabitKind[];
+  habitOnCalendar?: HabitKind;
   share: Share;
   trackWeight: boolean;
   timeZone?: string;
@@ -401,16 +413,31 @@ export async function saveProfileAction(raw: {
       units: z.object({ distance: z.enum(DISTANCE_UNITS), weight: z.enum(WEIGHT_UNITS) }),
       weekStartsOn: z.union([z.literal(0), z.literal(1)]),
       clock: z.enum(["12h", "24h"]),
-      trackDrinks: z.boolean(),
+      habits: z.array(z.enum(HABIT_KINDS)).max(HABIT_KINDS.length),
+      habitOnCalendar: z.enum(HABIT_KINDS).optional(),
       share: z.enum(SHARE_LEVELS),
       trackWeight: z.boolean(),
       timeZone: z.string().max(64).optional(),
     })
     .parse(raw);
   const existing = await repo.getProfile(sub);
+  const habits = profileHabits({ habits: p.habits });
+  // A counter's start is the first day it was turned on; turning it off and on again keeps it.
+  const habitStarts = { ...existing?.habitStarts };
+  const wasOn = existing ? profileHabits(existing) : [];
+  // "Today" where the user is (the server runs in UTC); en-CA formats as YYYY-MM-DD.
+  const tz = validTimeZone(p.timeZone) ? p.timeZone : validTimeZone(existing?.timeZone) ? existing.timeZone : "UTC";
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+  // Counters already on with no start (alcohol from the old "Track drinks") count from the first day.
+  for (const k of wasOn) habitStarts[k] ??= HABIT_SINCE_FIRST_DAY;
+  for (const k of habits) habitStarts[k] ??= today;
   // Keep internal fields that aren't part of the settings form.
   await repo.saveProfile(sub, {
     ...p,
+    habits,
+    habitOnCalendar: p.habitOnCalendar && habits.includes(p.habitOnCalendar) ? p.habitOnCalendar : habits[0],
+    habitStarts,
+    trackDrinks: habits.includes("alcohol"),
     email,
     timeZone: validTimeZone(p.timeZone) ? p.timeZone : existing?.timeZone,
     hasSports: existing?.hasSports,

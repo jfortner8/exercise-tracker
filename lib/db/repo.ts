@@ -12,6 +12,7 @@ import {
 import { cacheLife, cacheTag } from "next/cache";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { normalizeUnits } from "@/lib/domain";
+import { calendarHabit, profileHabits } from "@/lib/habits";
 import { env } from "@/lib/env";
 import { boardsFrom, mapLimit, shareOf } from "@/lib/social";
 import type {
@@ -98,6 +99,7 @@ export const defaultProfile = (email: string, name?: string): Profile => ({
   units: { distance: "mi", weight: "lb" },
   weekStartsOn: 1,
   trackDrinks: false,
+  habits: [],
   // Friends and clubs only; nobody sees anything until you add a friend or join a club.
   share: "circle",
   trackWeight: false,
@@ -127,6 +129,8 @@ export async function getProfile(sub: string): Promise<Profile | null> {
     units: normalizeUnits(p.units),
     share: shareOf(res.Item),
     trackWeight: p.trackWeight === true,
+    habits: profileHabits(p),
+    habitOnCalendar: calendarHabit(p) ?? undefined,
     clock: p.clock === "24h" ? "24h" : "12h",
     hasSports: p.hasSports === true,
     hasRoutines: p.hasRoutines === true,
@@ -255,7 +259,7 @@ export async function getDay(sub: string, date: string) {
 }
 
 export async function saveDay(sub: string, d: DayLog) {
-  const empty = !d.notes?.trim() && !d.drinks && d.weightKg == null;
+  const empty = !d.notes?.trim() && !d.drinks && !d.sugaryDrinks && !d.tobacco && d.weightKg == null;
   if (empty) return del(sub, `DAY#${d.date}`);
   return put(sub, `DAY#${d.date}`, "day", d);
 }

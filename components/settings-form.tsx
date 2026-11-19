@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { saveProfileAction } from "@/lib/actions";
+import { calendarHabit, HABIT_KINDS, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
+import { HabitIcon } from "./habit-icon";
 import type { Clock, DistanceUnit, Profile, Share, WeightUnit } from "@/lib/types";
 import { ThemeSwitch } from "./theme-switch";
 import { Button, Card, Field, Input, Select, cx } from "./ui";
@@ -18,6 +20,9 @@ const SHARE_OPTIONS: { value: Share; label: string; description: string }[] = [
 
 export function SettingsForm({ profile }: { profile: Profile }) {
   const [p, setP] = useState(profile);
+  const habits = profileHabits(p);
+  const toggleHabit = (k: HabitKind, on: boolean) =>
+    setP({ ...p, habits: HABIT_KINDS.filter((h) => (h === k ? on : habits.includes(h))) });
   const [pending, start] = useTransition();
   const [saved, setSaved] = useState(false);
 
@@ -32,7 +37,8 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             units: p.units,
             weekStartsOn: p.weekStartsOn,
             clock: p.clock ?? "12h",
-            trackDrinks: p.trackDrinks,
+            habits,
+            habitOnCalendar: calendarHabit(p) ?? undefined,
             share: p.share,
             trackWeight: p.trackWeight,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -92,13 +98,46 @@ export function SettingsForm({ profile }: { profile: Profile }) {
         </div>
         <div className="p-5">
           <h2 className="mb-3 text-sm font-semibold">Optional tracking</h2>
-          <Toggle
-            checked={p.trackDrinks}
-            onChange={(v) => setP({ ...p, trackDrinks: v })}
-            label="Track drinks"
-            description="Adds a drinks counter to each day and a weekly total to the calendar. Hidden everywhere when off."
-          />
-          <div className="mt-4">
+          <fieldset>
+            <legend className="text-sm font-medium">Daily counters</legend>
+            <p className="mt-0.5 text-sm text-muted">
+              Count these from the day view. Turning one off hides it but keeps what you logged.
+            </p>
+            <div className="mt-2 space-y-1.5">
+              {HABIT_KINDS.map((k) => (
+                <label key={k} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-[var(--accent)]"
+                    checked={habits.includes(k)}
+                    onChange={(e) => toggleHabit(k, e.target.checked)}
+                  />
+                  <HabitIcon kind={k} className="size-4 text-muted" />
+                  {HABITS[k].label}
+                </label>
+              ))}
+            </div>
+            {habits.length > 1 && (
+              <Field label="Show on calendar" className="mt-3 max-w-xs">
+                <Select
+                  value={calendarHabit(p) ?? ""}
+                  onChange={(e) => setP({ ...p, habitOnCalendar: e.target.value as HabitKind })}
+                >
+                  {habits.map((k) => (
+                    <option key={k} value={k}>
+                      {HABITS[k].label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {habits.length > 0 && (
+              <p className="mt-2 text-xs text-muted">
+                {habits.length > 1 ? "The one you pick shows" : "It shows"} on each calendar day, with a weekly total.
+              </p>
+            )}
+          </fieldset>
+          <div className="mt-5">
             <Toggle
               checked={p.trackWeight}
               onChange={(v) => setP({ ...p, trackWeight: v })}

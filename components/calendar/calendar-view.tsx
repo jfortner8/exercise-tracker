@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { addDays, format, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, Star, Wine } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Star } from "lucide-react";
 import Link from "next/link";
 import { useId, useMemo, useOptimistic, useState, useSyncExternalStore, useTransition } from "react";
 import { moveWorkoutAction, swapDaysAction } from "@/lib/actions";
@@ -31,6 +31,8 @@ import {
 } from "@/lib/domain";
 import type { BenchmarkDef, Clock, DayLog, DayResult, Injury, Profile, Routine, Units, Workout } from "@/lib/types";
 import { blockMetrics, workoutCategory, type ActivityKey } from "@/lib/activities";
+import { calendarHabit, habitLevel, habitOnDay, HABITS, type HabitKind } from "@/lib/habits";
+import { HabitIcon } from "../habit-icon";
 import { Button, cx } from "../ui";
 import { Sheet } from "../sheet";
 import { CopyWeekDialog } from "./copy-week-dialog";
@@ -70,6 +72,8 @@ function useToday() {
 
 export function CalendarView(props: CalendarProps) {
   const { view, days, profile, injuries } = props;
+  const habit = calendarHabit(profile);
+  const habitStart = habit ? profile.habitStarts?.[habit] : undefined;
   const today = useToday();
   const [selected, setSelected] = useState<string | null>(null);
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
@@ -206,7 +210,8 @@ export function CalendarView(props: CalendarProps) {
                   log={logByDay.get(d)}
                   injured={injuriesOn(d).length > 0}
                   missed={isMissedDay(d, today, props.startDate, activityOn(d), injuriesOn(d).length > 0)}
-                  trackDrinks={profile.trackDrinks}
+                  habit={habit}
+                  habitStart={habitStart}
                   startDate={props.startDate}
                   trackWeight={profile.trackWeight}
                   units={profile.units}
@@ -312,7 +317,8 @@ function DayCell({
   log,
   injured,
   missed,
-  trackDrinks,
+  habit,
+  habitStart,
   startDate,
   trackWeight,
   units,
@@ -328,7 +334,8 @@ function DayCell({
   log?: DayLog;
   injured: boolean;
   missed: boolean;
-  trackDrinks: boolean;
+  habit: HabitKind | null;
+  habitStart?: string;
   startDate: string | null;
   trackWeight: boolean;
   units: Units;
@@ -409,7 +416,8 @@ function DayCell({
         date={date}
         today={today}
         log={log}
-        trackDrinks={trackDrinks}
+        habit={habit}
+        habitStart={habitStart}
         startDate={startDate}
         trackWeight={trackWeight}
         units={units}
@@ -419,17 +427,7 @@ function DayCell({
   );
 }
 
-/**
- * Drinks to show for a day, or null for blank. Logged counts always show; otherwise an unlogged day
- * counts as 0 from the user's first day through today, and stays blank before it and in the future.
- */
-function drinksOn(date: string, today: string, startDate: string | null, log?: DayLog): number | null {
-  if (log?.drinks != null) return log.drinks;
-  if (!today || date > today || !startDate || date < startDate) return null;
-  return 0;
-}
-
-/** Drink count background: green at 0 through intense red at 6+ (theme tokens in globals.css). */
+/** Counter background by level (habitLevel): green at 0 through intense red (theme tokens in globals.css). */
 const DRINK_COLORS = [
   "bg-drink-0 text-drink-0-fg",
   "bg-drink-1 text-drink-1-fg",
@@ -449,7 +447,8 @@ function DayFooter({
   date,
   today,
   log,
-  trackDrinks,
+  habit,
+  habitStart,
   startDate,
   trackWeight,
   units,
@@ -458,8 +457,10 @@ function DayFooter({
   date: string;
   today: string;
   log?: DayLog;
-  trackDrinks: boolean;
-  /** The user's first day in the app; drinks before it stay blank rather than 0. */
+  /** The daily counter shown on the calendar, if any. */
+  habit: HabitKind | null;
+  habitStart?: string;
+  /** The user's first day in the app; counts before it stay blank rather than 0. */
   startDate: string | null;
   trackWeight: boolean;
   units: Units;
@@ -467,7 +468,7 @@ function DayFooter({
 }) {
   const note = log?.notes?.trim();
   const weight = log?.weightKg != null ? Math.round(kgToDisplay(log.weightKg, units) * 10) / 10 : null;
-  const drinks = drinksOn(date, today, startDate, log);
+  const count = habit ? habitOnDay(habit, date, today, startDate, habitStart, log) : null;
   return (
     <div className="flex h-5 shrink-0 border-t border-border text-[10px] leading-none md:h-7 md:text-[11px]">
       <span
@@ -509,19 +510,18 @@ function DayFooter({
             ))}
         </span>
       )}
-      {trackDrinks && (
+      {habit && (
         <span
           className={cx(
             "flex flex-1 items-center justify-center gap-0.5 border-l border-border font-semibold tabular-nums",
-            // Half drinks (the stepper allows .5) round down to the colour below.
-            drinks == null ? "bg-surface" : DRINK_COLORS[Math.min(Math.floor(drinks), DRINK_COLORS.length - 1)],
+            count == null ? "bg-surface" : DRINK_COLORS[habitLevel(habit, count)],
           )}
-          title={drinks != null ? `${drinks} drink${drinks === 1 ? "" : "s"}` : undefined}
+          title={count != null ? `${count} ${HABITS[habit].noun(count)}` : undefined}
         >
-          {drinks != null && (
+          {count != null && (
             <>
-              <Wine className={cx("size-2.5 shrink-0 opacity-80 md:size-3", !roomy && "max-md:hidden")} aria-hidden />
-              {drinks}
+              <HabitIcon kind={habit} className={cx("size-2.5 shrink-0 opacity-80 md:size-3", !roomy && "max-md:hidden")} />
+              {count}
             </>
           )}
         </span>
@@ -690,9 +690,12 @@ function WeekSummary({
   ].filter(Boolean);
   const minutes = Math.round(done.reduce((s, w) => s + (detailsDurationSec(w.actual ?? w.planned) ?? 0), 0) / 60);
   const meters = done.reduce((s, w) => s + ((w.actual ?? w.planned)?.distanceM ?? 0), 0);
-  // Weeks entirely before the first day (or in the future) have no drinks to count.
-  const drinkDays = week.map((d) => drinksOn(d, today, startDate, logByDay.get(d))).filter((n) => n != null);
-  const drinks = drinkDays.reduce((s, n) => s + n, 0);
+  // Weeks entirely before the counter's start (or in the future) have nothing to count.
+  const habit = calendarHabit(profile);
+  const counts = habit
+    ? week.map((d) => habitOnDay(habit, d, today, startDate, profile.habitStarts?.[habit], logByDay.get(d))).filter((n) => n != null)
+    : [];
+  const habitTotal = counts.reduce((s, n) => s + n, 0);
 
   return (
     // Phones: one wrapping line under the week. Wider screens: a column beside it.
@@ -709,9 +712,9 @@ function WeekSummary({
       {parts.length > 0 && <div className="leading-snug">{parts.join(" · ")}</div>}
       {minutes > 0 && <div className="whitespace-nowrap">{minutes} min</div>}
       {meters > 0 && <div className="whitespace-nowrap">{formatDistance(meters, profile.units)}</div>}
-      {profile.trackDrinks && drinkDays.length > 0 && (
-        <div className="flex items-center gap-1">
-          <Wine className="size-3" /> {drinks}
+      {habit && counts.length > 0 && (
+        <div className="flex items-center gap-1" title={`${habitTotal} ${HABITS[habit].noun(habitTotal)} this week`}>
+          <HabitIcon kind={habit} className="size-3" /> {habitTotal}
         </div>
       )}
       </div>
