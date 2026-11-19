@@ -1,3 +1,5 @@
+import type { HabitKind } from "./habits";
+
 export const WORKOUT_TYPES = [
   "run",
   "walk",
@@ -104,7 +106,11 @@ export interface Workout {
 export interface DayLog {
   date: string;
   notes?: string;
+  /** Alcoholic drinks (the original counter, so the field keeps its name). */
   drinks?: number;
+  sugaryDrinks?: number;
+  /** Cigarettes, vapes, pouches… */
+  tobacco?: number;
   /** One bodyweight per day, stored in kg. */
   weightKg?: number;
 }
@@ -128,7 +134,14 @@ export interface Profile {
   weekStartsOn: 0 | 1; // 0 Sunday, 1 Monday
   /** Start-time format; absent means 12-hour. */
   clock?: Clock;
+  /** Legacy "Track drinks" switch; read only to fill in `habits` for old profiles. */
   trackDrinks: boolean;
+  /** Daily counters the user opted into (see lib/habits.ts). */
+  habits?: HabitKind[];
+  /** The one counter shown on the calendar; falls back to the first in `habits`. */
+  habitOnCalendar?: HabitKind;
+  /** The day each counter was first turned on; unlogged days before it stay blank. */
+  habitStarts?: Partial<Record<HabitKind, string>>;
   /** Who sees this user's PBs on built-in benchmarks. See SHARE_LEVELS. */
   share: Share;
   /** Code others enter to become friends. Created the first time it's needed. */

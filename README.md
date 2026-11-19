@@ -5,7 +5,7 @@ A calendar-first workout tracker. Past days show what you actually did, and futu
 ## Features
 - **Calendar** (month/week): planned workouts (dashed) vs. done (solid), "needs review" for past plans you never logged, drag to reschedule (keeps "moved from"), and copy or repeat a week.
 - **Plan vs. actual** on every workout, with structured intervals (reps × work/rest + warm-up/cool-down; the total is calculated for you), status (completed / partial / skipped / missed / did something else), effort, pain, and a linked injury.
-- **Day notes** and an optional per-account **drinks** counter (turn it on in Settings).
+- **Day notes** and optional **daily counters** (alcoholic drinks, sugary drinks, tobacco): tick the ones you want in Settings and pick one to show on the calendar.
 - **Injuries**: date ranges shown as stripes on the calendar, plus a pain timeline from linked workouts.
 - **Benchmarks**: PBs for anything measurable (time, distance, weight × reps scored as estimated 1RM, reps, duration, or a custom unit), built-in suggestions, charts.
 

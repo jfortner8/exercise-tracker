@@ -1,7 +1,7 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Ban, Check, HeartPulse, MapPin, Minus, Moon, Repeat, Scale, Star, X, Pencil, Plus, Trash2, Trophy, Wine } from "lucide-react";
+import { Ban, Check, HeartPulse, MapPin, Minus, Moon, Repeat, Scale, Star, X, Pencil, Plus, Trash2, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
@@ -30,6 +30,8 @@ import {
   weightUnit,
 } from "@/lib/domain";
 import { describeExercise } from "@/lib/routines";
+import { habitCount, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
+import { HabitIcon } from "../habit-icon";
 import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Routine, Workout, WorkoutDetails } from "@/lib/types";
 import { STATUS_LABEL } from "@/lib/workout-types";
 import { Sheet } from "../sheet";
@@ -370,15 +372,18 @@ export function DayDrawer({
 }
 
 function DayNotes({ date, log, profile }: { date: string; log?: DayLog; profile: Profile }) {
-  const { trackDrinks, trackWeight, units } = profile;
+  const { trackWeight, units } = profile;
+  const habits = profileHabits(profile);
   const savedWeight = log?.weightKg != null ? String(Math.round(kgToDisplay(log.weightKg, units) * 10) / 10) : "";
   const [notes, setNotes] = useState(log?.notes ?? "");
-  const [drinks, setDrinks] = useState(log?.drinks ?? 0);
+  const savedCounts = () => Object.fromEntries(habits.map((k) => [k, habitCount(log, k) ?? 0])) as Record<HabitKind, number>;
+  const [counts, setCounts] = useState(savedCounts);
   const [weight, setWeight] = useState(savedWeight);
   const [pending, start] = useTransition();
   const weightNum = weight.trim() === "" ? null : Number(weight);
   const weightBad = weightNum != null && (!isFinite(weightNum) || weightNum <= 0);
-  const dirty = notes !== (log?.notes ?? "") || drinks !== (log?.drinks ?? 0) || weight !== savedWeight;
+  const dirty =
+    notes !== (log?.notes ?? "") || habits.some((k) => counts[k] !== (habitCount(log, k) ?? 0)) || weight !== savedWeight;
 
   return (
     // First section of the drawer: no divider above it, since the sheet header already has one.
@@ -405,19 +410,40 @@ function DayNotes({ date, log, profile }: { date: string; log?: DayLog; profile:
             <span className="text-muted">{weightUnit(units)}</span>
           </label>
         )}
-        {trackDrinks && (
-          <div className="flex items-center gap-2 text-sm">
-            <Wine className="size-4 text-muted" />
-            <span className="text-muted">Drinks</span>
-            <Button type="button" size="sm" variant="secondary" className="size-8 px-0" onClick={() => setDrinks((n) => Math.max(0, n - 0.5))}>
-              <Minus className="size-3.5" />
-            </Button>
-            <span className="w-8 text-center font-semibold tabular-nums">{drinks}</span>
-            <Button type="button" size="sm" variant="secondary" className="size-8 px-0" onClick={() => setDrinks((n) => n + 1)}>
-              <Plus className="size-3.5" />
-            </Button>
-          </div>
-        )}
+        {habits.map((k) => {
+          const h = HABITS[k];
+          const n = counts[k] ?? 0;
+          // From the latest count, so quick taps all land.
+          const bump = (by: number) => setCounts((c) => ({ ...c, [k]: Math.min(h.max, Math.max(0, (c[k] ?? 0) + by)) }));
+          return (
+            <div key={k} className="flex items-center gap-2 text-sm">
+              <HabitIcon kind={k} className="size-4 text-muted" />
+              <span className="text-muted">{h.short}</span>
+              {/* − takes off half a drink (people do log halves); + always adds a whole one. */}
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="size-8 px-0"
+                aria-label={`Fewer ${h.short.toLowerCase()}`}
+                onClick={() => bump(-h.step)}
+              >
+                <Minus className="size-3.5" />
+              </Button>
+              <span className="w-8 text-center font-semibold tabular-nums">{n}</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="size-8 px-0"
+                aria-label={`More ${h.short.toLowerCase()}`}
+                onClick={() => bump(1)}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
+          );
+        })}
         <Button
           className="ml-auto"
           size="sm"
@@ -428,7 +454,7 @@ function DayNotes({ date, log, profile }: { date: string; log?: DayLog; profile:
               saveDayAction(date, {
                 notes,
                 // Only send what's shown, so hidden fields keep their saved values.
-                ...(trackDrinks ? { drinks } : {}),
+                ...Object.fromEntries(habits.map((k) => [HABITS[k].field, counts[k] ?? 0])),
                 ...(trackWeight ? { weightKg: weightNum == null ? null : displayToKg(weightNum, units) } : {}),
               }),
             )
