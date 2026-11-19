@@ -8,7 +8,6 @@ import {
   addResultAction,
   deleteSeriesFromAction,
   deleteWorkoutAction,
-  logAsDoneAction,
   markRestDayAction,
   resolveWorkoutAction,
   saveDayAction,
@@ -41,6 +40,7 @@ import { Button, Field, Input, Select, Textarea, cx } from "../ui";
 import { WorkoutLinkField } from "../benchmarks/workout-link-field";
 import { InjuryForm } from "../injuries";
 import { WorkoutForm } from "../workouts/workout-form";
+import { QuickDone } from "./quick-done";
 
 function summarize(d: WorkoutDetails | undefined, profile: Profile) {
   if (!d) return null;
@@ -104,6 +104,7 @@ export function DayDrawer({
   const [skipReason, setSkipReason] = useState("");
   const [loggingInjury, setLoggingInjury] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null); // repeating workout id with the delete choice open
+  const [quick, setQuick] = useState<string | null>(null); // workout id with the quick "Done" panel open
   const edit = (w: Workout | "new" | null, status?: Workout["status"]) => {
     setPreset(status);
     setEditing(w);
@@ -216,7 +217,18 @@ export function DayDrawer({
                       </div>
                     </div>
                   </div>
-                  {status === "needs_review" && (
+                  {quick === w.id && (
+                    <QuickDone
+                      workout={w}
+                      units={profile.units}
+                      onMore={(draft) => {
+                        setQuick(null);
+                        edit(draft, "completed");
+                      }}
+                      onClose={() => setQuick(null)}
+                    />
+                  )}
+                  {status === "needs_review" && quick !== w.id && (
                     <div className="mt-3 space-y-2 rounded-lg bg-warn/10 p-2">
                       <div className="text-xs font-medium text-text">How did it go?</div>
                       {skipping === w.id ? (
@@ -248,13 +260,8 @@ export function DayDrawer({
                         </form>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            disabled={pending}
-                            onClick={() => start(() => resolveWorkoutAction(w.date, w.id, "completed"))}
-                          >
-                            <Check className="size-3.5" /> Done as planned
+                          <Button size="sm" variant="primary" onClick={() => setQuick(w.id)}>
+                            <Check className="size-3.5" /> Done
                           </Button>
                           <Button size="sm" onClick={() => edit(w, "substituted")}>
                             <Repeat className="size-3.5" /> Did something else…
@@ -274,15 +281,10 @@ export function DayDrawer({
                       )}
                     </div>
                   )}
-                  <div className="mt-3 flex flex-wrap gap-1.5">
+                  <div className={cx("mt-3 flex flex-wrap gap-1.5", quick === w.id && "hidden")}>
                     {status === "planned" && (
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        disabled={pending}
-                        onClick={() => start(() => logAsDoneAction(w.date, w.id))}
-                      >
-                        <Check className="size-3.5" /> Log as done
+                      <Button size="sm" variant="primary" onClick={() => setQuick(w.id)}>
+                        <Check className="size-3.5" /> Done
                       </Button>
                     )}
                     <Button size="sm" onClick={() => edit(w)}>
