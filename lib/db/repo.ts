@@ -259,7 +259,7 @@ export async function getDay(sub: string, date: string) {
 }
 
 export async function saveDay(sub: string, d: DayLog) {
-  const empty = !d.notes?.trim() && !d.drinks && !d.sugaryDrinks && !d.tobacco && d.weightKg == null;
+  const empty = !d.notes?.trim() && !d.drinks && !d.sugaryDrinks && !d.tobacco && !d.goalsDone?.length && d.weightKg == null;
   if (empty) return del(sub, `DAY#${d.date}`);
   return put(sub, `DAY#${d.date}`, "day", d);
 }
