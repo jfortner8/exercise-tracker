@@ -9,6 +9,8 @@ import { requireUser } from "@/lib/dal";
 import { repeatDates, START_TIME_RE, validTimeZone } from "@/lib/domain";
 import { HABIT_KINDS, HABIT_SINCE_FIRST_DAY, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
 import { cleanExercises, findRoutineByName, MAX_EXERCISES } from "@/lib/routines";
+import { quickActual, type ExtraAs } from "@/lib/quick-done";
+import { DISTANCE_TYPES } from "@/lib/activities";
 import { linkableWorkouts } from "@/lib/benchmarks/linking";
 import * as repo from "@/lib/db/repo";
 import { syncLeaderboard } from "@/lib/leaderboard";
@@ -250,8 +252,38 @@ export async function moveWorkoutAction(date: string, workoutId: string, toDate:
 }
 
 /** Mark a planned workout done, copying the plan into "actual" so only differences need editing. */
-export async function logAsDoneAction(date: string, workoutId: string) {
-  return resolveWorkoutAction(date, workoutId, "completed");
+/**
+ * The quick "Done" panel: log a planned workout as done with its real time and distance. The plan's
+ * details carry over; time past the intervals goes to the warm-up or cool-down (see lib/quick-done.ts).
+ */
+export async function quickDoneAction(
+  date: string,
+  workoutId: string,
+  raw: { timeSec?: number; distanceM?: number; extraAs: ExtraAs },
+) {
+  const { sub } = await requireUser();
+  const input = z
+    .object({
+      timeSec: z.number().int().positive().max(48 * 3600).optional(),
+      distanceM: z.number().positive().max(1_000_000).optional(),
+      extraAs: z.enum(["warmup", "cooldown"]),
+    })
+    .parse(raw);
+  const w = await repo.getWorkout(sub, day.parse(date), id.parse(workoutId));
+  if (!w) throw new Error("Workout not found");
+  await repo.saveWorkout(sub, {
+    ...w,
+    status: "completed",
+    actual: quickActual(w.actual ?? w.planned, {
+      ...input,
+      // Distance only where you cover ground.
+      distanceM: DISTANCE_TYPES.has(w.type) && input.distanceM ? Math.round(input.distanceM) : undefined,
+    }),
+    reason: undefined,
+    updatedAt: new Date().toISOString(),
+  });
+  await noteSport(sub, { type: w.type, status: "completed" });
+  refresh();
 }
 
 /** Mark a day as an intentional rest day. `today` is the client's local date. */

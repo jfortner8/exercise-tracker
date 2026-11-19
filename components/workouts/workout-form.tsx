@@ -106,7 +106,7 @@ function fromDraft(d: DetailsDraft, units: Units): WorkoutDetails | undefined {
 }
 
 /** Minutes field that also takes 87:45 / 1:27:45, with a live preview of how it was read. */
-function MinutesInput({
+export function MinutesInput({
   value,
   onChange,
   placeholder,
@@ -196,19 +196,20 @@ function DetailsFields({
               {gap > 0 ? (
                 <>
                   <span className="text-muted">
-                    {formatDuration(total)} of intervals · {formatDuration(gap)} outside them
+                    {formatDuration(total)} of intervals · count the extra {formatDuration(gap)} as:
                   </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-1.5 text-xs text-accent-ink"
-                    onClick={() =>
-                      onChange({ ...value, cooldownMin: formatMinutesInput((minutesField(value.cooldownMin) ?? 0) + gap) })
-                    }
-                  >
-                    Count as cool-down
-                  </Button>
+                  {(["warmupMin", "cooldownMin"] as const).map((k) => (
+                    <Button
+                      key={k}
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-1.5 text-xs text-accent-ink"
+                      onClick={() => onChange({ ...value, [k]: formatMinutesInput((minutesField(value[k]) ?? 0) + gap) })}
+                    >
+                      {k === "warmupMin" ? "Warm-up" : "Cool-down"}
+                    </Button>
+                  ))}
                 </>
               ) : gap < 0 ? (
                 <span className="text-warn">Intervals add up to more than the duration ({formatDuration(duration)})</span>
