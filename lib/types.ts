@@ -1,3 +1,4 @@
+import type { Goal } from "./goals";
 import type { HabitKind } from "./habits";
 
 export const WORKOUT_TYPES = [
@@ -111,6 +112,8 @@ export interface DayLog {
   sugaryDrinks?: number;
   /** Cigarettes, vapes, pouches… */
   tobacco?: number;
+  /** Ids of the daily goals checked off this day (see lib/goals.ts). */
+  goalsDone?: string[];
   /** One bodyweight per day, stored in kg. */
   weightKg?: number;
 }
@@ -142,6 +145,10 @@ export interface Profile {
   habitOnCalendar?: HabitKind;
   /** The day each counter was first turned on; unlogged days before it stay blank. */
   habitStarts?: Partial<Record<HabitKind, string>>;
+  /** Yes/no daily goals ("Stretched"). */
+  goals?: Goal[];
+  /** The goal shown on the calendar; falls back to the first. */
+  goalOnCalendar?: string;
   /** Who sees this user's PBs on built-in benchmarks. See SHARE_LEVELS. */
   share: Share;
   /** Code others enter to become friends. Created the first time it's needed. */

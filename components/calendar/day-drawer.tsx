@@ -3,7 +3,7 @@
 import { format, parseISO } from "date-fns";
 import { Ban, Check, HeartPulse, MapPin, Minus, Moon, Repeat, Scale, Star, X, Pencil, Plus, Trash2, Trophy } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import {
   addResultAction,
   deleteSeriesFromAction,
@@ -11,6 +11,7 @@ import {
   markRestDayAction,
   resolveWorkoutAction,
   saveDayAction,
+  setGoalDoneAction,
 } from "@/lib/actions";
 import { isClock, parseValue, valueLabel } from "@/lib/benchmarks/input";
 import { ClockInput } from "../clock-input";
@@ -31,6 +32,7 @@ import {
 import { describeExercise } from "@/lib/routines";
 import { habitCount, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
 import { HabitIcon } from "../habit-icon";
+import { activeGoals, goalDone, type Goal } from "@/lib/goals";
 import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Routine, Workout, WorkoutDetails } from "@/lib/types";
 import { STATUS_LABEL } from "@/lib/workout-types";
 import { Sheet } from "../sheet";
@@ -142,6 +144,9 @@ export function DayDrawer({
       ) : (
         <div className="space-y-6">
           <DayNotes date={date} log={log} profile={profile} />
+          {activeGoals(profile).length > 0 && (!today || date <= today) && (
+            <DayGoals date={date} log={log} goals={activeGoals(profile)} />
+          )}
 
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Workouts</h3>
@@ -370,6 +375,47 @@ export function DayDrawer({
         </div>
       )}
     </Sheet>
+  );
+}
+
+/** The day's yes/no goals. Each tick saves right away: a checklist should be one tap. */
+function DayGoals({ date, log, goals }: { date: string; log?: DayLog; goals: Goal[] }) {
+  const [done, setDone] = useOptimistic(
+    goals.filter((g) => goalDone(log, g.id)).map((g) => g.id),
+    (cur: string[], { id, on }: { id: string; on: boolean }) => (on ? [...cur, id] : cur.filter((x) => x !== id)),
+  );
+  const [, start] = useTransition();
+  const [error, setError] = useState(false);
+  return (
+    <section className="space-y-2">
+      <h3 className="text-sm font-semibold">Daily goals</h3>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {goals.map((g) => (
+          <label key={g.id} className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--accent)]"
+              checked={done.includes(g.id)}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setError(false);
+                start(async () => {
+                  setDone({ id: g.id, on });
+                  try {
+                    await setGoalDoneAction(date, g.id, on);
+                  } catch {
+                    setError(true);
+                  }
+                });
+              }}
+            />
+            {g.emoji && <span aria-hidden>{g.emoji}</span>}
+            {g.name}
+          </label>
+        ))}
+      </div>
+      {error && <p className="text-xs text-danger">Couldn&apos;t save that. Try again.</p>}
+    </section>
   );
 }
 

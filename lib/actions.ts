@@ -7,6 +7,7 @@ import { z } from "zod";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { requireUser } from "@/lib/dal";
 import { repeatDates, START_TIME_RE, validTimeZone } from "@/lib/domain";
+import { activeGoals, cleanGoals, GOAL_NAME_MAX, MAX_GOALS } from "@/lib/goals";
 import { HABIT_KINDS, HABIT_SINCE_FIRST_DAY, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
 import { cleanExercises, findRoutineByName, MAX_EXERCISES } from "@/lib/routines";
 import { quickActual, type ExtraAs } from "@/lib/quick-done";
@@ -426,6 +427,19 @@ export async function saveDayAction(
   refresh();
 }
 
+/** Check a daily goal off for a day, or un-check it. Leaves the day's other fields alone. */
+export async function setGoalDoneAction(date: string, goalId: string, done: boolean) {
+  const { sub } = await requireUser();
+  const d = day.parse(date);
+  const profile = await repo.getProfile(sub);
+  if (!profile || !activeGoals(profile).some((g) => g.id === goalId)) throw new Error("Unknown goal");
+  const existing = (await repo.getDay(sub, d)) ?? { date: d };
+  const rest = (existing.goalsDone ?? []).filter((id) => id !== goalId);
+  const goalsDone = done ? [...rest, goalId] : rest;
+  await repo.saveDay(sub, { ...existing, date: d, goalsDone: goalsDone.length ? goalsDone : undefined });
+  refresh();
+}
+
 // ---------- Profile ----------
 export async function saveProfileAction(raw: {
   displayName: string;
@@ -434,6 +448,8 @@ export async function saveProfileAction(raw: {
   clock: Clock;
   habits: HabitKind[];
   habitOnCalendar?: HabitKind;
+  goals: { id: string; name: string; emoji?: string; off?: boolean }[];
+  goalOnCalendar?: string;
   share: Share;
   trackWeight: boolean;
   timeZone?: string;
@@ -447,6 +463,10 @@ export async function saveProfileAction(raw: {
       clock: z.enum(["12h", "24h"]),
       habits: z.array(z.enum(HABIT_KINDS)).max(HABIT_KINDS.length),
       habitOnCalendar: z.enum(HABIT_KINDS).optional(),
+      goals: z
+        .array(z.object({ id: z.string().regex(/^[A-Za-z0-9]{1,40}$/), name: z.string().max(GOAL_NAME_MAX * 2), emoji: z.string().max(16).optional(), off: z.boolean().optional() }))
+        .max(MAX_GOALS * 4),
+      goalOnCalendar: z.string().max(40).optional(),
       share: z.enum(SHARE_LEVELS),
       trackWeight: z.boolean(),
       timeZone: z.string().max(64).optional(),
@@ -463,9 +483,12 @@ export async function saveProfileAction(raw: {
   // Counters already on with no start (alcohol from the old "Track drinks") count from the first day.
   for (const k of wasOn) habitStarts[k] ??= HABIT_SINCE_FIRST_DAY;
   for (const k of habits) habitStarts[k] ??= today;
+  const goals = cleanGoals(p.goals, existing?.goals, today);
   // Keep internal fields that aren't part of the settings form.
   await repo.saveProfile(sub, {
     ...p,
+    goals,
+    goalOnCalendar: activeGoals({ goals }).some((g) => g.id === p.goalOnCalendar) ? p.goalOnCalendar : activeGoals({ goals })[0]?.id,
     habits,
     habitOnCalendar: p.habitOnCalendar && habits.includes(p.habitOnCalendar) ? p.habitOnCalendar : habits[0],
     habitStarts,
