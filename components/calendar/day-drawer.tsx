@@ -33,7 +33,7 @@ import {
 import { describeExercise } from "@/lib/routines";
 import { habitCount, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
 import { HabitIcon } from "../habit-icon";
-import { goalDone, type Goal } from "@/lib/goals";
+import { activeGoals, goalDone, type Goal } from "@/lib/goals";
 import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Routine, Workout, WorkoutDetails } from "@/lib/types";
 import { STATUS_LABEL } from "@/lib/workout-types";
 import { Sheet } from "../sheet";
@@ -143,7 +143,9 @@ export function DayDrawer({
       ) : (
         <div className="space-y-6">
           <DayNotes date={date} log={log} profile={profile} />
-          {!!profile.goals?.length && (!today || date <= today) && <DayGoals date={date} log={log} goals={profile.goals} />}
+          {activeGoals(profile).length > 0 && (!today || date <= today) && (
+            <DayGoals date={date} log={log} goals={activeGoals(profile)} />
+          )}
 
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Workouts</h3>

@@ -40,7 +40,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             clock: p.clock ?? "12h",
             habits,
             habitOnCalendar: calendarHabit(p) ?? undefined,
-            goals: (p.goals ?? []).map(({ id, name, emoji }) => ({ id, name, emoji })),
+            goals: (p.goals ?? []).map(({ id, name, emoji, off }) => ({ id, name, emoji, off })),
             goalOnCalendar: p.goalOnCalendar,
             share: p.share,
             trackWeight: p.trackWeight,

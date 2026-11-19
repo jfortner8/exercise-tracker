@@ -41,7 +41,7 @@ describe("weekGoalTally", () => {
 });
 
 describe("cleanGoals", () => {
-  it("trims, drops blanks and duplicates, and caps the list", () => {
+  it("trims, drops blanks and duplicates, and caps how many are tracked", () => {
     const out = cleanGoals(
       [{ id: "a", name: "  Walk  " }, { id: "b", name: "walk" }, { id: "c", name: " " }, ...Array.from({ length: 10 }, (_, i) => ({ id: `x${i}`, name: `G${i}` }))],
       [],
@@ -49,7 +49,13 @@ describe("cleanGoals", () => {
     );
     expect(out[0]).toEqual({ id: "a", name: "Walk", start: today });
     expect(out.map((g) => g.id)).not.toContain("b");
-    expect(out).toHaveLength(MAX_GOALS);
+    expect(out.filter((g) => !g.off)).toHaveLength(MAX_GOALS);
+    expect(out.filter((g) => g.off)).toHaveLength(3);
+  });
+  it("keeps unticked goals switched off", () => {
+    const out = cleanGoals([{ ...stretch, off: true }, protein], [stretch, protein], today);
+    expect(out[0]).toMatchObject({ id: "stretch", off: true, start: "2026-11-15" });
+    expect(calendarGoal({ goals: out, goalOnCalendar: "stretch" })).toMatchObject({ id: "p1" });
   });
   it("keeps existing starts and dates new goals today", () => {
     const out = cleanGoals([stretch, { id: "new", name: "New" }], [stretch], today);

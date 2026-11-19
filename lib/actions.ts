@@ -7,7 +7,7 @@ import { z } from "zod";
 import { BENCHMARK_CATALOG } from "@/lib/benchmarks/catalog";
 import { requireUser } from "@/lib/dal";
 import { repeatDates, START_TIME_RE, validTimeZone } from "@/lib/domain";
-import { cleanGoals, GOAL_NAME_MAX, MAX_GOALS } from "@/lib/goals";
+import { activeGoals, cleanGoals, GOAL_NAME_MAX, MAX_GOALS } from "@/lib/goals";
 import { HABIT_KINDS, HABIT_SINCE_FIRST_DAY, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
 import { cleanExercises, findRoutineByName, MAX_EXERCISES } from "@/lib/routines";
 import { linkableWorkouts } from "@/lib/benchmarks/linking";
@@ -400,7 +400,7 @@ export async function setGoalDoneAction(date: string, goalId: string, done: bool
   const { sub } = await requireUser();
   const d = day.parse(date);
   const profile = await repo.getProfile(sub);
-  if (!profile?.goals?.some((g) => g.id === goalId)) throw new Error("Unknown goal");
+  if (!profile || !activeGoals(profile).some((g) => g.id === goalId)) throw new Error("Unknown goal");
   const existing = (await repo.getDay(sub, d)) ?? { date: d };
   const rest = (existing.goalsDone ?? []).filter((id) => id !== goalId);
   const goalsDone = done ? [...rest, goalId] : rest;
@@ -416,7 +416,7 @@ export async function saveProfileAction(raw: {
   clock: Clock;
   habits: HabitKind[];
   habitOnCalendar?: HabitKind;
-  goals: { id: string; name: string; emoji?: string }[];
+  goals: { id: string; name: string; emoji?: string; off?: boolean }[];
   goalOnCalendar?: string;
   share: Share;
   trackWeight: boolean;
@@ -432,8 +432,8 @@ export async function saveProfileAction(raw: {
       habits: z.array(z.enum(HABIT_KINDS)).max(HABIT_KINDS.length),
       habitOnCalendar: z.enum(HABIT_KINDS).optional(),
       goals: z
-        .array(z.object({ id: z.string().regex(/^[A-Za-z0-9]{1,40}$/), name: z.string().max(GOAL_NAME_MAX * 2), emoji: z.string().max(16).optional() }))
-        .max(MAX_GOALS * 2),
+        .array(z.object({ id: z.string().regex(/^[A-Za-z0-9]{1,40}$/), name: z.string().max(GOAL_NAME_MAX * 2), emoji: z.string().max(16).optional(), off: z.boolean().optional() }))
+        .max(MAX_GOALS * 4),
       goalOnCalendar: z.string().max(40).optional(),
       share: z.enum(SHARE_LEVELS),
       trackWeight: z.boolean(),
@@ -456,7 +456,7 @@ export async function saveProfileAction(raw: {
   await repo.saveProfile(sub, {
     ...p,
     goals,
-    goalOnCalendar: goals.some((g) => g.id === p.goalOnCalendar) ? p.goalOnCalendar : goals[0]?.id,
+    goalOnCalendar: activeGoals({ goals }).some((g) => g.id === p.goalOnCalendar) ? p.goalOnCalendar : activeGoals({ goals })[0]?.id,
     habits,
     habitOnCalendar: p.habitOnCalendar && habits.includes(p.habitOnCalendar) ? p.habitOnCalendar : habits[0],
     habitStarts,

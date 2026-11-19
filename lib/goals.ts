@@ -7,6 +7,8 @@ export interface Goal {
   emoji?: string;
   /** The day the goal was added; unchecked days before it stay blank. */
   start: string;
+  /** Opted out: hidden from the day view and calendar, kept so ticking it again restores it. */
+  off?: boolean;
 }
 
 export const MAX_GOALS = 8;
@@ -37,9 +39,12 @@ export function goalOnDay(goal: Goal, date: string, today: string, firstDay: str
   return false;
 }
 
-/** The goal shown on the calendar: the chosen one, else the first. */
+/** The goals the user is tracking (ticked in Settings). */
+export const activeGoals = (p: Partial<Pick<Profile, "goals">>) => (p.goals ?? []).filter((g) => !g.off);
+
+/** The goal shown on the calendar: the chosen one, else the first tracked one. */
 export function calendarGoal(p: Partial<Pick<Profile, "goals" | "goalOnCalendar">>): Goal | null {
-  const goals = p.goals ?? [];
+  const goals = activeGoals(p);
   return goals.find((g) => g.id === p.goalOnCalendar) ?? goals[0] ?? null;
 }
 
@@ -51,10 +56,10 @@ export function weekGoalTally(goal: Goal, week: string[], today: string, firstDa
 
 /**
  * Tidy a goal list from the settings form: trims names, drops blanks and case-insensitive duplicates,
- * caps the count, keeps known starts and gives new goals today's date.
+ * caps how many are tracked, keeps known starts and gives new goals today's date.
  */
 export function cleanGoals(
-  input: { id: string; name: string; emoji?: string }[],
+  input: { id: string; name: string; emoji?: string; off?: boolean }[],
   existing: Goal[] | undefined,
   today: string,
 ): Goal[] {
@@ -65,9 +70,11 @@ export function cleanGoals(
     const key = name.toLowerCase();
     if (!name || seen.has(key) || out.some((o) => o.id === g.id)) continue;
     seen.add(key);
+    // Only tracked goals count toward the limit; extra ones are kept switched off.
+    const off = !!g.off || out.filter((o) => !o.off).length >= MAX_GOALS;
     const start = existing?.find((e) => e.id === g.id)?.start ?? today;
-    out.push({ id: g.id, name, ...(g.emoji ? { emoji: g.emoji } : {}), start });
-    if (out.length === MAX_GOALS) break;
+    out.push({ id: g.id, name, ...(g.emoji ? { emoji: g.emoji } : {}), start, ...(off ? { off: true } : {}) });
+    if (out.length === MAX_GOALS * 3) break;
   }
   return out;
 }
