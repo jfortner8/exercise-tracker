@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { addDays, format, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, Star } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, Star } from "lucide-react";
 import Link from "next/link";
 import { useId, useMemo, useOptimistic, useState, useSyncExternalStore, useTransition } from "react";
 import { moveWorkoutAction, swapDaysAction } from "@/lib/actions";
@@ -33,6 +33,7 @@ import type { BenchmarkDef, Clock, DayLog, DayResult, Injury, Profile, Routine, 
 import { blockMetrics, workoutCategory, type ActivityKey } from "@/lib/activities";
 import { calendarHabit, habitLevel, habitOnDay, HABITS, type HabitKind } from "@/lib/habits";
 import { HabitIcon } from "../habit-icon";
+import { calendarGoal, goalOnDay, weekGoalTally, type Goal } from "@/lib/goals";
 import { Button, cx } from "../ui";
 import { Sheet } from "../sheet";
 import { CopyWeekDialog } from "./copy-week-dialog";
@@ -74,6 +75,7 @@ export function CalendarView(props: CalendarProps) {
   const { view, days, profile, injuries } = props;
   const habit = calendarHabit(profile);
   const habitStart = habit ? profile.habitStarts?.[habit] : undefined;
+  const goal = calendarGoal(profile);
   const today = useToday();
   const [selected, setSelected] = useState<string | null>(null);
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
@@ -212,6 +214,7 @@ export function CalendarView(props: CalendarProps) {
                   missed={isMissedDay(d, today, props.startDate, activityOn(d), injuriesOn(d).length > 0)}
                   habit={habit}
                   habitStart={habitStart}
+                  goal={goal}
                   startDate={props.startDate}
                   trackWeight={profile.trackWeight}
                   units={profile.units}
@@ -319,6 +322,7 @@ function DayCell({
   missed,
   habit,
   habitStart,
+  goal,
   startDate,
   trackWeight,
   units,
@@ -336,6 +340,7 @@ function DayCell({
   missed: boolean;
   habit: HabitKind | null;
   habitStart?: string;
+  goal: Goal | null;
   startDate: string | null;
   trackWeight: boolean;
   units: Units;
@@ -358,6 +363,10 @@ function DayCell({
         {format(d, "d")}
       </span>
       {view === "week" && <span className="text-xs opacity-80 md:hidden">{format(d, "EEE")}</span>}
+      {/* A goal takes the footer's note spot on a phone's month tile, so the note dot moves up here. */}
+      {goal && view === "month" && log?.notes?.trim() && (
+        <span className="size-1.5 shrink-0 rounded-full bg-current opacity-60 md:hidden" aria-label="Has a note" />
+      )}
     </span>
   );
   return (
@@ -418,6 +427,7 @@ function DayCell({
         log={log}
         habit={habit}
         habitStart={habitStart}
+        goal={goal}
         startDate={startDate}
         trackWeight={trackWeight}
         units={units}
@@ -449,6 +459,7 @@ function DayFooter({
   log,
   habit,
   habitStart,
+  goal,
   startDate,
   trackWeight,
   units,
@@ -460,6 +471,8 @@ function DayFooter({
   /** The daily counter shown on the calendar, if any. */
   habit: HabitKind | null;
   habitStart?: string;
+  /** The yes/no goal shown on the calendar, if any. */
+  goal: Goal | null;
   /** The user's first day in the app; counts before it stay blank rather than 0. */
   startDate: string | null;
   trackWeight: boolean;
@@ -469,13 +482,29 @@ function DayFooter({
   const note = log?.notes?.trim();
   const weight = log?.weightKg != null ? Math.round(kgToDisplay(log.weightKg, units) * 10) / 10 : null;
   const count = habit ? habitOnDay(habit, date, today, startDate, habitStart, log) : null;
+  const done = goal ? goalOnDay(goal, date, today, startDate, log) : null;
   return (
     <div className="flex h-5 shrink-0 border-t border-border text-[10px] leading-none md:h-7 md:text-[11px]">
+      {goal && (
+        // Done: a green check. Not done: a quiet grey cell (no red for a positive goal). Blank otherwise.
+        <span
+          className={cx(
+            "flex items-center justify-center",
+            roomy ? "w-7 flex-none" : "flex-1 md:w-7 md:flex-none",
+            done ? "bg-done text-done-fg" : done === false ? "bg-surface-2" : "bg-surface",
+          )}
+          title={done == null ? undefined : `${goal.name}${done ? " ✓" : ": not done"}`}
+        >
+          {done && <Check className="size-3 md:size-3.5" strokeWidth={3} aria-label={`${goal.name} done`} />}
+        </span>
+      )}
       <span
         className={cx(
           "flex min-w-0 flex-1 items-center bg-surface px-1 text-muted",
           !roomy && "max-md:justify-center max-md:px-0",
           !roomy && trackWeight && "max-md:w-3 max-md:flex-none",
+          goal && "border-l border-border",
+          goal && !roomy && "max-md:hidden",
         )}
         title={note}
       >
@@ -696,6 +725,8 @@ function WeekSummary({
     ? week.map((d) => habitOnDay(habit, d, today, startDate, profile.habitStarts?.[habit], logByDay.get(d))).filter((n) => n != null)
     : [];
   const habitTotal = counts.reduce((s, n) => s + n, 0);
+  const goal = calendarGoal(profile);
+  const tally = goal ? weekGoalTally(goal, week, today, startDate, (d) => logByDay.get(d)) : null;
 
   return (
     // Phones: one wrapping line under the week. Wider screens: a column beside it.
@@ -712,6 +743,14 @@ function WeekSummary({
       {parts.length > 0 && <div className="leading-snug">{parts.join(" · ")}</div>}
       {minutes > 0 && <div className="whitespace-nowrap">{minutes} min</div>}
       {meters > 0 && <div className="whitespace-nowrap">{formatDistance(meters, profile.units)}</div>}
+      {goal && tally && tally.of > 0 && (
+        <div className="flex items-center gap-1 whitespace-nowrap" title={`${goal.name}: ${tally.done} of ${tally.of} days`}>
+          <Check className="size-3" strokeWidth={3} aria-hidden />
+          <span>
+            <span className="font-semibold text-text">{tally.done}</span>/{tally.of}
+          </span>
+        </div>
+      )}
       {habit && counts.length > 0 && (
         <div className="flex items-center gap-1" title={`${habitTotal} ${HABITS[habit].noun(habitTotal)} this week`}>
           <HabitIcon kind={habit} className="size-3" /> {habitTotal}

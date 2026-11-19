@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { saveProfileAction } from "@/lib/actions";
 import { calendarHabit, HABIT_KINDS, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
 import { HabitIcon } from "./habit-icon";
+import { GoalsEditor } from "./goals-editor";
 import type { Clock, DistanceUnit, Profile, Share, WeightUnit } from "@/lib/types";
 import { ThemeSwitch } from "./theme-switch";
 import { Button, Card, Field, Input, Select, cx } from "./ui";
@@ -39,6 +40,8 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             clock: p.clock ?? "12h",
             habits,
             habitOnCalendar: calendarHabit(p) ?? undefined,
+            goals: (p.goals ?? []).map(({ id, name, emoji, off }) => ({ id, name, emoji, off })),
+            goalOnCalendar: p.goalOnCalendar,
             share: p.share,
             trackWeight: p.trackWeight,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -137,6 +140,15 @@ export function SettingsForm({ profile }: { profile: Profile }) {
               </p>
             )}
           </fieldset>
+          <div className="mt-5">
+            <GoalsEditor
+              goals={p.goals ?? []}
+              onCalendar={p.goalOnCalendar}
+              // New goals get their start date when saved.
+              onChange={(goals) => setP({ ...p, goals: goals.map((g) => ({ start: "", ...p.goals?.find((x) => x.id === g.id), ...g })) })}
+              onPick={(id) => setP({ ...p, goalOnCalendar: id })}
+            />
+          </div>
           <div className="mt-5">
             <Toggle
               checked={p.trackWeight}
