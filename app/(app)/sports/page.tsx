@@ -2,7 +2,7 @@ import { format, parseISO } from "date-fns";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Card, PageHeader } from "@/components/ui";
-import { requireProfile } from "@/lib/dal";
+import { requireProfile, requireToday } from "@/lib/dal";
 import { listAllWorkouts } from "@/lib/db/repo";
 import { sportTallies } from "@/lib/sports";
 
@@ -11,9 +11,9 @@ export const metadata: Metadata = { title: "Sports" };
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 async function Tallies() {
-  const { user } = await requireProfile();
+  const [{ user }, today] = await Promise.all([requireProfile(), requireToday()]);
   // Counted from the workouts themselves, so logging, editing or deleting a session is reflected right away.
-  const year = format(new Date(), "yyyy");
+  const year = today.slice(0, 4);
   const tallies = sportTallies(await listAllWorkouts(user.sub), year);
 
   if (!tallies.length) {

@@ -51,6 +51,22 @@ async function afterChange(sub: string) {
   refresh();
 }
 
+/**
+ * The browser reports its time zone when it differs from the profile's (the user is travelling, or
+ * moved). Saving it keeps the calendar feed's start times, the Consistency board and habit starts on
+ * the user's local day.
+ */
+export async function syncTimeZoneAction(timeZone: string) {
+  const { sub } = await requireUser();
+  const tz = z.string().max(64).regex(/^[A-Za-z0-9/_+-]+$/).parse(timeZone);
+  if (!validTimeZone(tz)) return;
+  const profile = await repo.getProfile(sub);
+  if (!profile || profile.timeZone === tz) return;
+  await repo.setTimeZone(sub, tz);
+  // "Today" may have moved a day, which changes which days the Consistency board counts.
+  await afterChange(sub);
+}
+
 async function noteSport(sub: string, w: Pick<Workout, "type" | "status">) {
   if (w.type === "sport" && (w.status === "completed" || w.status === "partial")) await repo.markHasSports(sub);
 }

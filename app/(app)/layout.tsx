@@ -2,9 +2,9 @@ import { LogOut } from "lucide-react";
 import { Suspense } from "react";
 import { BottomNav, Sidebar } from "@/components/nav";
 import { ThemeSwitch } from "@/components/theme-switch";
-import { requireProfile } from "@/lib/dal";
+import { ZoneSync } from "@/components/zone-sync";
+import { requireProfile, requireToday } from "@/lib/dal";
 import { listInjuries } from "@/lib/db/repo";
-import { ymd } from "@/lib/domain";
 import { showInjuriesTab } from "@/lib/injuries";
 
 async function UserFooter() {
@@ -38,6 +38,11 @@ const sidebarFooter = (
   </>
 );
 
+async function Zone() {
+  const { profile } = await requireProfile();
+  return <ZoneSync profileZone={profile.timeZone} />;
+}
+
 /** Nav with the optional tabs: Sports (after a completed sport workout) and Weight (when tracking it). */
 async function Nav({ part }: { part: "sidebar" | "bottom" }) {
   const { user, profile } = await requireProfile();
@@ -45,7 +50,7 @@ async function Nav({ part }: { part: "sidebar" | "bottom" }) {
     showSports: profile.hasSports === true,
     showWeight: profile.trackWeight,
     showRoutines: profile.hasRoutines === true,
-    showInjuries: showInjuriesTab(await listInjuries(user.sub), ymd(new Date())),
+    showInjuries: showInjuriesTab(await listInjuries(user.sub), await requireToday()),
   };
   return part === "sidebar" ? <Sidebar footer={sidebarFooter} {...flags} /> : <BottomNav {...flags} />;
 }
@@ -59,6 +64,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
       <main className="min-w-0 flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10 md:pt-8">{children}</main>
       <Suspense fallback={<BottomNav />}>
         <Nav part="bottom" />
+      </Suspense>
+      <Suspense fallback={null}>
+        <Zone />
       </Suspense>
     </div>
   );

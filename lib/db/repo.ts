@@ -154,6 +154,23 @@ export const markHasSports = (sub: string) =>
     if (e.name !== "ConditionalCheckFailedException") throw e;
   });
 
+/** Saves where the user is now (an IANA zone), for the calendar feed, leaderboards and habit starts. */
+export const setTimeZone = (sub: string, timeZone: string) =>
+  db()
+    .send(
+      new UpdateCommand({
+        TableName: T(),
+        Key: { PK: pk(sub), SK: "PROFILE" },
+        UpdateExpression: "SET #tz = :z",
+        ConditionExpression: "attribute_exists(PK)",
+        ExpressionAttributeNames: { "#tz": "timeZone" }, // a reserved word
+        ExpressionAttributeValues: { ":z": timeZone },
+      }),
+    )
+    .catch((e: Error) => {
+      if (e.name !== "ConditionalCheckFailedException") throw e;
+    });
+
 // ---------- Workouts ----------
 const woSK = (date: string, id: string) => `WO#${date}#${id}`;
 

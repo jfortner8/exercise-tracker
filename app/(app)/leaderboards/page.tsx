@@ -6,14 +6,13 @@ import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { cx, PageHeader } from "@/components/ui";
 import { BENCHMARK_CATALOG, CATEGORY_LABEL } from "@/lib/benchmarks/catalog";
-import { requireProfile } from "@/lib/dal";
+import { requireProfile, requireToday } from "@/lib/dal";
 import { getBoardsFor, getLeaderboards, listClubMembers, listMyClubs } from "@/lib/db/repo";
 import {
   formatResult,
   IMPROVEMENT_WINDOWS,
   improvementPct,
   kgToDisplay,
-  todayIn,
   weightUnit,
   ymd,
   type ImprovementWindow,
@@ -72,7 +71,7 @@ async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards
         }
       : await getBoardsFor(club ? (await listClubMembers(club.clubId)).map((m) => m.sub) : circle.people);
   const hasConsistency = groupKey !== "everyone";
-  const today = todayIn(profile.timeZone);
+  const today = await requireToday();
   const year = today.slice(0, 4);
   const VIEWS = views(year);
 
@@ -194,7 +193,7 @@ async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards
               c={selected.c}
               entries={selected.entries}
               view={view}
-              year={year}
+              today={today}
               me={user.sub}
               units={profile.units}
               tabs={VIEWS.map((v) => ({ ...v, href: href(groupKey, selected.c.key, v.key) }))}
@@ -217,7 +216,7 @@ function Board({
   c,
   entries,
   view,
-  year,
+  today,
   me,
   units,
   tabs,
@@ -225,13 +224,15 @@ function Board({
   c: Catalog;
   entries: LeaderboardEntry[];
   view: View;
-  year: string;
+  /** Today where the viewer is (YYYY-MM-DD). */
+  today: string;
   me: string;
   units: Units;
   tabs: { key: View; label: string; href: string }[];
 }) {
   const window = IMPROVEMENT_WINDOWS.find((w) => w.key === view);
-  const since = window ? ymd(subMonths(new Date(), window.months)) : "";
+  const year = today.slice(0, 4);
+  const since = window ? ymd(subMonths(parseISO(today), window.months)) : "";
   const season = view === "season";
 
   // This season: each person's best this year, so an easy day never lowers it and January starts fresh.
