@@ -31,7 +31,7 @@ describe("activities", () => {
   it("choosing a recent sport sets the type and the sport", () => {
     expect(applyActivity("sport:roller-derby")).toEqual({ type: "sport", sport: "roller-derby" });
     expect(applyActivity("row")).toEqual({ type: "row" });
-    expect(activityMeta("sport:soccer")).toEqual({ label: "Soccer", emoji: "⚽" });
+    expect(activityMeta("sport:soccer")).toEqual({ label: "Soccer/Football", emoji: "⚽" });
     expect(activityMeta("run")).toEqual({ label: "Run", emoji: "🏃" });
   });
 
@@ -55,7 +55,7 @@ describe("sports", () => {
     expect(SPORTS.every((s) => s.sessions.length >= 2)).toBe(true);
     expect(SPORTS.find((s) => s.key === "roller-derby")!.sessions.map((s) => s.label)).toEqual(["Bout", "Practice"]);
     expect(SPORTS.find((s) => s.key === "american-football")!.label).toBe("American football");
-    expect(sportCategory({ sport: "soccer", sportSession: "match" })).toBe("Soccer match");
+    expect(sportCategory({ sport: "soccer", sportSession: "match" })).toBe("Soccer/Football match");
   });
 
   it("tallies only completed/partial sessions, per session type", () => {
@@ -68,7 +68,7 @@ describe("sports", () => {
       w({ date: "2026-10-02", type: "run" }),
     ];
     const [soccer, padel] = sportTallies(ws, "2026");
-    expect(soccer).toMatchObject({ label: "Soccer", total: 3, thisYear: 2, unspecified: 1, lastDate: "2026-11-03" });
+    expect(soccer).toMatchObject({ label: "Soccer/Football", total: 3, thisYear: 2, unspecified: 1, lastDate: "2026-11-03" });
     expect(soccer.sessions).toEqual([
       { label: "Match", plural: "matches", count: 1 },
       { label: "Practice", plural: "practices", count: 1 },
@@ -85,6 +85,9 @@ describe("autoTitle", () => {
     expect(autoTitle({ type: "sport", sport: "combat", sportSession: "sparring" })).toBe("Boxing / Martial Arts Sparring");
     expect(autoTitle({ type: "sport", sport: "flag-football", sportSession: "game" })).toBe("Flag Football Game");
     expect(autoTitle({ type: "sport", sport: "color-guard", sportSession: "competition" })).toBe("Color Guard Competition");
+    expect(autoTitle({ type: "sport", sport: "hockey", sportSession: "game" })).toBe("Ice Hockey Game"); // older key
+    expect(autoTitle({ type: "sport", sport: "field-hockey", sportSession: "practice" })).toBe("Field Hockey Practice");
+    expect(autoTitle({ type: "sport", sport: "gymnastics", sportSession: "meet" })).toBe("Gymnastics Meet");
     expect(autoTitle({ type: "sport", sport: "physical-therapy", sportSession: "appointment" })).toBe("Physical Therapy Appointment");
     expect(autoTitle({ type: "sport", sport: "physical-therapy", sportSession: "home exercises" })).toBe("Physical Therapy Home Exercises");
   });

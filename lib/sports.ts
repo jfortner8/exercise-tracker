@@ -23,16 +23,20 @@ const PRACTICE = session("Practice");
 
 /** Sports offered when a workout's type is "sport". "other" takes a typed-in name. */
 export const SPORTS: Sport[] = [
-  { key: "soccer", label: "Soccer", emoji: "⚽", sessions: [MATCH, PRACTICE] },
+  { key: "soccer", label: "Soccer/Football", emoji: "⚽", sessions: [MATCH, PRACTICE] },
   { key: "basketball", label: "Basketball", emoji: "🏀", sessions: [GAME, PRACTICE] },
   { key: "roller-derby", label: "Roller derby", emoji: "🛼", sessions: [session("Bout"), PRACTICE] },
   { key: "tennis", label: "Tennis", emoji: "🎾", sessions: [MATCH, PRACTICE] },
+  { key: "pickleball", label: "Pickleball", emoji: "🏓", sessions: [MATCH, PRACTICE] },
   { key: "volleyball", label: "Volleyball", emoji: "🏐", sessions: [MATCH, PRACTICE] },
+  { key: "water-polo", label: "Water polo", emoji: "🤽", sessions: [GAME, PRACTICE] },
   { key: "american-football", label: "American football", emoji: "🏈", sessions: [GAME, PRACTICE] },
   { key: "flag-football", label: "Flag football", emoji: "🏈", sessions: [GAME, PRACTICE] },
   { key: "baseball", label: "Baseball", emoji: "⚾", sessions: [GAME, PRACTICE] },
   { key: "softball", label: "Softball", emoji: "🥎", sessions: [GAME, PRACTICE] },
-  { key: "hockey", label: "Hockey", emoji: "🏒", sessions: [GAME, PRACTICE] },
+  // Keyed "hockey" from before field hockey was split out, so older workouts keep their sport.
+  { key: "hockey", label: "Ice hockey", emoji: "🏒", sessions: [GAME, PRACTICE] },
+  { key: "field-hockey", label: "Field hockey", emoji: "🏑", sessions: [GAME, PRACTICE] },
   { key: "rugby", label: "Rugby", emoji: "🏉", sessions: [MATCH, session("Training", "trainings")] },
   { key: "ultimate", label: "Ultimate", emoji: "🥏", sessions: [GAME, PRACTICE] },
   { key: "badminton", label: "Badminton", emoji: "🏸", sessions: [MATCH, PRACTICE] },
@@ -42,6 +46,7 @@ export const SPORTS: Sport[] = [
   { key: "combat", label: "Boxing / martial arts", emoji: "🥊", sessions: [session("Bout"), session("Sparring", "sparring sessions"), session("Class", "classes")] },
   { key: "golf", label: "Golf", emoji: "⛳", sessions: [session("Round"), session("Range", "range sessions")] },
   { key: "climbing", label: "Climbing", emoji: "🧗", sessions: [session("Session"), session("Competition")] },
+  { key: "gymnastics", label: "Gymnastics", emoji: "🤸", sessions: [PRACTICE, session("Meet")] },
   { key: "color-guard", label: "Color guard", emoji: "🚩", sessions: [PRACTICE, GAME, session("Competition")] },
   {
     key: "physical-therapy",
@@ -56,14 +61,14 @@ export const sportMeta = (key?: string) => SPORTS.find((s) => s.key === key);
 
 type SportFields = Pick<Workout, "sport" | "sportName" | "sportSession">;
 
-/** "Soccer", or the typed name for "other". */
+/** "Soccer/Football", or the typed name for "other". */
 export function sportName(w: SportFields): string | undefined {
   if (!w.sport) return undefined;
   if (w.sport === "other") return w.sportName?.trim() || "Other sport";
   return sportMeta(w.sport)?.label;
 }
 
-/** "Soccer match", "Roller derby practice", or just "Soccer" without a session. */
+/** "Soccer/Football match", "Roller derby practice", or just "Soccer/Football" without a session. */
 export function sportCategory(w: SportFields): string | undefined {
   const name = sportName(w);
   if (!name) return undefined;
