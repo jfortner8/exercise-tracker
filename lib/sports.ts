@@ -42,6 +42,7 @@ export const SPORTS: Sport[] = [
   { key: "combat", label: "Boxing / martial arts", emoji: "🥊", sessions: [session("Bout"), session("Sparring", "sparring sessions"), session("Class", "classes")] },
   { key: "golf", label: "Golf", emoji: "⛳", sessions: [session("Round"), session("Range", "range sessions")] },
   { key: "climbing", label: "Climbing", emoji: "🧗", sessions: [session("Session"), session("Competition")] },
+  { key: "color-guard", label: "Color guard", emoji: "🚩", sessions: [PRACTICE, GAME, session("Competition")] },
   {
     key: "physical-therapy",
     label: "Physical therapy",

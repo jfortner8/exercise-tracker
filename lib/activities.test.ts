@@ -84,6 +84,7 @@ describe("autoTitle", () => {
     expect(autoTitle({ type: "sport", sport: "american-football", sportSession: "game" })).toBe("American Football Game");
     expect(autoTitle({ type: "sport", sport: "combat", sportSession: "sparring" })).toBe("Boxing / Martial Arts Sparring");
     expect(autoTitle({ type: "sport", sport: "flag-football", sportSession: "game" })).toBe("Flag Football Game");
+    expect(autoTitle({ type: "sport", sport: "color-guard", sportSession: "competition" })).toBe("Color Guard Competition");
     expect(autoTitle({ type: "sport", sport: "physical-therapy", sportSession: "appointment" })).toBe("Physical Therapy Appointment");
     expect(autoTitle({ type: "sport", sport: "physical-therapy", sportSession: "home exercises" })).toBe("Physical Therapy Home Exercises");
   });

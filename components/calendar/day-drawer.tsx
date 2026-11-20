@@ -13,7 +13,7 @@ import {
   saveDayAction,
   setGoalDoneAction,
 } from "@/lib/actions";
-import { isClock, parseValue, valueLabel } from "@/lib/benchmarks/input";
+import { isClock, parseValue, valueLabel, valueToInput } from "@/lib/benchmarks/input";
 import { ClockInput } from "../clock-input";
 import { workoutCategory, type ActivityKey } from "@/lib/activities";
 import { suggestLink } from "@/lib/benchmarks/linking";
@@ -37,6 +37,7 @@ import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Routine, Workout
 import { STATUS_LABEL } from "@/lib/workout-types";
 import { Sheet } from "../sheet";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
+import { SplitsHelper } from "../benchmarks/splits-helper";
 import { WorkoutLinkField } from "../benchmarks/workout-link-field";
 import { InjuryForm } from "../injuries";
 import { WorkoutForm } from "../workouts/workout-form";
@@ -530,6 +531,8 @@ function QuickBenchmark({
   const [value, setValue] = useState("");
   const [reps, setReps] = useState("");
   const [workoutId, setWorkoutId] = useState("");
+  /** "From splits, km 2–6" while the value is the one the splits helper filled in. */
+  const [splitsNote, setSplitsNote] = useState<string | undefined>();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const bm = benchmarks.find((b) => b.id === bmId);
@@ -547,9 +550,11 @@ function QuickBenchmark({
         value: v,
         reps: bm.metricKind === "weight_reps" ? Number(reps) || 1 : undefined,
         workoutId: workoutId || undefined,
+        notes: splitsNote,
       });
       setValue("");
       setReps("");
+      setSplitsNote(undefined);
       setMsg(`Saved to ${bm.name}`);
     });
   }
@@ -587,7 +592,13 @@ function QuickBenchmark({
           <>
             <Field label={label} className={bm.metricKind === "weight_reps" ? "" : "col-span-2"}>
               {isClock(bm) ? (
-                <ClockInput value={value} onChange={setValue} />
+                <ClockInput
+                  value={value}
+                  onChange={(v) => {
+                    setValue(v);
+                    setSplitsNote(undefined);
+                  }}
+                />
               ) : (
                 <Input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" />
               )}
@@ -597,6 +608,16 @@ function QuickBenchmark({
                 <Input value={reps} onChange={(e) => setReps(e.target.value)} inputMode="numeric" placeholder="1" />
               </Field>
             )}
+            <SplitsHelper
+              key={bm.id}
+              def={bm}
+              units={profile.units}
+              className="col-span-2"
+              onUse={(sec, note) => {
+                setValue(valueToInput(bm, sec, profile.units));
+                setSplitsNote(note);
+              }}
+            />
             <WorkoutLinkField
               def={bm}
               workouts={workouts}
