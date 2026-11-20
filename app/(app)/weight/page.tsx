@@ -3,9 +3,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/ui";
 import { WeightTrend } from "@/components/weight-trend";
-import { requireProfile } from "@/lib/dal";
+import { requireProfile, requireToday } from "@/lib/dal";
 import { listAllDays } from "@/lib/db/repo";
-import { ymd } from "@/lib/domain";
 import { weightSeries } from "@/lib/weight";
 
 export const metadata: Metadata = { title: "Weight" };
@@ -31,7 +30,7 @@ async function Trend() {
       </p>
     );
   }
-  return <WeightTrend series={series} units={profile.units} today={ymd(new Date())} />;
+  return <WeightTrend series={series} units={profile.units} today={await requireToday()} />;
 }
 
 export default function WeightPage() {

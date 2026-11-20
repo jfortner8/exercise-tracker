@@ -186,6 +186,15 @@ export function validTimeZone(tz?: string): tz is string {
   }
 }
 
+/** Cookie the browser keeps set to its own time zone, so the server knows "today" where the user is now. */
+export const TZ_COOKIE = "tz";
+
+/** The zone to treat as the user's: where their browser is now, else the one saved on their profile, else UTC. */
+export function userZone(cookieZone?: string, profileZone?: string): string {
+  if (cookieZone && /^[A-Za-z0-9/_+-]{1,64}$/.test(cookieZone) && validTimeZone(cookieZone)) return cookieZone;
+  return validTimeZone(profileZone) ? profileZone : "UTC";
+}
+
 /** Today's date (YYYY-MM-DD) in a time zone; UTC when it's missing or unknown. */
 export const todayIn = (tz?: string, now = new Date()) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: validTimeZone(tz) ? tz : "UTC" }).format(now);

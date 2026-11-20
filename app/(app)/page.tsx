@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { recentActivities } from "@/lib/activities";
 import { calendarResults, eachDay, monthGridRange, weekRange, ymd } from "@/lib/domain";
-import { requireProfile } from "@/lib/dal";
+import { requireProfile, requireToday } from "@/lib/dal";
 import {
   firstEntryDate,
   listAllResults,
@@ -26,9 +26,10 @@ function CalendarSkeleton() {
 
 async function Calendar({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
   const sp = await searchParams;
-  const { user, profile } = await requireProfile();
+  const [{ user, profile }, today] = await Promise.all([requireProfile(), requireToday()]);
   const view = sp.view === "week" ? "week" : "month";
-  const anchorStr = typeof sp.d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.d) ? sp.d : ymd(new Date());
+  // "Today" where the user is: the server runs in UTC, which is already tomorrow on a US evening.
+  const anchorStr = typeof sp.d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.d) ? sp.d : today;
   const anchor = parseISO(anchorStr);
 
   const { start, end } =
@@ -43,7 +44,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
     firstEntryDate(user.sub),
     // All results (one small query): earlier history decides whether a result in view was a PB.
     listAllResults(user.sub),
-    recentWorkouts(user.sub, ymd(new Date())),
+    recentWorkouts(user.sub, today),
     profile.hasRoutines ? listRoutines(user.sub) : Promise.resolve([]),
   ]);
 

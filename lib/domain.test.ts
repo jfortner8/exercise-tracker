@@ -22,6 +22,8 @@ import {
   personalBest,
   repeatDates,
   ymd,
+  todayIn,
+  userZone,
 } from "./domain";
 
 describe("intervals", () => {
@@ -334,5 +336,21 @@ describe("formatStartTime", () => {
   it("uses a 24-hour clock when asked", () => {
     expect(formatStartTime("06:30", "24h")).toBe("06:30");
     expect(formatStartTime("18:05", "24h")).toBe("18:05");
+  });
+});
+
+describe("userZone and todayIn", () => {
+  it("prefers where the browser is now, then the profile's zone, then UTC", () => {
+    expect(userZone("Asia/Tokyo", "America/New_York")).toBe("Asia/Tokyo");
+    expect(userZone(undefined, "America/New_York")).toBe("America/New_York");
+    expect(userZone("Not/AZone", "America/New_York")).toBe("America/New_York");
+    expect(userZone("a;b=c", undefined)).toBe("UTC");
+    expect(userZone(undefined, undefined)).toBe("UTC");
+  });
+  it("is still the same day on a US evening after UTC midnight", () => {
+    const now = new Date("2026-11-23T01:30:00Z"); // Sunday 8:30 PM in New York
+    expect(todayIn("UTC", now)).toBe("2026-11-23");
+    expect(todayIn(userZone(undefined, "America/New_York"), now)).toBe("2026-11-22");
+    expect(todayIn(userZone("Asia/Tokyo", "America/New_York"), now)).toBe("2026-11-23");
   });
 });
