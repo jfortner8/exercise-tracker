@@ -19,6 +19,7 @@ import { suggestLink } from "@/lib/benchmarks/linking";
 import { formatResult, markRunningPBs, personalBest, resultScore, ymd } from "@/lib/domain";
 import type { BenchmarkDef, BenchmarkResult, Units, Workout } from "@/lib/types";
 import { ClockInput } from "../clock-input";
+import { SplitsHelper } from "./splits-helper";
 import { Button, Card, Field, Input, PageHeader, cx } from "../ui";
 import { WorkoutLinkField } from "./workout-link-field";
 
@@ -293,6 +294,15 @@ function ResultForm({
           </Field>
         )}
       </div>
+      <SplitsHelper
+        def={def}
+        units={units}
+        className={editing ? "sm:col-span-2" : undefined}
+        onUse={(sec, note) => {
+          setValue(valueToInput(def, sec, units));
+          setNotes((n) => n.trim() || note);
+        }}
+      />
       <WorkoutLinkField def={def} workouts={workouts} units={units} value={workoutId} onChange={setWorkoutId} />
       <Field label="Notes" className={editing ? "sm:col-span-2" : undefined}>
         <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Pool, conditions, felt…" />
