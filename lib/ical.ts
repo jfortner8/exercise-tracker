@@ -4,9 +4,12 @@
  */
 import { addDays, format, parseISO } from "date-fns";
 import { autoTitle, workoutCategory } from "./activities";
-import { describeDuration, describeIntervals, detailsDurationSec, DONE_STATUSES, formatDistance } from "./domain";
+import { describeDuration, describeIntervals, detailsDurationSec, DONE_STATUSES, formatDistance, validTimeZone } from "./domain";
 import { describeExercise } from "./routines";
+import { zonedTimeToUtc } from "./start-time";
 import type { Units, Workout, WorkoutDetails } from "./types";
+
+export { zonedTimeToUtc } from "./start-time";
 
 /** Length of a timed event when the workout has no duration. */
 export const DEFAULT_EVENT_SEC = 60 * 60;
@@ -36,33 +39,6 @@ export function foldLine(line: string): string {
   }
   out.push(cur);
   return out.join("\r\n ");
-}
-
-/** Milliseconds `timeZone` is ahead of UTC at instant `ms`. */
-function zoneOffsetMs(ms: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(new Date(ms));
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
-  return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")) - ms;
-}
-
-/** The UTC instant of wall-clock `date` + `hhmm` in `timeZone` (DST-aware). */
-export function zonedTimeToUtc(date: string, hhmm: string, timeZone: string): Date {
-  const [y, mo, d] = date.split("-").map(Number);
-  const [h, mi] = hhmm.split(":").map(Number);
-  const wall = Date.UTC(y, mo - 1, d, h, mi);
-  // Two passes settle the offset on the right side of a DST change.
-  let ms = wall - zoneOffsetMs(wall, timeZone);
-  ms = wall - zoneOffsetMs(ms, timeZone);
-  return new Date(ms);
 }
 
 const utcStamp = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
@@ -98,7 +74,7 @@ function detailLine(label: string, d: WorkoutDetails | undefined, units: Units):
 
 export interface FeedOptions {
   units: Units;
-  /** IANA zone the start times are in; without one, timed events float in the viewer's zone. */
+  /** IANA zone for start times saved without their own; with neither, timed events float in the viewer's zone. */
   timeZone?: string;
   includeNotes?: boolean;
   /** Host used in UIDs and links, e.g. "exercise.example.com". */
@@ -122,8 +98,10 @@ export function workoutEventLines(w: Workout, o: FeedOptions): string[] {
   ];
   if (w.startTime) {
     const sec = eventDurationSec(w);
-    if (o.timeZone) {
-      const start = zonedTimeToUtc(w.date, w.startTime, o.timeZone);
+    // The zone it was entered in, so 8am Eastern stays that moment after a drive to Alabama.
+    const zone = validTimeZone(w.startZone) ? w.startZone : o.timeZone;
+    if (zone) {
+      const start = zonedTimeToUtc(w.date, w.startTime, zone);
       lines.push(`DTSTART:${utcStamp(start)}`, `DTEND:${utcStamp(new Date(start.getTime() + sec * 1000))}`);
     } else {
       // Floating time: same wall-clock time wherever the calendar is.

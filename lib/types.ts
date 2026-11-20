@@ -69,8 +69,13 @@ export interface WorkoutDetails {
 export interface Workout {
   id: string;
   date: string; // yyyy-MM-dd
-  /** Optional start time, "HH:mm" (24 h) in the user's own time zone. Untimed workouts are all-day. */
+  /** Optional start time, "HH:mm" (24 h), in `startZone`. Untimed workouts are all-day. */
   startTime?: string;
+  /**
+   * IANA zone the start time was entered in, so it stays the same moment when the user travels
+   * (8am Eastern shows as 7am in Alabama). Older workouts without one use the profile's zone.
+   */
+  startZone?: string;
   originalDate?: string; // set when a planned workout is moved
   /** Shared by the workouts created together by one weekly repeat. */
   seriesId?: string;

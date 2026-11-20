@@ -10,18 +10,20 @@ import {
   displayToMeters,
   distanceUnit,
   formatDuration,
+  formatStartTime,
   formatMinutesInput,
   intervalTotalSec,
   metersToDisplay,
   parseMinutesInput,
   repeatDates,
 } from "@/lib/domain";
-import { WORKOUT_STATUSES, WORKOUT_TYPES, type Injury, type Routine, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
+import { WORKOUT_STATUSES, WORKOUT_TYPES, type Clock, type Injury, type Routine, type Units, type Workout, type WorkoutDetails } from "@/lib/types";
 import { activityKey, activityMeta, applyActivity, autoTitle, DISTANCE_TYPES, type ActivityKey } from "@/lib/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@/lib/dance";
 import { currentInjuries } from "@/lib/injuries";
 import { findRoutineByName, sameExercises } from "@/lib/routines";
 import { SPORTS, sportMeta } from "@/lib/sports";
+import { startTimeIn, zoneAbbr, zoneDiffers, zonedTimeToUtc } from "@/lib/start-time";
 import { STATUS_LABEL, TYPE_META } from "@/lib/workout-types";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
 import { InjuryForm } from "../injuries";
@@ -344,6 +346,8 @@ export function WorkoutForm({
   workout,
   units,
   weekStartsOn = 1,
+  zone,
+  clock,
   injuries,
   onDone,
   presetStatus,
@@ -354,6 +358,9 @@ export function WorkoutForm({
   workout?: Workout;
   units: Units;
   weekStartsOn?: 0 | 1;
+  /** Where the user is now, for a start time entered in another zone. */
+  zone?: string;
+  clock?: Clock;
   injuries: Injury[];
   onDone: () => void;
   /** Start the form on this status (e.g. "substituted" from the drawer's quick resolve). */
@@ -388,6 +395,8 @@ export function WorkoutForm({
   const [title, setTitle] = useState(workout?.title ?? "");
   const [location, setLocation] = useState(workout?.location ?? "");
   const [startTime, setStartTime] = useState(workout?.startTime ?? "");
+  // The zone the start time is in. A new one is in the zone the user is in when they save.
+  const [startZone, setStartZone] = useState(workout?.startZone);
   const [day, setDay] = useState(workout?.date ?? date);
   // A new workout on a past day was most likely done, so it starts as Completed; today and later start as Planned.
   // Follows the date until the user picks a status themselves.
@@ -488,6 +497,7 @@ export function WorkoutForm({
       originalDate: workout?.date,
       date: day,
       startTime: startTime || undefined,
+      startZone: startTime ? (startZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone) : undefined,
       type,
       title: title.trim() || autoName,
       location: location.trim() || undefined,
@@ -673,7 +683,10 @@ export function WorkoutForm({
             {startTime && (
               <button
                 type="button"
-                onClick={() => setStartTime("")}
+                onClick={() => {
+                  setStartTime("");
+                  setStartZone(undefined);
+                }}
                 aria-label="Clear start time"
                 className="shrink-0 rounded-md p-1 text-muted hover:bg-surface-2 hover:text-text"
               >
@@ -683,6 +696,15 @@ export function WorkoutForm({
           </div>
         </Field>
       </div>
+      <StartZoneHint
+        timed={{ date: day, startTime, startZone }}
+        zone={zone}
+        clock={clock}
+        onSwitch={(time) => {
+          setStartTime(time);
+          setStartZone(zone);
+        }}
+      />
 
       <Field label="Status">
         <div className="flex flex-wrap gap-1.5">
@@ -848,5 +870,35 @@ export function WorkoutForm({
     {/* Outside the form: the injury dialog has a form of its own. */}
     {loggingInjury && <InjuryForm startDate={day} onClose={() => setLoggingInjury(false)} />}
     </>
+  );
+}
+
+/**
+ * Under the start time when it was entered in another zone: says which zone the time is in, and
+ * offers to move it to the same moment where the user is now.
+ */
+function StartZoneHint({
+  timed,
+  zone,
+  clock,
+  onSwitch,
+}: {
+  timed: Pick<Workout, "date" | "startTime" | "startZone">;
+  zone?: string;
+  clock?: Clock;
+  onSwitch: (time: string) => void;
+}) {
+  if (!zoneDiffers(timed, zone)) return null;
+  const at = zonedTimeToUtc(timed.date, timed.startTime, timed.startZone);
+  const here = startTimeIn(timed, zone!);
+  return (
+    <p className="-mt-2 text-xs text-muted">
+      This start time is in {zoneAbbr(timed.startZone, at)}.{" "}
+      {here && (
+        <button type="button" className="text-accent hover:underline" onClick={() => onSwitch(here)}>
+          Change to {formatStartTime(here, clock)} {zoneAbbr(zone!, at)}
+        </button>
+      )}
+    </p>
   );
 }
