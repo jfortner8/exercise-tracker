@@ -20,6 +20,7 @@ import type {
   BenchmarkResult,
   Club,
   ClubMember,
+  ConsistencyRow,
   DayLog,
   Friend,
   Injury,
@@ -348,6 +349,20 @@ export const deleteLeaderboardEntry = (sub: string, key: string) => del(sub, lbS
 /** This user's own leaderboard rows (to update, or remove on opt-out or untracking). */
 export const listOwnLeaderboardEntries = (sub: string) => beginsWith<LeaderboardEntry>(sub, "LBPB#");
 
+// Consistency: SK = LBCON, one row per opted-in user, not on the leaderboard index (friends & clubs only).
+const CON_SK = "LBCON";
+export const putConsistencyRow = (r: ConsistencyRow) => put(r.sub, CON_SK, "consistency", r);
+export const deleteConsistencyRow = (sub: string) => del(sub, CON_SK);
+export async function getConsistencyRow(sub: string): Promise<ConsistencyRow | null> {
+  const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: CON_SK } }));
+  return res.Item ? strip<ConsistencyRow>(res.Item) : null;
+}
+
+/** A leaderboard row as read back: just the entry fields (the same item also carries keys and index fields). */
+const entryOf = ({ sub, catalogKey, displayName, value, reps, date, score, history, share, seasons }: LeaderboardEntry): LeaderboardEntry => ({
+  sub, catalogKey, displayName, value, reps, date, score, history: history ?? [], share, ...(seasons ? { seasons } : {}),
+});
+
 export const LEADERBOARD_TAG = "leaderboard";
 
 /**
@@ -369,15 +384,15 @@ export async function getLeaderboards(): Promise<Record<string, LeaderboardEntry
  * leaderboard rows, one query per person, so the cost follows the circle's size, not the app's.
  * Not cached; these rows change whenever one of the people logs a PB.
  */
-export async function getBoardsFor(subs: Iterable<string>): Promise<Record<string, LeaderboardEntry[]>> {
-  const rows = (await mapLimit([...new Set(subs)], 16, listOwnLeaderboardEntries)).flat();
+export async function getBoardsFor(
+  subs: Iterable<string>,
+): Promise<{ boards: Record<string, LeaderboardEntry[]>; consistency: ConsistencyRow[] }> {
+  // One query per person gets their PB rows (LBPB#…) and their consistency row (LBCON).
+  const rows = (await mapLimit([...new Set(subs)], 16, (s) => beginsWith<Record<string, unknown>>(s, "LB"))).flat();
   const direction = (key: string) => BENCHMARK_CATALOG.find((c) => c.key === key)?.direction;
-  return boardsFrom(
-    rows.map(({ sub, catalogKey, displayName, value, reps, date, score, history, share }) => ({
-      sub, catalogKey, displayName, value, reps, date, score, history: history ?? [], share,
-    })),
-    direction,
-  );
+  const pbs = rows.filter((r) => typeof r.catalogKey === "string") as unknown as LeaderboardEntry[];
+  const consistency = rows.filter((r) => r.days && typeof r.through === "string") as unknown as ConsistencyRow[];
+  return { boards: boardsFrom(pbs.map(entryOf), direction), consistency };
 }
 
 /** Everyone on a benchmark's leaderboard, best first. */
@@ -397,8 +412,7 @@ export async function listLeaderboard(key: string, direction: "lower" | "higher"
     );
     for (const it of res.Items ?? []) {
       // Same row is also the user's own item; keep only the entry fields.
-      const { sub, catalogKey, displayName, value, reps, date, score, history, share } = it as LeaderboardEntry;
-      out.push({ sub, catalogKey, displayName, value, reps, date, score, history: history ?? [], share });
+      out.push(entryOf(it as LeaderboardEntry));
     }
     ExclusiveStartKey = res.LastEvaluatedKey;
   } while (ExclusiveStartKey);

@@ -151,6 +151,8 @@ export interface Profile {
   goalOnCalendar?: string;
   /** Who sees this user's PBs on built-in benchmarks. See SHARE_LEVELS. */
   share: Share;
+  /** Opt-in: also show this user's consistency (% of days on track) to the same people. Friends & clubs only. */
+  shareConsistency?: boolean;
   /** Code others enter to become friends. Created the first time it's needed. */
   friendCode?: string;
   /** Opt-in: log one bodyweight per day; shown on the calendar on days it's logged. */
@@ -217,6 +219,40 @@ export interface LeaderboardEntry {
   history: { date: string; score: number }[];
   /** The owner's share level when written. Rows from before share levels are "everyone". */
   share?: Share;
+  /** Best result in each calendar year, keyed by year ("2026"). Absent on rows written before seasons. */
+  seasons?: Record<string, SeasonBest>;
+}
+
+/** A person's best result in one season (calendar year). */
+export interface SeasonBest {
+  value: number;
+  reps?: number;
+  date: string;
+  score: number;
+}
+
+/** One day on the Consistency board: on track or not, and workouts done (rest days aside). */
+export interface ConsistencyDay {
+  on: boolean;
+  done: number;
+}
+
+/**
+ * A user's row for the Consistency board (only when they opted in). Covers the 28 days before
+ * the sync and the 28 after, each future day scored as if it passed with no changes, so the row
+ * stays right for weeks without a re-sync. Days with no entry don't count (before the first
+ * entry, or injured with nothing logged).
+ */
+export interface ConsistencyRow {
+  sub: string;
+  displayName: string;
+  share: Share;
+  /** The day it was synced, and the last day it covers. */
+  syncedOn: string;
+  through: string;
+  /** The user's first entry; days before it never count. */
+  startDate: string | null;
+  days: Record<string, ConsistencyDay>;
 }
 
 export type InjuryStatus = "active" | "recovering" | "healed";

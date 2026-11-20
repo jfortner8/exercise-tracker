@@ -3,6 +3,7 @@ import type {
   BenchmarkDef,
   BenchmarkResult,
   DayResult,
+  Injury,
   Intervals,
   MetricKind,
   Units,
@@ -185,6 +186,10 @@ export function validTimeZone(tz?: string): tz is string {
   }
 }
 
+/** Today's date (YYYY-MM-DD) in a time zone; UTC when it's missing or unknown. */
+export const todayIn = (tz?: string, now = new Date()) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: validTimeZone(tz) ? tz : "UTC" }).format(now);
+
 /** Order for a day's workouts: timed ones by start time, then untimed ones in the order they were added. */
 export function compareWorkouts(
   a: { startTime?: string; createdAt: string },
@@ -279,6 +284,10 @@ export function isMissedDay(
 ) {
   return !!today && !!startDate && date < today && date >= startDate && workouts.length === 0 && !injured;
 }
+
+/** Injuries covering a day: within its dates, or still open (not healed) up to today. */
+export const injuriesOn = <I extends Pick<Injury, "startDate" | "endDate" | "status">>(injuries: I[], d: string, today: string) =>
+  injuries.filter((i) => i.startDate <= d && (i.endDate ? d <= i.endDate : i.status !== "healed" && !!today && d <= today));
 
 export interface Adherence {
   onTrack: number;

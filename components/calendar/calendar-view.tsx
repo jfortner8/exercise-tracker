@@ -23,6 +23,7 @@ import {
   DONE_STATUSES,
   formatDistance,
   formatStartTime,
+  injuriesOn as injuriesOnDay,
   isMissedDay,
   kgToDisplay,
   weightUnit,
@@ -107,8 +108,7 @@ export function CalendarView(props: CalendarProps) {
   }, [props.results]);
   // A logged benchmark result means the day wasn't missed, even with no workout.
   const activityOn = (d: string) => [...(byDay.get(d) ?? []), ...(resultsByDay.get(d) ?? [])];
-  const injuriesOn = (d: string) =>
-    injuries.filter((i) => i.startDate <= d && (i.endDate ? d <= i.endDate : i.status !== "healed" && !!today && d <= today));
+  const injuriesOn = (d: string) => injuriesOnDay(injuries, d, today);
 
   const sensors = useSensors(
     // Mouse drags after a small move. Touch needs a long press, so a swipe that starts on a
