@@ -22,7 +22,6 @@ import {
   displayStatus,
   DONE_STATUSES,
   formatDistance,
-  formatStartTime,
   injuriesOn as injuriesOnDay,
   isMissedDay,
   kgToDisplay,
@@ -32,6 +31,7 @@ import {
 } from "@/lib/domain";
 import type { BenchmarkDef, Clock, DayLog, DayResult, Injury, Profile, Routine, Units, Workout } from "@/lib/types";
 import { blockMetrics, workoutCategory, type ActivityKey } from "@/lib/activities";
+import { startTimeLabel } from "@/lib/start-time";
 import { calendarHabit, habitLevel, habitOnDay, HABITS, type HabitKind } from "@/lib/habits";
 import { HabitIcon } from "../habit-icon";
 import { calendarGoal, goalOnDay, weekGoalTally, type Goal } from "@/lib/goals";
@@ -219,6 +219,7 @@ export function CalendarView(props: CalendarProps) {
                   trackWeight={profile.trackWeight}
                   units={profile.units}
                   clock={profile.clock}
+                  zone={profile.timeZone}
                   pb={(resultsByDay.get(d) ?? []).some((r) => r.isPb)}
                   onOpen={() => setSelected(d)}
                 />
@@ -327,6 +328,7 @@ function DayCell({
   trackWeight,
   units,
   clock,
+  zone,
   pb,
   onOpen,
 }: {
@@ -345,6 +347,8 @@ function DayCell({
   trackWeight: boolean;
   units: Units;
   clock?: Clock;
+  /** Where the user is now; start times entered elsewhere are shown in it. */
+  zone?: string;
   /** A benchmark result on this day set a new PB. */
   pb: boolean;
   onOpen: () => void;
@@ -415,6 +419,7 @@ function DayCell({
               dayLabel={i === 0 ? dayLabel : null}
               units={units}
               clock={clock}
+              zone={zone}
               compact={view === "week" || workouts.length < 2 ? "none" : workouts.length === 2 ? "two" : "three"}
               clearCorner={i === 0 && pb}
             />
@@ -566,6 +571,7 @@ function Block({
   dayLabel,
   units,
   clock,
+  zone,
   compact,
   clearCorner = false,
 }: {
@@ -575,6 +581,7 @@ function Block({
   dayLabel: React.ReactNode;
   units: Units;
   clock?: Clock;
+  zone?: string;
   /** Several workouts share a month tile: keep to the most important line(s). */
   compact: "none" | "two" | "three";
   /** Leave room in the top-right for the PB star. */
@@ -589,7 +596,7 @@ function Block({
   });
   const done = DONE_STATUSES.has(status);
   const cat = workoutCategory(w);
-  const metrics = [w.startTime && formatStartTime(w.startTime, clock), blockMetrics(w, units)].filter(Boolean).join(" · ") || undefined;
+  const metrics = [startTimeLabel(w, zone, clock), blockMetrics(w, units)].filter(Boolean).join(" · ") || undefined;
   // Don't repeat "Run" twice when the title is just the category.
   const titleIsCategory = w.title.trim().toLowerCase() === cat.label.toLowerCase();
   const struck = status === "skipped" && "line-through";

@@ -194,6 +194,15 @@ export async function recentWorkouts(sub: string, today: string, limit = 30): Pr
 /** Every workout the user has logged (Sports tab tallies). */
 export const listAllWorkouts = (sub: string) => beginsWith<Workout>(sub, "WO#");
 
+/**
+ * Pins timed workouts saved without a zone (from before zones were stored) to `zone`, the zone they
+ * were entered in. Run just before the profile's zone changes.
+ */
+export async function stampStartZones(sub: string, zone: string) {
+  const loose = (await listAllWorkouts(sub)).filter((w) => w.startTime && !w.startZone);
+  if (loose.length) await saveWorkouts(sub, loose.map((w) => ({ ...w, startZone: zone })));
+}
+
 export async function getWorkout(sub: string, date: string, id: string) {
   const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: woSK(date, id) } }));
   return res.Item ? strip<Workout>(res.Item) : null;

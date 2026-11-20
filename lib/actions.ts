@@ -62,6 +62,8 @@ export async function syncTimeZoneAction(timeZone: string) {
   if (!validTimeZone(tz)) return;
   const profile = await repo.getProfile(sub);
   if (!profile || profile.timeZone === tz) return;
+  // Older start times were entered in the old zone: pin them there before it moves.
+  if (validTimeZone(profile.timeZone)) await repo.stampStartZones(sub, profile.timeZone);
   await repo.setTimeZone(sub, tz);
   // "Today" may have moved a day, which changes which days the Consistency board counts.
   await afterChange(sub);
@@ -102,6 +104,7 @@ const workoutInput = z.object({
   id: id.optional(),
   date: day,
   startTime: z.string().regex(START_TIME_RE).optional(),
+  startZone: z.string().max(64).optional(),
   originalDate: day.optional(), // the workout's current key date when editing
   type: z.enum(WORKOUT_TYPES),
   title: z.string().trim().min(1).max(200),
@@ -182,6 +185,12 @@ export async function saveWorkoutAction(raw: WorkoutInput, rawRepeat?: RepeatInp
   const sportDef = parsed.type === "sport" ? sportMeta(parsed.sport) : undefined;
   const input = {
     ...parsed,
+    // A start time keeps the zone it was entered in; one without falls back to the profile's.
+    startZone: parsed.startTime
+      ? validTimeZone(parsed.startZone)
+        ? parsed.startZone
+        : (await repo.getProfile(sub))?.timeZone
+      : undefined,
     sport: sportDef?.key,
     sportName: sportDef?.key === "other" ? parsed.sportName || undefined : undefined,
     sportSession: sportDef?.sessions.some((s) => s.key === parsed.sportSession) ? parsed.sportSession : undefined,
@@ -396,6 +405,7 @@ export async function copyWeekAction(fromStart: string, toStart: string, times: 
         id: ulid(),
         date: format(addDays(parseISO(w.date), offset), "yyyy-MM-dd"),
         startTime: w.startTime,
+        startZone: w.startZone,
         type: w.type,
         title: w.title,
         location: w.location,
@@ -515,6 +525,9 @@ export async function saveProfileAction(raw: {
   for (const k of wasOn) habitStarts[k] ??= HABIT_SINCE_FIRST_DAY;
   for (const k of habits) habitStarts[k] ??= today;
   const goals = cleanGoals(p.goals, existing?.goals, today);
+  if (validTimeZone(existing?.timeZone) && validTimeZone(p.timeZone) && p.timeZone !== existing.timeZone) {
+    await repo.stampStartZones(sub, existing.timeZone);
+  }
   // Keep internal fields that aren't part of the settings form.
   await repo.saveProfile(sub, {
     ...p,

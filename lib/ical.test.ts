@@ -89,6 +89,13 @@ describe("workoutEventLines", () => {
     expect(field(l, "DTEND:")).toBe("20261118T121500Z");
     expect(field(l, "TRANSP:")).toBe("OPAQUE");
   });
+  it("keeps a start time in the zone it was entered in, wherever the profile's zone has moved", () => {
+    // 8am Eastern, fetched after the profile moved to Alabama: still 13:00Z, so 7am there.
+    const l = ev({ startTime: "08:00", startZone: "America/New_York" }, { timeZone: "America/Chicago" });
+    expect(field(l, "DTSTART:")).toBe("20261118T130000Z");
+    // Without its own zone it uses the profile's.
+    expect(field(ev({ startTime: "08:00" }, { timeZone: "America/Chicago" }), "DTSTART:")).toBe("20261118T140000Z");
+  });
   it("runs past midnight into the next day", () => {
     const l = ev({ startTime: "23:30", planned: { durationSec: 90 * 60 } }, { timeZone: "UTC" });
     expect(field(l, "DTSTART:")).toBe("20261118T233000Z");

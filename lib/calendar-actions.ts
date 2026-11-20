@@ -14,8 +14,11 @@ const newToken = () => randomBytes(24).toString("base64url");
 async function setToken(timeZone: string | undefined, replace: boolean) {
   const { sub } = await requireUser();
   const tz = z.string().max(64).optional().parse(timeZone);
-  const old = (await repo.getProfile(sub))?.calendarToken;
+  const profile = await repo.getProfile(sub);
+  const old = profile?.calendarToken;
   if (old && !replace) return;
+  // Older start times were entered in the saved zone: pin them there before it changes.
+  if (validTimeZone(profile?.timeZone) && validTimeZone(tz) && tz !== profile.timeZone) await repo.stampStartZones(sub, profile.timeZone);
   const ok = await repo.setCalendarToken(sub, newToken(), old, validTimeZone(tz) ? tz : undefined);
   if (!ok) throw new Error("Your calendar link changed in another tab. Reload and try again.");
   refresh();

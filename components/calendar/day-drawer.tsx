@@ -25,11 +25,11 @@ import {
   formatDistance,
   formatDuration,
   formatResult,
-  formatStartTime,
   kgToDisplay,
   weightUnit,
 } from "@/lib/domain";
 import { describeExercise } from "@/lib/routines";
+import { startTimeLabel } from "@/lib/start-time";
 import { habitCount, HABITS, profileHabits, type HabitKind } from "@/lib/habits";
 import { HabitIcon } from "../habit-icon";
 import { activeGoals, goalDone, type Goal } from "@/lib/goals";
@@ -136,6 +136,8 @@ export function DayDrawer({
           workout={editing === "new" ? undefined : editing}
           units={profile.units}
           weekStartsOn={profile.weekStartsOn}
+          zone={profile.timeZone}
+          clock={profile.clock}
           injuries={injuries}
           presetStatus={preset}
           recent={recent}
@@ -163,7 +165,7 @@ export function DayDrawer({
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2">
-                        {w.startTime && <span className="text-sm tabular-nums text-muted">{formatStartTime(w.startTime, profile.clock)}</span>}
+                        {w.startTime && <span className="text-sm tabular-nums text-muted">{startTimeLabel(w, profile.timeZone, profile.clock)}</span>}
                         <span className="font-medium">{w.title}</span>
                         <span
                           className={cx(
