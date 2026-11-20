@@ -14,7 +14,7 @@ import { quickActual, type ExtraAs } from "@/lib/quick-done";
 import { DISTANCE_TYPES } from "@/lib/activities";
 import { linkableWorkouts } from "@/lib/benchmarks/linking";
 import * as repo from "@/lib/db/repo";
-import { syncLeaderboard } from "@/lib/leaderboard";
+import { syncConsistency, syncLeaderboard } from "@/lib/leaderboard";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@/lib/dance";
 import { SPORTS, sportMeta } from "@/lib/sports";
 import {
@@ -38,6 +38,19 @@ const DANCE_STYLE_KEYS = DANCE_STYLES.map((s) => s.key) as [string, ...string[]]
 const DANCE_SESSION_KEYS = DANCE_SESSIONS.map((s) => s.key) as [string, ...string[]];
 
 /** The Sports tab appears once a sport workout has been completed. */
+/**
+ * After a change that can move which days were on track: refresh the Consistency board row, then
+ * the page. A failed sync is logged, not thrown, so the user's own save still goes through.
+ */
+async function afterChange(sub: string) {
+  try {
+    await syncConsistency(sub);
+  } catch (e) {
+    console.error("syncConsistency failed", e);
+  }
+  refresh();
+}
+
 async function noteSport(sub: string, w: Pick<Workout, "type" | "status">) {
   if (w.type === "sport" && (w.status === "completed" || w.status === "partial")) await repo.markHasSports(sub);
 }
@@ -214,13 +227,13 @@ export async function saveWorkoutAction(raw: WorkoutInput, rawRepeat?: RepeatInp
     await repo.saveWorkout(sub, { ...rest, id: ulid(), createdAt: now, updatedAt: now });
   }
   await noteSport(sub, input);
-  refresh();
+  await afterChange(sub);
 }
 
 export async function deleteWorkoutAction(date: string, workoutId: string) {
   const { sub } = await requireUser();
   await repo.deleteWorkout(sub, day.parse(date), id.parse(workoutId));
-  refresh();
+  await afterChange(sub);
 }
 
 /**
@@ -233,14 +246,14 @@ export async function deleteSeriesFromAction(date: string, workoutId: string) {
   if (!w) throw new Error("Workout not found");
   if (!w.seriesId) {
     await repo.deleteWorkout(sub, w.date, w.id);
-    refresh();
+    await afterChange(sub);
     return { deleted: 1 };
   }
   const later = (await repo.listWorkouts(sub, w.date, "9999-12-31")).filter(
     (o) => o.seriesId === w.seriesId && (o.id === w.id || o.status === "planned"),
   );
   await repo.deleteWorkouts(sub, later);
-  refresh();
+  await afterChange(sub);
   return { deleted: later.length };
 }
 
@@ -249,7 +262,7 @@ export async function moveWorkoutAction(date: string, workoutId: string, toDate:
   const w = await repo.getWorkout(sub, day.parse(date), id.parse(workoutId));
   if (!w) throw new Error("Workout not found");
   if (w.date !== day.parse(toDate)) await repo.moveWorkout(sub, w, toDate);
-  refresh();
+  await afterChange(sub);
 }
 
 /** Mark a planned workout done, copying the plan into "actual" so only differences need editing. */
@@ -284,7 +297,7 @@ export async function quickDoneAction(
     updatedAt: new Date().toISOString(),
   });
   await noteSport(sub, { type: w.type, status: "completed" });
-  refresh();
+  await afterChange(sub);
 }
 
 /** Mark a day as an intentional rest day. `today` is the client's local date. */
@@ -301,7 +314,7 @@ export async function markRestDayAction(date: string, today: string) {
     createdAt: now,
     updatedAt: now,
   });
-  refresh();
+  await afterChange(sub);
 }
 
 /** One-tap outcome for a planned workout: done as planned, missed, or skipped with a reason. */
@@ -329,7 +342,7 @@ export async function resolveWorkoutAction(
     updatedAt: new Date().toISOString(),
   });
   await noteSport(sub, { type: w.type, status: input.status });
-  refresh();
+  await afterChange(sub);
 }
 
 /**
@@ -345,7 +358,7 @@ export async function swapDaysAction(fromDate: string, workoutId: string, toDate
   const others = (await repo.listWorkouts(sub, to, to)).filter((o) => o.status === "planned");
   await repo.moveWorkout(sub, w, to);
   for (const o of others) await repo.moveWorkout(sub, o, from);
-  refresh();
+  await afterChange(sub);
 }
 
 /** Copy a week's workouts (as planned, without results) to the week starting `toStart`, repeated `times` weeks. */
@@ -384,7 +397,7 @@ export async function copyWeekAction(fromStart: string, toStart: string, times: 
     }
   }
   await repo.saveWorkouts(sub, copies);
-  refresh();
+  await afterChange(sub);
   return { copied: copies.length };
 }
 
@@ -451,6 +464,7 @@ export async function saveProfileAction(raw: {
   goals: { id: string; name: string; emoji?: string; off?: boolean }[];
   goalOnCalendar?: string;
   share: Share;
+  shareConsistency?: boolean;
   trackWeight: boolean;
   timeZone?: string;
 }) {
@@ -468,6 +482,7 @@ export async function saveProfileAction(raw: {
         .max(MAX_GOALS * 4),
       goalOnCalendar: z.string().max(40).optional(),
       share: z.enum(SHARE_LEVELS),
+      shareConsistency: z.boolean().optional(),
       trackWeight: z.boolean(),
       timeZone: z.string().max(64).optional(),
     })
@@ -488,6 +503,8 @@ export async function saveProfileAction(raw: {
   await repo.saveProfile(sub, {
     ...p,
     goals,
+    // Consistency only goes to people who can see your PBs; off when you share with nobody.
+    shareConsistency: p.share !== "off" && p.shareConsistency === true,
     goalOnCalendar: activeGoals({ goals }).some((g) => g.id === p.goalOnCalendar) ? p.goalOnCalendar : activeGoals({ goals })[0]?.id,
     habits,
     habitOnCalendar: p.habitOnCalendar && habits.includes(p.habitOnCalendar) ? p.habitOnCalendar : habits[0],
@@ -505,7 +522,7 @@ export async function saveProfileAction(raw: {
   // Opting in/out or renaming changes what others see on leaderboards.
   await syncLeaderboard(sub);
   if (existing && existing.displayName !== p.displayName) await repo.updateSocialName(sub, p.displayName);
-  refresh();
+  await afterChange(sub);
 }
 
 // ---------- Injuries ----------
@@ -522,12 +539,12 @@ export async function saveInjuryAction(raw: z.infer<typeof injuryInput>) {
   const { sub } = await requireUser();
   const i = injuryInput.parse(raw);
   await repo.saveInjury(sub, { ...i, id: i.id ?? ulid() });
-  refresh();
+  await afterChange(sub);
 }
 export async function deleteInjuryAction(injuryId: string) {
   const { sub } = await requireUser();
   await repo.deleteInjury(sub, id.parse(injuryId));
-  refresh();
+  await afterChange(sub);
 }
 
 // ---------- Benchmarks ----------
@@ -570,7 +587,7 @@ export async function deleteBenchmarkAction(benchmarkId: string) {
   const { sub } = await requireUser();
   await repo.deleteBenchmark(sub, id.parse(benchmarkId));
   await syncLeaderboard(sub);
-  refresh();
+  await afterChange(sub);
 }
 
 const resultInput = z.object({
@@ -599,7 +616,7 @@ export async function addResultAction(raw: z.infer<typeof resultInput>) {
   const bm = await checkResult(sub, r);
   await repo.saveResult(sub, { ...r, id: ulid() });
   if (bm.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
-  refresh();
+  await afterChange(sub);
 }
 
 /** Edit a result (value, reps, date, notes, workout link). Changing the date moves it. */
@@ -614,7 +631,7 @@ export async function updateResultAction(raw: z.infer<typeof resultInput> & { id
   await repo.replaceResult(sub, old, { ...r, id: resultId });
   // An edited value or date can change the PB and its history on the leaderboards.
   if (bm.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
-  refresh();
+  await afterChange(sub);
 }
 
 export async function deleteResultAction(benchmarkId: string, date: string, resultId: string) {
@@ -622,7 +639,7 @@ export async function deleteResultAction(benchmarkId: string, date: string, resu
   await repo.deleteResult(sub, { benchmarkId: id.parse(benchmarkId), date: day.parse(date), id: id.parse(resultId) });
   const bm = await repo.getBenchmark(sub, benchmarkId);
   if (bm?.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
-  refresh();
+  await afterChange(sub);
 }
 
 /** Workouts on one day, for the benchmark form's "Part of workout" picker. */

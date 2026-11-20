@@ -43,6 +43,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             goals: (p.goals ?? []).map(({ id, name, emoji, off }) => ({ id, name, emoji, off })),
             goalOnCalendar: p.goalOnCalendar,
             share: p.share,
+            shareConsistency: p.share !== "off" && p.shareConsistency === true,
             trackWeight: p.trackWeight,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           });
@@ -187,6 +188,22 @@ export function SettingsForm({ profile }: { profile: Profile }) {
               </label>
             ))}
           </div>
+          <label className={cx("mt-3 flex items-start gap-3 text-sm", p.share === "off" ? "cursor-not-allowed opacity-50" : "cursor-pointer")}>
+            <input
+              type="checkbox"
+              checked={p.share !== "off" && p.shareConsistency === true}
+              disabled={p.share === "off"}
+              onChange={(e) => setP({ ...p, shareConsistency: e.target.checked })}
+              className="mt-0.5 size-4 accent-[var(--accent)]"
+            />
+            <span>
+              <span className="block font-medium">Also show my consistency</span>
+              <span className="block text-muted">
+                The % of days you were on track over the last 4 weeks, on the Consistency board for your friends and
+                clubs. Never on the Everyone board.
+              </span>
+            </span>
+          </label>
         </fieldset>
       </Card>
       <div className="mt-4 flex items-center justify-end gap-3">
