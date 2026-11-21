@@ -26,8 +26,8 @@ export const HABITS: Record<HabitKind, HabitMeta> = {
   alcohol: {
     kind: "alcohol",
     label: "Alcoholic drinks",
-    short: "Drinks",
-    noun: (n) => (n === 1 ? "drink" : "drinks"),
+    short: "Alcoholic drinks",
+    noun: (n) => (n === 1 ? "alcoholic drink" : "alcoholic drinks"),
     field: "drinks",
     step: 0.5,
     max: 50,
