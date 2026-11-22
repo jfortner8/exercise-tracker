@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { addDays, format, parseISO } from "date-fns";
-import { Check, ChevronLeft, ChevronRight, Copy, Star } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, Star, X } from "lucide-react";
 import Link from "next/link";
 import { useId, useMemo, useOptimistic, useState, useSyncExternalStore, useTransition } from "react";
 import { moveWorkoutAction, swapDaysAction } from "@/lib/actions";
@@ -488,19 +488,23 @@ function DayFooter({
   const weight = log?.weightKg != null ? Math.round(kgToDisplay(log.weightKg, units) * 10) / 10 : null;
   const count = habit ? habitOnDay(habit, date, today, startDate, habitStart, log) : null;
   const done = goal ? goalOnDay(goal, date, today, startDate, log) : null;
+  // Today can still be done or weighed, so only past days are marked as missed.
+  const missedGoal = done === false && date < today;
+  const missedWeight = weight == null && !!startDate && date >= startDate && date < today;
   return (
     <div className="flex h-5 shrink-0 border-t border-border text-[10px] leading-none md:h-7 md:text-[11px]">
       {goal && (
-        // Done: a green check. Not done: a quiet grey cell (no red for a positive goal). Blank otherwise.
+        // Done: a green check. Missed (a past day): a small red X. Today not done yet: a quiet grey cell.
         <span
           className={cx(
             "flex items-center justify-center",
             roomy ? "w-7 flex-none" : "flex-1 md:w-7 md:flex-none",
-            done ? "bg-done text-done-fg" : done === false ? "bg-surface-2" : "bg-surface",
+            done ? "bg-done text-done-fg" : done === false ? "bg-surface-2 text-danger" : "bg-surface",
           )}
           title={done == null ? undefined : `${goal.name}${done ? " ✓" : ": not done"}`}
         >
           {done && <Check className="size-3 md:size-3.5" strokeWidth={3} aria-label={`${goal.name} done`} />}
+          {missedGoal && <X className="size-2.5 md:size-3" strokeWidth={3} aria-label={`${goal.name} not done`} />}
         </span>
       )}
       <span
@@ -521,11 +525,14 @@ function DayFooter({
         )}
       </span>
       {trackWeight && (
-        // Always present when tracking so tiles line up; greyed out on days without a weigh-in.
+        // Always present when tracking so tiles line up; greyed out on days without a weigh-in,
+        // and struck through with a diagonal on past days that went without one.
         <span
           className={cx(
             "flex flex-1 items-center justify-center gap-0.5 border-l border-border font-medium tabular-nums",
             weight != null ? "bg-surface text-text" : "bg-surface-2",
+            missedWeight &&
+              "bg-[linear-gradient(to_top_right,transparent_calc(50%-0.75px),var(--color-muted)_50%,transparent_calc(50%+0.75px))]",
           )}
           title={weight != null ? `Bodyweight ${weight} ${weightUnit(units)}` : "No weight logged"}
         >
