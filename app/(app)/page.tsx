@@ -2,18 +2,10 @@ import { addMonths, addWeeks, format, parseISO } from "date-fns";
 import { Suspense } from "react";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { recentActivities } from "@/lib/activities";
-import { calendarResults, eachDay, monthGridRange, weekRange, ymd } from "@/lib/domain";
+import { eachDay, monthGridRange, weekRange, ymd } from "@/lib/domain";
 import { requireProfile, requireToday } from "@/lib/dal";
-import {
-  firstEntryDate,
-  listAllResults,
-  listBenchmarks,
-  listDays,
-  listInjuries,
-  listRoutines,
-  listWorkouts,
-  recentWorkouts,
-} from "@/lib/db/repo";
+import { firstEntryDate, listRoutines, recentWorkouts } from "@/lib/db/repo";
+import { calendarRange } from "@/lib/services/calendar";
 
 function CalendarSkeleton() {
   return (
@@ -36,14 +28,9 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
     view === "month" ? monthGridRange(anchor, profile.weekStartsOn) : weekRange(anchor, profile.weekStartsOn);
   const [s, e] = [ymd(start), ymd(end)];
 
-  const [workouts, days, injuries, benchmarks, startDate, allResults, recent, routines] = await Promise.all([
-    listWorkouts(user.sub, s, e),
-    listDays(user.sub, s, e),
-    listInjuries(user.sub),
-    listBenchmarks(user.sub),
+  const [{ workouts, days, injuries, benchmarks, results }, startDate, recent, routines] = await Promise.all([
+    calendarRange(user.sub, s, e),
     firstEntryDate(user.sub),
-    // All results (one small query): earlier history decides whether a result in view was a PB.
-    listAllResults(user.sub),
     recentWorkouts(user.sub, today),
     profile.hasRoutines ? listRoutines(user.sub) : Promise.resolve([]),
   ]);
@@ -67,7 +54,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/">["search
       benchmarks={benchmarks}
       profile={profile}
       startDate={startDate}
-      results={calendarResults(benchmarks, allResults, s, e)}
+      results={results}
       recent={recentActivities(recent)}
       routines={routines}
     />
