@@ -1,558 +1,112 @@
 "use server";
 
-import { addDays, differenceInCalendarDays, format, parseISO, startOfWeek } from "date-fns";
 import { refresh } from "next/cache";
-import { ulid } from "ulid";
-import {
-  copyTimes,
-  day,
-  dayPatchInput,
-  id,
-  injuryInput,
-  benchmarkInput,
-  profileInput,
-  quickDoneInput,
-  repeatInput,
-  resolveInput,
-  resultInput,
-  routineInput,
-  routineName,
-  timeZoneName,
-  workoutInput,
-  type BenchmarkInput,
-  type InjuryInput,
-  type RepeatInput,
-  type ResultInput,
-  type RoutineInput,
-  type WorkoutInput,
-} from "@et/core/schemas";
-import { BENCHMARK_CATALOG } from "@et/core/benchmarks/catalog";
 import { requireUser } from "@/lib/dal";
-import { repeatDates, validTimeZone } from "@et/core/domain";
-import { activeGoals, cleanGoals } from "@et/core/goals";
-import { HABIT_SINCE_FIRST_DAY, profileHabits, type HabitKind } from "@et/core/habits";
-import { cleanExercises, findRoutineByName } from "@et/core/routines";
-import { quickActual, type ExtraAs } from "@et/core/quick-done";
-import { DISTANCE_TYPES } from "@et/core/activities";
-import { linkableWorkouts } from "@et/core/benchmarks/linking";
-import * as repo from "@/lib/db/repo";
-import { syncConsistency, syncLeaderboard } from "@/lib/leaderboard";
-import { sportMeta } from "@et/core/sports";
-import type { Clock, Share, Units, Workout, WorkoutDetails } from "@et/core/types";
+import * as benchmarks from "@/lib/services/benchmarks";
+import * as days from "@/lib/services/days";
+import * as injuries from "@/lib/services/injuries";
+import * as profile from "@/lib/services/profile";
+import * as routines from "@/lib/services/routines";
+import * as workouts from "@/lib/services/workouts";
+import type { BenchmarkInput, DayPatchInput, InjuryInput, ProfileInput, RepeatInput, ResultInput, RoutineInput, WorkoutInput } from "@et/core/schemas";
+import type { ExtraAs } from "@et/core/quick-done";
 
-/** The Sports tab appears once a sport workout has been completed. */
-/**
- * After a change that can move which days were on track: refresh the Consistency board row, then
- * the page. A failed sync is logged, not thrown, so the user's own save still goes through.
+/*
+ * The website's server actions: sign-in check, the shared service (lib/services), then re-render.
+ * The phone app reaches the same services through /api/v1.
  */
-async function afterChange(sub: string) {
-  try {
-    await syncConsistency(sub);
-  } catch (e) {
-    console.error("syncConsistency failed", e);
-  }
+
+/** Runs `fn` for the signed-in user, then re-renders the page. */
+async function act<T>(fn: (sub: string) => Promise<T>): Promise<T> {
+  const { sub } = await requireUser();
+  const result = await fn(sub);
   refresh();
-}
-
-/**
- * The browser reports its time zone when it differs from the profile's (the user is travelling, or
- * moved). Saving it keeps the calendar feed's start times, the Consistency board and habit starts on
- * the user's local day.
- */
-export async function syncTimeZoneAction(timeZone: string) {
-  const { sub } = await requireUser();
-  const tz = timeZoneName.parse(timeZone);
-  if (!validTimeZone(tz)) return;
-  const profile = await repo.getProfile(sub);
-  if (!profile || profile.timeZone === tz) return;
-  // Older start times were entered in the old zone: pin them there before it moves.
-  if (validTimeZone(profile.timeZone)) await repo.stampStartZones(sub, profile.timeZone);
-  await repo.setTimeZone(sub, tz);
-  // "Today" may have moved a day, which changes which days the Consistency board counts.
-  await afterChange(sub);
-}
-
-async function noteSport(sub: string, w: Pick<Workout, "type" | "status">) {
-  if (w.type === "sport" && (w.status === "completed" || w.status === "partial")) await repo.markHasSports(sub);
-}
-
-
-// ---------- Routines (the Routines tab) ----------
-export async function saveRoutineAction(raw: RoutineInput) {
-  const { sub } = await requireUser();
-  const p = routineInput.parse(raw);
-  const list = cleanExercises(p.exercises);
-  if (!list.length) return { error: "Add at least one exercise." };
-  const all = await repo.listRoutines(sub);
-  const clash = findRoutineByName(all, p.name);
-  if (clash && clash.id !== p.id) return { error: `You already have a routine called "${clash.name}".` };
-  const existing = p.id ? all.find((r) => r.id === p.id) : undefined;
-  if (p.id && !existing) return { error: "That routine no longer exists." };
-  const now = new Date().toISOString();
-  await repo.saveRoutine(sub, { id: existing?.id ?? ulid(), name: p.name, exercises: list, createdAt: existing?.createdAt ?? now, updatedAt: now });
-  await repo.setHasRoutines(sub, true);
-  refresh();
-  return { ok: true as const };
-}
-
-export async function deleteRoutineAction(routineId: string) {
-  const { sub } = await requireUser();
-  await repo.deleteRoutine(sub, id.parse(routineId));
-  if (!(await repo.listRoutines(sub)).length) await repo.setHasRoutines(sub, false);
-  refresh();
-}
-
-/**
- * Save a workout. With `repeat` (new planned workouts only) it is created on each matching day,
- * as separate workouts sharing a seriesId, so each one can be logged, moved or edited on its own.
- */
-export async function saveWorkoutAction(raw: WorkoutInput, rawRepeat?: RepeatInput, rawRoutine?: { name: string }) {
-  const { sub } = await requireUser();
-  const parsed = workoutInput.parse(raw);
-  const repeat = rawRepeat ? repeatInput.parse(rawRepeat) : undefined;
-  const newRoutine = rawRoutine ? routineName.parse(rawRoutine.name) : undefined;
-  const strength = parsed.type === "strength";
-  // Exercises and routines only belong on strength workouts.
-  const keepExercises = (d: typeof parsed.planned): WorkoutDetails | undefined => {
-    if (!d) return d;
-    const list = strength ? cleanExercises(d.exercises) : [];
-    const { exercises: _e, ...rest } = d;
-    void _e;
-    return list.length ? { ...rest, exercises: list } : Object.keys(rest).length ? rest : undefined;
-  };
-  if (repeat && (parsed.id || parsed.status !== "planned")) throw new Error("Only new planned workouts can repeat");
-  // Sport details only belong on sport workouts; a session must be one the sport offers.
-  const sportDef = parsed.type === "sport" ? sportMeta(parsed.sport) : undefined;
-  const input = {
-    ...parsed,
-    // A start time keeps the zone it was entered in; one without falls back to the profile's.
-    startZone: parsed.startTime
-      ? validTimeZone(parsed.startZone)
-        ? parsed.startZone
-        : (await repo.getProfile(sub))?.timeZone
-      : undefined,
-    sport: sportDef?.key,
-    sportName: sportDef?.key === "other" ? parsed.sportName || undefined : undefined,
-    sportSession: sportDef?.sessions.some((s) => s.key === parsed.sportSession) ? parsed.sportSession : undefined,
-    // Dance style and session only belong on dance workouts.
-    danceStyle: parsed.type === "dance" ? parsed.danceStyle : undefined,
-    danceStyleName: parsed.type === "dance" && parsed.danceStyle === "other" ? parsed.danceStyleName || undefined : undefined,
-    danceSession: parsed.type === "dance" ? parsed.danceSession : undefined,
-    planned: keepExercises(parsed.planned),
-    actual: keepExercises(parsed.actual),
-    routineId: strength ? parsed.routineId || undefined : undefined,
-    routineName: strength && parsed.routineId ? parsed.routineName || undefined : undefined,
-  };
-  const now = new Date().toISOString();
-
-  // "Save as a routine": created from what was done once logged, otherwise the plan.
-  if (newRoutine) {
-    if (!strength) throw new Error("Only strength workouts have routines");
-    const list = input.actual?.exercises?.length ? input.actual.exercises : (input.planned?.exercises ?? []);
-    if (!list.length) throw new Error("Add at least one exercise to save a routine");
-    if (findRoutineByName(await repo.listRoutines(sub), newRoutine)) throw new Error(`You already have a routine called "${newRoutine}"`);
-    const routine = { id: ulid(), name: newRoutine, exercises: list, createdAt: now, updatedAt: now };
-    await repo.saveRoutine(sub, routine);
-    await repo.setHasRoutines(sub, true);
-    input.routineId = routine.id;
-    input.routineName = routine.name;
-  }
-
-  if (input.id && input.originalDate) {
-    const existing = await repo.getWorkout(sub, input.originalDate, input.id);
-    if (!existing) throw new Error("Workout not found");
-    const { originalDate: keyDate, ...rest } = input;
-    // The form always sends the whole workout, so replace rather than merge:
-    // a field cleared in the form arrives as absent and must not keep its old value.
-    const updated: Workout = {
-      ...rest,
-      id: existing.id,
-      date: existing.date,
-      originalDate: existing.originalDate,
-      seriesId: existing.seriesId,
-      createdAt: existing.createdAt,
-      updatedAt: now,
-    };
-    if (input.date !== keyDate) await repo.moveWorkout(sub, updated, input.date);
-    else await repo.saveWorkout(sub, updated);
-  } else if (repeat) {
-    const { originalDate: _ignored, ...rest } = input;
-    void _ignored;
-    const weekStartsOn = (await repo.getProfile(sub))?.weekStartsOn ?? 1;
-    const dates = repeatDates(input.date, repeat.weekdays, repeat.every, repeat.weeks, weekStartsOn);
-    if (!dates.length) throw new Error("None of the chosen days fall in that range");
-    const seriesId = ulid();
-    await repo.saveWorkouts(
-      sub,
-      dates.map((date) => ({ ...rest, date, seriesId, id: ulid(), createdAt: now, updatedAt: now })),
-    );
-  } else {
-    const { originalDate: _ignored, ...rest } = input;
-    void _ignored;
-    await repo.saveWorkout(sub, { ...rest, id: ulid(), createdAt: now, updatedAt: now });
-  }
-  await noteSport(sub, input);
-  await afterChange(sub);
-}
-
-export async function deleteWorkoutAction(date: string, workoutId: string) {
-  const { sub } = await requireUser();
-  await repo.deleteWorkout(sub, day.parse(date), id.parse(workoutId));
-  await afterChange(sub);
-}
-
-/**
- * Delete a repeating workout and the rest of its series dated on or after it. Only workouts still
- * planned go; ones already logged (done, missed, skipped…) stay as history. Returns how many went.
- */
-export async function deleteSeriesFromAction(date: string, workoutId: string) {
-  const { sub } = await requireUser();
-  const w = await repo.getWorkout(sub, day.parse(date), id.parse(workoutId));
-  if (!w) throw new Error("Workout not found");
-  if (!w.seriesId) {
-    await repo.deleteWorkout(sub, w.date, w.id);
-    await afterChange(sub);
-    return { deleted: 1 };
-  }
-  const later = (await repo.listWorkouts(sub, w.date, "9999-12-31")).filter(
-    (o) => o.seriesId === w.seriesId && (o.id === w.id || o.status === "planned"),
-  );
-  await repo.deleteWorkouts(sub, later);
-  await afterChange(sub);
-  return { deleted: later.length };
-}
-
-export async function moveWorkoutAction(date: string, workoutId: string, toDate: string) {
-  const { sub } = await requireUser();
-  const w = await repo.getWorkout(sub, day.parse(date), id.parse(workoutId));
-  if (!w) throw new Error("Workout not found");
-  if (w.date !== day.parse(toDate)) await repo.moveWorkout(sub, w, toDate);
-  await afterChange(sub);
-}
-
-/** Mark a planned workout done, copying the plan into "actual" so only differences need editing. */
-/**
- * The quick "Done" panel: log a planned workout as done with its real time and distance. The plan's
- * details carry over; time past the intervals goes to the warm-up or cool-down (see lib/quick-done.ts).
- */
-export async function quickDoneAction(
-  date: string,
-  workoutId: string,
-  raw: { timeSec?: number; distanceM?: number; extraAs: ExtraAs },
-) {
-  const { sub } = await requireUser();
-  const input = quickDoneInput.parse(raw);
-  const w = await repo.getWorkout(sub, day.parse(date), id.parse(workoutId));
-  if (!w) throw new Error("Workout not found");
-  await repo.saveWorkout(sub, {
-    ...w,
-    status: "completed",
-    actual: quickActual(w.actual ?? w.planned, {
-      ...input,
-      // Distance only where you cover ground.
-      distanceM: DISTANCE_TYPES.has(w.type) && input.distanceM ? Math.round(input.distanceM) : undefined,
-    }),
-    reason: undefined,
-    updatedAt: new Date().toISOString(),
-  });
-  await noteSport(sub, { type: w.type, status: "completed" });
-  await afterChange(sub);
-}
-
-/** Mark a day as an intentional rest day. `today` is the client's local date. */
-export async function markRestDayAction(date: string, today: string) {
-  const { sub } = await requireUser();
-  const d = day.parse(date);
-  const now = new Date().toISOString();
-  await repo.saveWorkout(sub, {
-    id: ulid(),
-    date: d,
-    type: "rest",
-    title: "Rest",
-    status: d <= day.parse(today) ? "completed" : "planned",
-    createdAt: now,
-    updatedAt: now,
-  });
-  await afterChange(sub);
-}
-
-/** One-tap outcome for a planned workout: done as planned, missed, or skipped with a reason. */
-export async function resolveWorkoutAction(
-  date: string,
-  workoutId: string,
-  status: "completed" | "missed" | "skipped",
-  reason?: string,
-) {
-  const { sub } = await requireUser();
-  const input = resolveInput.parse({ status, reason });
-  const w = await repo.getWorkout(sub, day.parse(date), id.parse(workoutId));
-  if (!w) throw new Error("Workout not found");
-  await repo.saveWorkout(sub, {
-    ...w,
-    status: input.status,
-    actual: input.status === "completed" ? (w.actual ?? w.planned) : undefined,
-    reason: input.status === "skipped" ? input.reason : undefined,
-    updatedAt: new Date().toISOString(),
-  });
-  await noteSport(sub, { type: w.type, status: input.status });
-  await afterChange(sub);
-}
-
-/**
- * Swap days: move the dragged workout to `toDate` and that day's planned workouts to its old day.
- * Both sides keep `originalDate`, so the calendar shows "moved from …".
- */
-export async function swapDaysAction(fromDate: string, workoutId: string, toDate: string) {
-  const { sub } = await requireUser();
-  const [from, to] = [day.parse(fromDate), day.parse(toDate)];
-  if (from === to) return;
-  const w = await repo.getWorkout(sub, from, id.parse(workoutId));
-  if (!w) throw new Error("Workout not found");
-  const others = (await repo.listWorkouts(sub, to, to)).filter((o) => o.status === "planned");
-  await repo.moveWorkout(sub, w, to);
-  for (const o of others) await repo.moveWorkout(sub, o, from);
-  await afterChange(sub);
-}
-
-/** Copy a week's workouts (as planned, without results) to the week starting `toStart`, repeated `times` weeks. */
-export async function copyWeekAction(fromStart: string, toStart: string, times: number) {
-  const { sub } = await requireUser();
-  const from = parseISO(day.parse(fromStart));
-  const weekStartsOn = (await repo.getProfile(sub))?.weekStartsOn ?? 1;
-  // Snap the target to the start of its week so weekdays line up.
-  const to = startOfWeek(parseISO(day.parse(toStart)), { weekStartsOn });
-  const n = copyTimes.parse(times);
-  const source = await repo.listWorkouts(sub, fromStart, format(addDays(from, 6), "yyyy-MM-dd"));
-  if (!source.length) return { copied: 0 };
-  const now = new Date().toISOString();
-  const copies: Workout[] = [];
-  for (let k = 0; k < n; k++) {
-    const offset = differenceInCalendarDays(to, from) + k * 7;
-    for (const w of source) {
-      copies.push({
-        id: ulid(),
-        date: format(addDays(parseISO(w.date), offset), "yyyy-MM-dd"),
-        startTime: w.startTime,
-        startZone: w.startZone,
-        type: w.type,
-        title: w.title,
-        location: w.location,
-        sport: w.sport,
-        sportName: w.sportName,
-        sportSession: w.sportSession,
-        danceStyle: w.danceStyle,
-        danceStyleName: w.danceStyleName,
-        danceSession: w.danceSession,
-        status: "planned",
-        planned: w.planned ?? w.actual,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-  }
-  await repo.saveWorkouts(sub, copies);
-  await afterChange(sub);
-  return { copied: copies.length };
-}
-
-// ---------- Day logs ----------
-/**
- * Update a day's notes, drinks and/or bodyweight. A field left out keeps its saved value;
- * null clears it. (So saving notes never wipes drinks or weight hidden by settings.)
- */
-export async function saveDayAction(
-  date: string,
-  patch: {
-    notes?: string | null;
-    drinks?: number | null;
-    sugaryDrinks?: number | null;
-    tobacco?: number | null;
-    weightKg?: number | null;
-  },
-) {
-  const { sub } = await requireUser();
-  const d = day.parse(date);
-  const p = dayPatchInput.parse(patch);
-  const existing = (await repo.getDay(sub, d)) ?? { date: d };
-  const pick = <K extends keyof typeof p>(k: K, old: unknown) => (p[k] === undefined ? old : (p[k] ?? undefined));
-  await repo.saveDay(sub, {
-    date: d,
-    notes: (pick("notes", existing.notes) as string | undefined)?.trim() || undefined,
-    drinks: (pick("drinks", existing.drinks) as number | undefined) || undefined,
-    sugaryDrinks: (pick("sugaryDrinks", existing.sugaryDrinks) as number | undefined) || undefined,
-    tobacco: (pick("tobacco", existing.tobacco) as number | undefined) || undefined,
-    weightKg: pick("weightKg", existing.weightKg) as number | undefined,
-  });
-  refresh();
-}
-
-/** Check a daily goal off for a day, or un-check it. Leaves the day's other fields alone. */
-export async function setGoalDoneAction(date: string, goalId: string, done: boolean) {
-  const { sub } = await requireUser();
-  const d = day.parse(date);
-  const profile = await repo.getProfile(sub);
-  if (!profile || !activeGoals(profile).some((g) => g.id === goalId)) throw new Error("Unknown goal");
-  const existing = (await repo.getDay(sub, d)) ?? { date: d };
-  const rest = (existing.goalsDone ?? []).filter((id) => id !== goalId);
-  const goalsDone = done ? [...rest, goalId] : rest;
-  await repo.saveDay(sub, { ...existing, date: d, goalsDone: goalsDone.length ? goalsDone : undefined });
-  refresh();
+  return result;
 }
 
 // ---------- Profile ----------
-export async function saveProfileAction(raw: {
-  displayName: string;
-  units: Units;
-  weekStartsOn: 0 | 1;
-  clock: Clock;
-  habits: HabitKind[];
-  habitOnCalendar?: HabitKind;
-  goals: { id: string; name: string; emoji?: string; off?: boolean }[];
-  goalOnCalendar?: string;
-  share: Share;
-  shareConsistency?: boolean;
-  trackWeight: boolean;
-  timeZone?: string;
-}) {
-  const { sub, email } = await requireUser();
-  const p = profileInput.parse(raw);
-  const existing = await repo.getProfile(sub);
-  const habits = profileHabits({ habits: p.habits });
-  // A counter's start is the first day it was turned on; turning it off and on again keeps it.
-  const habitStarts = { ...existing?.habitStarts };
-  const wasOn = existing ? profileHabits(existing) : [];
-  // "Today" where the user is (the server runs in UTC); en-CA formats as YYYY-MM-DD.
-  const tz = validTimeZone(p.timeZone) ? p.timeZone : validTimeZone(existing?.timeZone) ? existing.timeZone : "UTC";
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
-  // Counters already on with no start (alcohol from the old "Track drinks") count from the first day.
-  for (const k of wasOn) habitStarts[k] ??= HABIT_SINCE_FIRST_DAY;
-  for (const k of habits) habitStarts[k] ??= today;
-  const goals = cleanGoals(p.goals, existing?.goals, today);
-  if (validTimeZone(existing?.timeZone) && validTimeZone(p.timeZone) && p.timeZone !== existing.timeZone) {
-    await repo.stampStartZones(sub, existing.timeZone);
-  }
-  // Keep internal fields that aren't part of the settings form.
-  await repo.saveProfile(sub, {
-    ...p,
-    goals,
-    // Consistency only goes to people who can see your PBs; off when you share with nobody.
-    shareConsistency: p.share !== "off" && p.shareConsistency === true,
-    goalOnCalendar: activeGoals({ goals }).some((g) => g.id === p.goalOnCalendar) ? p.goalOnCalendar : activeGoals({ goals })[0]?.id,
-    habits,
-    habitOnCalendar: p.habitOnCalendar && habits.includes(p.habitOnCalendar) ? p.habitOnCalendar : habits[0],
-    habitStarts,
-    trackDrinks: habits.includes("alcohol"),
-    email,
-    timeZone: validTimeZone(p.timeZone) ? p.timeZone : existing?.timeZone,
-    hasSports: existing?.hasSports,
-    hasRoutines: existing?.hasRoutines,
-    friendCode: existing?.friendCode,
-    calendarToken: existing?.calendarToken,
-    calendarIncludeNotes: existing?.calendarIncludeNotes,
-    calendarPlannedOnly: existing?.calendarPlannedOnly,
-  });
-  // Opting in/out or renaming changes what others see on leaderboards.
-  await syncLeaderboard(sub);
-  if (existing && existing.displayName !== p.displayName) await repo.updateSocialName(sub, p.displayName);
-  await afterChange(sub);
+export async function syncTimeZoneAction(timeZone: string) {
+  return act((sub) => profile.syncTimeZone(sub, timeZone));
+}
+export async function saveProfileAction(raw: ProfileInput) {
+  const { email } = await requireUser();
+  return act((sub) => profile.saveProfile(sub, email, raw));
+}
+
+// ---------- Routines ----------
+export async function saveRoutineAction(raw: RoutineInput) {
+  return act((sub) => routines.saveRoutine(sub, raw));
+}
+export async function deleteRoutineAction(routineId: string) {
+  return act((sub) => routines.deleteRoutine(sub, routineId));
+}
+
+// ---------- Workouts ----------
+export async function saveWorkoutAction(raw: WorkoutInput, rawRepeat?: RepeatInput, rawRoutine?: { name: string }) {
+  return act((sub) => workouts.saveWorkout(sub, raw, rawRepeat, rawRoutine));
+}
+export async function deleteWorkoutAction(date: string, workoutId: string) {
+  return act((sub) => workouts.deleteWorkout(sub, date, workoutId));
+}
+export async function deleteSeriesFromAction(date: string, workoutId: string) {
+  return act((sub) => workouts.deleteSeriesFrom(sub, date, workoutId));
+}
+export async function moveWorkoutAction(date: string, workoutId: string, toDate: string) {
+  return act((sub) => workouts.moveWorkout(sub, date, workoutId, toDate));
+}
+export async function quickDoneAction(date: string, workoutId: string, raw: { timeSec?: number; distanceM?: number; extraAs: ExtraAs }) {
+  return act((sub) => workouts.quickDone(sub, date, workoutId, raw));
+}
+export async function markRestDayAction(date: string, today: string) {
+  return act((sub) => workouts.markRestDay(sub, date, today));
+}
+export async function resolveWorkoutAction(date: string, workoutId: string, status: "completed" | "missed" | "skipped", reason?: string) {
+  return act((sub) => workouts.resolveWorkout(sub, date, workoutId, status, reason));
+}
+export async function swapDaysAction(fromDate: string, workoutId: string, toDate: string) {
+  return act((sub) => workouts.swapDays(sub, fromDate, workoutId, toDate));
+}
+export async function copyWeekAction(fromStart: string, toStart: string, times: number) {
+  return act((sub) => workouts.copyWeek(sub, fromStart, toStart, times));
+}
+/** Workouts on one day, for the benchmark form's "Part of workout" picker. Read-only, so no re-render. */
+export async function workoutsOnDayAction(date: string) {
+  const { sub } = await requireUser();
+  return workouts.workoutsOnDay(sub, date);
+}
+
+// ---------- Day logs ----------
+export async function saveDayAction(date: string, patch: DayPatchInput) {
+  return act((sub) => days.saveDay(sub, date, patch));
+}
+export async function setGoalDoneAction(date: string, goalId: string, done: boolean) {
+  return act((sub) => days.setGoalDone(sub, date, goalId, done));
 }
 
 // ---------- Injuries ----------
 export async function saveInjuryAction(raw: InjuryInput) {
-  const { sub } = await requireUser();
-  const i = injuryInput.parse(raw);
-  await repo.saveInjury(sub, { ...i, id: i.id ?? ulid() });
-  await afterChange(sub);
+  return act((sub) => injuries.saveInjury(sub, raw));
 }
 export async function deleteInjuryAction(injuryId: string) {
-  const { sub } = await requireUser();
-  await repo.deleteInjury(sub, id.parse(injuryId));
-  await afterChange(sub);
+  return act((sub) => injuries.deleteInjury(sub, injuryId));
 }
 
 // ---------- Benchmarks ----------
 export async function trackCatalogBenchmarkAction(key: string) {
-  const { sub } = await requireUser();
-  const entry = BENCHMARK_CATALOG.find((c) => c.key === key);
-  if (!entry) throw new Error("Unknown benchmark");
-  const existing = await repo.listBenchmarks(sub);
-  if (existing.some((b) => b.catalogKey === key)) return;
-  await repo.saveBenchmark(sub, {
-    id: ulid(),
-    name: entry.name,
-    category: entry.category,
-    metricKind: entry.metricKind,
-    direction: entry.direction,
-    unit: entry.unit,
-    catalogKey: entry.key,
-    createdAt: new Date().toISOString(),
-  });
-  refresh();
+  return act((sub) => benchmarks.trackCatalogBenchmark(sub, key));
 }
-
 export async function createBenchmarkAction(raw: BenchmarkInput) {
-  const { sub } = await requireUser();
-  const b = benchmarkInput.parse(raw);
-  const newId = ulid();
-  await repo.saveBenchmark(sub, { ...b, unit: b.unit || undefined, id: newId, createdAt: new Date().toISOString() });
-  refresh();
-  return newId;
+  return act((sub) => benchmarks.createBenchmark(sub, raw));
 }
-
 export async function deleteBenchmarkAction(benchmarkId: string) {
-  const { sub } = await requireUser();
-  await repo.deleteBenchmark(sub, id.parse(benchmarkId));
-  await syncLeaderboard(sub);
-  await afterChange(sub);
+  return act((sub) => benchmarks.deleteBenchmark(sub, benchmarkId));
 }
-
-/** Loads the benchmark and checks a linked workout: this user's, on the result's day, of a fitting type. */
-async function checkResult(sub: string, r: ResultInput) {
-  const bm = await repo.getBenchmark(sub, r.benchmarkId);
-  if (!bm) throw new Error("Benchmark not found");
-  if (r.workoutId) {
-    const w = await repo.getWorkout(sub, r.date, r.workoutId);
-    if (!w) throw new Error("That workout isn't on the result's date");
-    if (!linkableWorkouts(bm, [w]).length) throw new Error(`${bm.name} can't be part of a ${w.type} workout`);
-  }
-  return bm;
-}
-
 export async function addResultAction(raw: ResultInput) {
-  const { sub } = await requireUser();
-  const r = resultInput.parse(raw);
-  const bm = await checkResult(sub, r);
-  await repo.saveResult(sub, { ...r, id: ulid() });
-  if (bm.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
-  await afterChange(sub);
+  return act((sub) => benchmarks.addResult(sub, raw));
 }
-
-/** Edit a result (value, reps, date, notes, workout link). Changing the date moves it. */
 export async function updateResultAction(raw: ResultInput & { id: string; originalDate: string }) {
-  const { sub } = await requireUser();
-  const r = resultInput.parse(raw);
-  const resultId = id.parse(raw.id);
-  const old = await repo.getResult(sub, { benchmarkId: r.benchmarkId, date: day.parse(raw.originalDate), id: resultId });
-  if (!old) throw new Error("Result not found");
-  const bm = await checkResult(sub, r);
-  // The form sends the whole result, so cleared fields (notes, link) are dropped rather than kept.
-  await repo.replaceResult(sub, old, { ...r, id: resultId });
-  // An edited value or date can change the PB and its history on the leaderboards.
-  if (bm.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
-  await afterChange(sub);
+  return act((sub) => benchmarks.updateResult(sub, raw));
 }
-
 export async function deleteResultAction(benchmarkId: string, date: string, resultId: string) {
-  const { sub } = await requireUser();
-  await repo.deleteResult(sub, { benchmarkId: id.parse(benchmarkId), date: day.parse(date), id: id.parse(resultId) });
-  const bm = await repo.getBenchmark(sub, benchmarkId);
-  if (bm?.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
-  await afterChange(sub);
-}
-
-/** Workouts on one day, for the benchmark form's "Part of workout" picker. */
-export async function workoutsOnDayAction(date: string) {
-  const { sub } = await requireUser();
-  const d = day.parse(date);
-  return repo.listWorkouts(sub, d, d);
+  return act((sub) => benchmarks.deleteResult(sub, benchmarkId, date, resultId));
 }

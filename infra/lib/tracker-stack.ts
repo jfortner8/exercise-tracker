@@ -20,6 +20,8 @@ export class TrackerStack extends cdk.Stack {
       partitionKey: { name: "PK", type: dynamodb.AttributeType.STRING },
       sortKey: { name: "SK", type: dynamodb.AttributeType.STRING },
       billing: dynamodb.Billing.onDemand(),
+      // Rate-limit counters (PK "RL#…") carry an expiry so DynamoDB deletes them on its own.
+      timeToLiveAttribute: "expiresAt",
       // Leaderboards: one PB row per opted-in user per built-in benchmark,
       // queried by benchmark (lbKey = "LB#<catalogKey>") and sorted by score.
       globalSecondaryIndexes: [

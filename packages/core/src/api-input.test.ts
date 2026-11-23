@@ -27,3 +27,17 @@ describe("parseRange", () => {
     expect(parseRange("2026-01-01", "2026-12-31")).toHaveProperty("error");
   });
 });
+
+describe("rate limit helpers", () => {
+  it("puts times in the same window until it rolls over", async () => {
+    const { rateWindow } = await import("./api-input");
+    expect(rateWindow(60_000, 60)).toBe(60);
+    expect(rateWindow(119_999, 60)).toBe(60);
+    expect(rateWindow(120_000, 60)).toBe(120);
+  });
+  it("takes the first forwarded IP", async () => {
+    const { clientIp } = await import("./api-input");
+    expect(clientIp("203.0.113.7, 10.0.0.1")).toBe("203.0.113.7");
+    expect(clientIp(null)).toBe("unknown");
+  });
+});
