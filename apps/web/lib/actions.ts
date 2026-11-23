@@ -1,10 +1,14 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { SESSION_COOKIE } from "@/lib/auth/session";
 import { requireUser } from "@/lib/dal";
 import * as benchmarks from "@/lib/services/benchmarks";
 import * as days from "@/lib/services/days";
 import * as injuries from "@/lib/services/injuries";
+import { deleteAccount } from "@/lib/services/me";
 import * as profile from "@/lib/services/profile";
 import * as routines from "@/lib/services/routines";
 import * as workouts from "@/lib/services/workouts";
@@ -31,6 +35,14 @@ export async function syncTimeZoneAction(timeZone: string) {
 export async function saveProfileAction(raw: ProfileInput) {
   const { email } = await requireUser();
   return act((sub) => profile.saveProfile(sub, email, raw));
+}
+
+/** Deletes the account and everything in it (see deleteAccount), then signs out. */
+export async function deleteAccountAction() {
+  const { sub } = await requireUser();
+  await deleteAccount(sub);
+  (await cookies()).delete(SESSION_COOKIE);
+  redirect("/login");
 }
 
 // ---------- Routines ----------
