@@ -7,9 +7,10 @@ import type { Profile } from "@et/core/types";
 export async function ensureFriendCode(sub: string, profile: Profile): Promise<string> {
   if (profile.friendCode) return profile.friendCode;
   for (let i = 0; i < 5; i++) {
-    if (await repo.setFriendCode(sub, newCode())) return (await repo.getProfile(sub))?.friendCode ?? "";
-    // Taken, or another tab just made one: use theirs if so.
-    const now = await repo.getProfile(sub);
+    if (await repo.setFriendCode(sub, newCode())) return (await repo.getProfile(sub, true))?.friendCode ?? "";
+    // Taken, or another request just made one: use theirs if so. A consistent read, or a code
+    // written a moment ago can be missed and every retry fails.
+    const now = await repo.getProfile(sub, true);
     if (now?.friendCode) return now.friendCode;
   }
   throw new Error("Could not create a friend code");

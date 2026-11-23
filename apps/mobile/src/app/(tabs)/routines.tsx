@@ -1,6 +1,5 @@
-import { ComingSoon } from "@/screens/ComingSoon";
-import { findTab } from "@/screens/tabs";
+import { Routines } from "@/screens/optional/Routines";
 
 export default function Screen() {
-  return <ComingSoon tab={findTab("routines")!} />;
+  return <Routines />;
 }

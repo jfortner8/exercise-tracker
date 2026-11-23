@@ -120,8 +120,9 @@ export async function ensureProfile(sub: string, email: string, name?: string) {
   }
 }
 
-export async function getProfile(sub: string): Promise<Profile | null> {
-  const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: "PROFILE" } }));
+/** `consistent`: read the latest write (after losing a race to another request, say). */
+export async function getProfile(sub: string, consistent = false): Promise<Profile | null> {
+  const res = await db().send(new GetCommand({ TableName: T(), Key: { PK: pk(sub), SK: "PROFILE" }, ConsistentRead: consistent || undefined }));
   if (!res.Item) return null;
   const { leaderboard: _old, ...p } = strip<Profile & { leaderboard?: boolean }>(res.Item);
   void _old;

@@ -109,7 +109,7 @@ export async function resetFriendCode(sub: string) {
   for (let i = 0; i < 5; i++) {
     const code = newCode();
     if (await repo.setFriendCode(sub, code, current)) return code;
-    current = (await repo.getProfile(sub))?.friendCode;
+    current = (await repo.getProfile(sub, true))?.friendCode;
   }
   throw new ApiError(503, "Couldn't make a new code. Try again.");
 }
