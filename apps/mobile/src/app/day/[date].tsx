@@ -1,5 +1,5 @@
 import { format, parseISO } from "date-fns";
-import { Redirect, Stack, useLocalSearchParams } from "expo-router";
+import { Redirect, router, Stack, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Alert, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { workoutCategory } from "@et/core/activities";
@@ -56,15 +56,12 @@ export default function DaySheet() {
             {info.workouts.map((w) => (
               <WorkoutCard key={w.id} w={w} today={today} zone={profile.timeZone} clock={profile.clock} run={run} />
             ))}
+            {info.workouts.length === 0 && info.missed && <Body style={{ marginBottom: 8 }}>Nothing was planned or logged for this day.</Body>}
+            <Button title="+ Add workout" variant="secondary" onPress={() => router.push({ pathname: "/workout", params: { date } })} />
             {info.workouts.length === 0 && (
-              <>
-                {info.missed && <Body style={{ marginBottom: 8 }}>Nothing was planned or logged for this day.</Body>}
-                <Button title="Mark as rest day" variant="secondary" onPress={() => run(() => api(`/days/${date}/rest`, { method: "POST" }))} />
-              </>
+              <Button title="Mark as rest day" variant="secondary" onPress={() => run(() => api(`/days/${date}/rest`, { method: "POST" }))} />
             )}
-            <Body muted style={{ marginTop: 8, marginBottom: 12 }}>
-              Adding and editing workouts comes next; until then use the website.
-            </Body>
+            <View style={{ height: 14 }} />
 
             <DayLogCard key={JSON.stringify(info.log ?? {})} date={date} run={run} log={info.log} profile={profile} busy={write.isPending} />
           </>
@@ -158,6 +155,8 @@ function WorkoutCard({
   const cat = workoutCategory(w);
   const [skipping, setSkipping] = useState(false);
   const [reason, setReason] = useState("");
+  /** Opens the workout form on this workout, optionally starting on a status. */
+  const open = (s?: Workout["status"]) => router.push({ pathname: "/workout", params: { date: w.date, id: w.id, ...(s ? { status: s } : {}) } });
   const resolve = (s: "completed" | "missed" | "skipped", r?: string) =>
     run(() => api(`/workouts/${w.date}/${w.id}/resolve`, { body: { status: s, ...(r ? { reason: r } : {}) } }));
   return (
@@ -185,13 +184,20 @@ function WorkoutCard({
         ) : (
           <View style={{ marginTop: 6 }}>
             <Button title="✓ Done" onPress={() => resolve("completed")} />
+            <Button title="Done, with details…" variant="secondary" onPress={() => open("completed")} />
+            {status === "needs_review" && <Button title="Did something else…" variant="secondary" onPress={() => open("substituted")} />}
             <Button title="Skipped…" variant="secondary" onPress={() => setSkipping(true)} />
             {status === "needs_review" && <Button title="Missed" variant="danger" onPress={() => resolve("missed")} />}
           </View>
         ))}
-      <Pressable accessibilityRole="button" onPress={() => confirmDelete(w, run)}>
-        <Text style={{ color: t.danger, marginTop: 8 }}>Delete</Text>
-      </Pressable>
+      <View style={{ flexDirection: "row", gap: 18, marginTop: 10 }}>
+        <Pressable accessibilityRole="button" onPress={() => open()}>
+          <Text style={{ color: t.accentInk, fontWeight: "600" }}>Edit</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => confirmDelete(w, run)}>
+          <Text style={{ color: t.danger }}>Delete</Text>
+        </Pressable>
+      </View>
     </Card>
   );
 }

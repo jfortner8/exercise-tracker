@@ -2,47 +2,13 @@
 
 import { Plus, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { displayToKg, kgToDisplay } from "@et/core/domain";
 import { MAX_EXERCISES } from "@et/core/routines";
-import type { Exercise, Units } from "@et/core/types";
+import type { Units } from "@et/core/types";
+import { blankExercise, type ExerciseDraft } from "@et/core/workout-draft";
 import { Input } from "../ui";
 
-/** An exercise as typed: strings, weight in the user's unit. */
-export interface ExerciseDraft {
-  name: string;
-  sets: string;
-  reps: string;
-  weight: string;
-}
-
-export const blankExercise = (): ExerciseDraft => ({ name: "", sets: "", reps: "", weight: "" });
-
-export function toExerciseDrafts(list: Exercise[] | undefined, units: Units): ExerciseDraft[] {
-  return (list ?? []).map((e) => ({
-    name: e.name,
-    sets: e.sets ? String(e.sets) : "",
-    reps: e.reps ?? "",
-    weight: e.weightKg ? String(Math.round(kgToDisplay(e.weightKg, units) * 10) / 10) : "",
-  }));
-}
-
-/** Rows with a name, as Exercises; unreadable numbers are left out. */
-export function fromExerciseDrafts(drafts: ExerciseDraft[], units: Units): Exercise[] {
-  const n = (s: string) => (s.trim() && isFinite(Number(s)) && Number(s) > 0 ? Number(s) : undefined);
-  return drafts
-    .filter((d) => d.name.trim())
-    .map((d) => {
-      const sets = n(d.sets);
-      const weight = n(d.weight);
-      return {
-        name: d.name.trim(),
-        ...(sets ? { sets: Math.round(sets) } : {}),
-        ...(d.reps.trim() ? { reps: d.reps.trim() } : {}),
-        // Stored in kg to the gram, so 135 lb reads back as 135.
-        ...(weight ? { weightKg: Math.round(displayToKg(weight, units) * 1000) / 1000 } : {}),
-      };
-    });
-}
+// The draft helpers live in @et/core so the phone app reads and saves exercises the same way.
+export { blankExercise, fromExerciseDrafts, toExerciseDrafts, type ExerciseDraft } from "@et/core/workout-draft";
 
 /** The editable list of exercises: name on top, then sets · reps · weight · remove. */
 export function ExerciseRows({

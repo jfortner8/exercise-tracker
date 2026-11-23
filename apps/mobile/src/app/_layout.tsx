@@ -60,6 +60,7 @@ function Navigator() {
           name="day/[date]"
           options={{ headerShown: true, presentation: "formSheet", sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }}
         />
+        <Stack.Screen name="workout" options={{ headerShown: true, presentation: "modal" }} />
         <Stack.Screen name="(auth)" />
       </Stack>
     </>
