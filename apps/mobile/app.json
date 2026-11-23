@@ -48,6 +48,17 @@
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "eb7587e8-2940-46bb-b52c-d55981720e05"
+      }
+    },
+    "owner": "jfortner8"
   }
 }
