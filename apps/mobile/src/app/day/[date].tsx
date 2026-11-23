@@ -13,6 +13,7 @@ import { api } from "@/api/client";
 import { useMe } from "@/api/queries";
 import { useSession } from "@/auth/session";
 import { useDays } from "@/screens/calendar/Calendar";
+import { QuickDone } from "@/screens/calendar/QuickDone";
 import { useTheme } from "@/theme";
 import { Body, Button, Card, ErrorText, Screen } from "@/ui";
 
@@ -54,7 +55,7 @@ export default function DaySheet() {
 
             <Body style={{ fontWeight: "600", marginBottom: 8 }}>Workouts</Body>
             {info.workouts.map((w) => (
-              <WorkoutCard key={w.id} w={w} today={today} zone={profile.timeZone} clock={profile.clock} run={run} />
+              <WorkoutCard key={w.id} w={w} today={today} zone={profile.timeZone} clock={profile.clock} units={profile.units} run={run} />
             ))}
             {info.workouts.length === 0 && info.missed && <Body style={{ marginBottom: 8 }}>Nothing was planned or logged for this day.</Body>}
             <Button title="+ Add workout" variant="secondary" onPress={() => router.push({ pathname: "/workout", params: { date } })} />
@@ -142,18 +143,21 @@ function WorkoutCard({
   today,
   zone,
   clock,
+  units,
   run,
 }: {
   w: Workout;
   today: string;
   zone?: string;
   clock?: "12h" | "24h";
+  units: import("@et/core/types").Units;
   run: (f: () => Promise<unknown>) => void;
 }) {
   const t = useTheme();
   const status = today ? displayStatus(w, today) : w.status;
   const cat = workoutCategory(w);
   const [skipping, setSkipping] = useState(false);
+  const [quick, setQuick] = useState(false);
   const [reason, setReason] = useState("");
   /** Opens the workout form on this workout, optionally starting on a status. */
   const open = (s?: Workout["status"]) => router.push({ pathname: "/workout", params: { date: w.date, id: w.id, ...(s ? { status: s } : {}) } });
@@ -168,7 +172,8 @@ function WorkoutCard({
         {[startTimeLabel(w, zone, clock), STATUS[status] ?? status].filter(Boolean).join(" · ")}
       </Body>
       {w.reason ? <Body muted>↳ {w.reason}</Body> : null}
-      {(status === "planned" || status === "needs_review") &&
+      {quick && <QuickDone w={w} units={units} run={run} onMore={() => open("completed")} onClose={() => setQuick(false)} />}
+      {(status === "planned" || status === "needs_review") && !quick &&
         (skipping ? (
           <View style={{ marginTop: 8 }}>
             <TextInput
@@ -183,8 +188,7 @@ function WorkoutCard({
           </View>
         ) : (
           <View style={{ marginTop: 6 }}>
-            <Button title="✓ Done" onPress={() => resolve("completed")} />
-            <Button title="Done, with details…" variant="secondary" onPress={() => open("completed")} />
+            <Button title="✓ Done" onPress={() => setQuick(true)} />
             {status === "needs_review" && <Button title="Did something else…" variant="secondary" onPress={() => open("substituted")} />}
             <Button title="Skipped…" variant="secondary" onPress={() => setSkipping(true)} />
             {status === "needs_review" && <Button title="Missed" variant="danger" onPress={() => resolve("missed")} />}
