@@ -3,17 +3,21 @@ import { Redirect, router, Stack, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Alert, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { workoutCategory } from "@et/core/activities";
-import { displayStatus, displayToKg, kgToDisplay, weightUnit } from "@et/core/domain";
+import { displayStatus, displayToKg, formatResult, injuriesOn, kgToDisplay, weightUnit } from "@et/core/domain";
 import { activeGoals } from "@et/core/goals";
 import { habitCount, HABITS, profileHabits } from "@et/core/habits";
 import { startTimeLabel } from "@et/core/start-time";
-import type { Workout } from "@et/core/types";
+import type { BenchmarkDef, DayResult, Injury, Profile, Workout } from "@et/core/types";
 import { calendarDays, useCalendar, useCalendarWrite } from "@/api/calendar";
 import { api } from "@/api/client";
 import { useMe } from "@/api/queries";
 import { useSession } from "@/auth/session";
 import { useDays } from "@/screens/calendar/Calendar";
+import { setMoving } from "@/screens/calendar/moving";
 import { QuickDone } from "@/screens/calendar/QuickDone";
+import { ResultForm } from "@/screens/benchmarks/ResultForm";
+import { InjuryForm } from "@/screens/optional/Injuries";
+import { Chips } from "@/ui/form";
 import { useTheme } from "@/theme";
 import { Body, Button, Card, ErrorText, Screen } from "@/ui";
 
@@ -62,7 +66,11 @@ export default function DaySheet() {
             {info.workouts.length === 0 && (
               <Button title="Mark as rest day" variant="secondary" onPress={() => run(() => api(`/days/${date}/rest`, { method: "POST" }))} />
             )}
+            <InjuryLine date={date} today={today} injuries={injuriesOn(cal.data?.injuries ?? [], date, today)} />
             <View style={{ height: 14 }} />
+
+            <DayResults results={info.results} profile={profile} />
+            {(cal.data?.benchmarks.length ?? 0) > 0 && <RecordResult date={date} today={today} benchmarks={cal.data!.benchmarks} profile={profile} />}
 
             <DayLogCard key={JSON.stringify(info.log ?? {})} date={date} run={run} log={info.log} profile={profile} busy={write.isPending} />
           </>
@@ -198,6 +206,19 @@ function WorkoutCard({
         <Pressable accessibilityRole="button" onPress={() => open()}>
           <Text style={{ color: t.accentInk, fontWeight: "600" }}>Edit</Text>
         </Pressable>
+        {w.status === "planned" && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityHint="Then tap the day on the calendar it moves to"
+            onPress={() => {
+              setMoving(w);
+              if (router.canGoBack()) router.back();
+              else router.replace("/");
+            }}
+          >
+            <Text style={{ color: t.accentInk, fontWeight: "600" }}>Move…</Text>
+          </Pressable>
+        )}
         <Pressable accessibilityRole="button" onPress={() => confirmDelete(w, run)}>
           <Text style={{ color: t.danger }}>Delete</Text>
         </Pressable>
@@ -266,6 +287,65 @@ function DayLogCard({
           )
         }
       />
+    </Card>
+  );
+}
+
+/** Injuries this day falls in, and logging a new one from here (where you notice it). */
+function InjuryLine({ date, today, injuries }: { date: string; today: string; injuries: Pick<Injury, "id" | "name" | "status">[] }) {
+  const t = useTheme();
+  const [logging, setLogging] = useState(false);
+  return (
+    <View style={{ marginTop: 8 }}>
+      {injuries.map((i) => (
+        <Text key={i.id} style={{ color: t.danger, fontSize: 14, marginBottom: 4 }}>
+          🩹 {i.name} · <Text style={{ textTransform: "capitalize" }}>{i.status}</Text>
+        </Text>
+      ))}
+      {logging ? (
+        <InjuryForm today={today} startDate={date} onClose={() => setLogging(false)} />
+      ) : (
+        <Button title={injuries.length ? "Log another injury" : "Hurt? Log an injury"} variant="link" onPress={() => setLogging(true)} />
+      )}
+    </View>
+  );
+}
+
+/** This day's benchmark results; PBs get a star. Tapping one opens its benchmark. */
+function DayResults({ results, profile }: { results: DayResult[]; profile: Profile }) {
+  const t = useTheme();
+  if (!results.length) return null;
+  return (
+    <Card>
+      <Body style={{ fontWeight: "600", marginBottom: 6 }}>Benchmarks</Body>
+      {results.map((r) => (
+        <Pressable key={r.id} accessibilityRole="button" onPress={() => router.push({ pathname: "/benchmark/[id]", params: { id: r.benchmarkId } })} style={{ paddingVertical: 4 }}>
+          <Text style={{ color: t.text, fontSize: 15 }}>
+            <Text style={{ color: r.isPb ? t.pb : t.muted }}>★ </Text>
+            <Text style={{ fontWeight: "600" }}>{r.benchmarkName}</Text> {formatResult(r, r, profile.units)}
+            {r.isPb ? <Text style={{ color: t.pb, fontWeight: "600" }}>  New PB</Text> : null}
+          </Text>
+        </Pressable>
+      ))}
+    </Card>
+  );
+}
+
+/** Record a benchmark result on this day without leaving the sheet. */
+function RecordResult({ date, today, benchmarks, profile }: { date: string; today: string; benchmarks: BenchmarkDef[]; profile: Profile }) {
+  const [id, setId] = useState<string | null>(null);
+  const def = benchmarks.find((b) => b.id === id);
+  if (id == null) return <Button title="+ Record a benchmark result" variant="secondary" onPress={() => setId("")} />;
+  return (
+    <Card>
+      <Chips
+        label="Benchmark"
+        options={[...benchmarks].sort((a, b) => a.name.localeCompare(b.name)).map((b) => ({ value: b.id, label: b.name }))}
+        value={id}
+        onChange={(v) => setId(v || "")}
+      />
+      {def && <ResultForm key={def.id} def={def} units={profile.units} today={today} date={date} onDone={() => setId(null)} />}
+      <Button title="Cancel" variant="link" onPress={() => setId(null)} />
     </Card>
   );
 }

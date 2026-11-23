@@ -1,11 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { addDays, format, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { Redirect, router, Stack, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 import { activityKey, activityMeta, applyActivity, autoTitle } from "@et/core/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@et/core/dance";
-import { repeatDates, START_TIME_RE, ymd } from "@et/core/domain";
+import { formatStartTime, repeatDates, START_TIME_RE } from "@et/core/domain";
+import { startTimeIn, zoneAbbr, zoneDiffers, zonedTimeToUtc } from "@et/core/start-time";
 import { currentInjuries } from "@et/core/injuries";
 import { findRoutineByName, sameExercises } from "@et/core/routines";
 import type { RepeatInput, WorkoutInput } from "@et/core/schemas";
@@ -19,7 +20,7 @@ import { useMe } from "@/api/queries";
 import { useSession } from "@/auth/session";
 import { DetailsFields } from "@/screens/workout/DetailsFields";
 import { Body, Button, ErrorText, Field, Screen } from "@/ui";
-import { Chips, MultiChips, Row, SectionTitle, SmallField, SwitchRow } from "@/ui/form";
+import { Chips, DateField, MultiChips, Row, SectionTitle, SmallField, SwitchRow } from "@/ui/form";
 
 const num = (s: string) => (s.trim() === "" || isNaN(Number(s)) ? undefined : Number(s));
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -93,6 +94,8 @@ function WorkoutForm({
   const [title, setTitle] = useState(workout?.title ?? "");
   const [location, setLocation] = useState(workout?.location ?? "");
   const [startTime, setStartTime] = useState(workout?.startTime ?? "");
+  // The zone the start time was entered in; typing a new time means it's in the phone's zone.
+  const [startZone, setStartZone] = useState(workout?.startZone);
   const [day, setDay] = useState(workout?.date ?? date);
   const [status, setStatus] = useState<Workout["status"]>(presetStatus ?? workout?.status ?? statusForDay(date, today));
   const [statusChosen, setStatusChosen] = useState(!!workout || !!presetStatus);
@@ -161,8 +164,7 @@ function WorkoutForm({
     setSaveRoutine(false);
   }
 
-  function moveDay(n: number) {
-    const next = ymd(addDays(parseISO(day), n));
+  function changeDay(next: string) {
     setDay(next);
     if (!statusChosen) setStatus(statusForDay(next, today));
   }
@@ -186,7 +188,7 @@ function WorkoutForm({
       date: day,
       startTime: startTime || undefined,
       // A time keeps the zone it was entered in; a new one is in the phone's zone.
-      startZone: startTime ? (workout?.startTime === startTime && workout.startZone ? workout.startZone : deviceTimeZone()) : undefined,
+      startZone: startTime ? (startZone ?? deviceTimeZone()) : undefined,
       type,
       title: title.trim() || autoName,
       location: location.trim() || undefined,
@@ -246,16 +248,25 @@ function WorkoutForm({
       <Field label="Title" value={title} onChangeText={setTitle} placeholder={autoName} />
       <Field label="Location" value={location} onChangeText={setLocation} placeholder={type === "swim" ? "YMCA pool, open water…" : "Park, gym, treadmill…"} />
 
-      <Body style={{ fontWeight: "600", marginBottom: 6 }}>Date</Body>
-      <Row>
-        <Button title="‹" variant="secondary" onPress={() => moveDay(-1)} />
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <Body style={{ fontWeight: "600" }}>{format(parseISO(day), "EEE, MMM d, yyyy")}</Body>
-        </View>
-        <Button title="›" variant="secondary" onPress={() => moveDay(1)} />
-      </Row>
-      <View style={{ height: 12 }} />
-      <SmallField label="Start time (optional, 24-hour)" value={startTime} onChangeText={setStartTime} placeholder="07:30" keyboardType="numbers-and-punctuation" />
+      <DateField label="Date" value={day} onChange={changeDay} />
+      <SmallField
+        label="Start time (optional, 24-hour)"
+        value={startTime}
+        onChangeText={(v) => {
+          setStartTime(v);
+          setStartZone(deviceTimeZone());
+        }}
+        placeholder="07:30"
+        keyboardType="numbers-and-punctuation"
+      />
+      <StartZoneHint
+        timed={{ date: day, startTime, startZone }}
+        clock={profile.clock}
+        onSwitch={(time) => {
+          setStartTime(time);
+          setStartZone(deviceTimeZone());
+        }}
+      />
 
       <Chips
         label="Status"
@@ -356,5 +367,30 @@ function WorkoutForm({
       <Button title={workout ? "Save changes" : canRepeat && repeating ? "Add workouts" : "Add workout"} onPress={() => void save()} loading={busy} />
       <Button title="Cancel" variant="link" onPress={close} />
     </Screen>
+  );
+}
+
+/**
+ * Under the start time when it was entered in another zone: says which zone it's in, and offers
+ * the same moment where the phone is now. As on the website.
+ */
+function StartZoneHint({
+  timed,
+  clock,
+  onSwitch,
+}: {
+  timed: Pick<Workout, "date" | "startTime" | "startZone">;
+  clock?: "12h" | "24h";
+  onSwitch: (time: string) => void;
+}) {
+  const zone = deviceTimeZone();
+  if (!START_TIME_RE.test(timed.startTime ?? "") || !zoneDiffers(timed, zone)) return null;
+  const at = zonedTimeToUtc(timed.date, timed.startTime, timed.startZone);
+  const here = startTimeIn(timed, zone);
+  return (
+    <View style={{ marginTop: -6, marginBottom: 12 }}>
+      <Body muted style={{ fontSize: 13 }}>This start time is in {zoneAbbr(timed.startZone, at)}.</Body>
+      {here ? <Button title={`Change to ${formatStartTime(here, clock)} ${zoneAbbr(zone, at)}`} variant="link" onPress={() => onSwitch(here)} /> : null}
+    </View>
   );
 }

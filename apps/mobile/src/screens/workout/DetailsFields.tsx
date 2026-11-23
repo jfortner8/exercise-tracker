@@ -94,7 +94,7 @@ export function DetailsFields({
 }
 
 /** The editable exercises: name, then sets · reps · weight, and remove. */
-function ExerciseList({ value, onChange, units }: { value: ExerciseDraft[]; onChange: (v: ExerciseDraft[]) => void; units: Units }) {
+export function ExerciseList({ value, onChange, units }: { value: ExerciseDraft[]; onChange: (v: ExerciseDraft[]) => void; units: Units }) {
   const t = useTheme();
   const set = (i: number, k: keyof ExerciseDraft) => (v: string) => onChange(value.map((e, j) => (j === i ? { ...e, [k]: v } : e)));
   return (

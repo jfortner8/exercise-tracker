@@ -73,6 +73,8 @@ export function CalendarGrid({
   today,
   startDate,
   onOpen,
+  onLongPress,
+  movingFrom,
 }: {
   view: CalendarView;
   days: string[];
@@ -82,6 +84,10 @@ export function CalendarGrid({
   today: string;
   startDate: string | null;
   onOpen: (date: string) => void;
+  /** Long press: start moving that day's planned workout. */
+  onLongPress?: (date: string) => void;
+  /** The day a workout is being moved from: it's outlined, and every tap picks where it goes. */
+  movingFrom?: string;
 }) {
   const t = useTheme();
   const weeks = chunkWeeks(days);
@@ -89,7 +95,18 @@ export function CalendarGrid({
     return (
       <View style={[styles.frame, { borderColor: t.border, backgroundColor: t.surface }]}>
         {days.map((d, i) => (
-          <WeekRow key={d} info={byDay.get(d)} date={d} first={i === 0} profile={profile} today={today} startDate={startDate} onPress={() => onOpen(d)} />
+          <WeekRow
+            key={d}
+            info={byDay.get(d)}
+            date={d}
+            first={i === 0}
+            profile={profile}
+            today={today}
+            startDate={startDate}
+            onPress={() => onOpen(d)}
+            onLongPress={onLongPress && (() => onLongPress(d))}
+            outlined={movingFrom === d}
+          />
         ))}
       </View>
     );
@@ -116,6 +133,8 @@ export function CalendarGrid({
               today={today}
               startDate={startDate}
               onPress={() => onOpen(d)}
+              onLongPress={onLongPress && (() => onLongPress(d))}
+              outlined={movingFrom === d}
             />
           ))}
         </View>
@@ -146,6 +165,8 @@ function DayTile({
   today,
   startDate,
   onPress,
+  onLongPress,
+  outlined,
 }: {
   date: string;
   info?: DayInfo;
@@ -155,6 +176,8 @@ function DayTile({
   today: string;
   startDate: string | null;
   onPress: () => void;
+  onLongPress?: () => void;
+  outlined?: boolean;
 }) {
   const t = useTheme();
   const workouts = info?.workouts ?? [];
@@ -164,10 +187,13 @@ function DayTile({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
       style={({ pressed }) => [
         styles.tile,
         { borderColor: t.border, backgroundColor: outside ? t.surface2 : t.surface, opacity: pressed ? 0.7 : 1 },
         !last && { borderRightWidth: StyleSheet.hairlineWidth },
+        outlined && { borderWidth: 2, borderColor: t.accent },
       ]}
     >
       {info?.injured && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: t.injury }]} />}
@@ -210,6 +236,8 @@ function WeekRow({
   today,
   startDate,
   onPress,
+  onLongPress,
+  outlined,
 }: {
   date: string;
   info?: DayInfo;
@@ -218,6 +246,8 @@ function WeekRow({
   today: string;
   startDate: string | null;
   onPress: () => void;
+  onLongPress?: () => void;
+  outlined?: boolean;
 }) {
   const t = useTheme();
   const workouts = info?.workouts ?? [];
@@ -225,7 +255,13 @@ function WeekRow({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [!first && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: t.border }, { opacity: pressed ? 0.7 : 1 }]}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      style={({ pressed }) => [
+        !first && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: t.border },
+        { opacity: pressed ? 0.7 : 1 },
+        outlined && { borderWidth: 2, borderColor: t.accent },
+      ]}
     >
       {info?.injured && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: t.injury }]} />}
       <View style={styles.weekRow}>

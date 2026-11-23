@@ -1,6 +1,5 @@
-import { ComingSoon } from "@/screens/ComingSoon";
-import { findTab } from "@/screens/tabs";
+import { Weight } from "@/screens/optional/Weight";
 
 export default function Screen() {
-  return <ComingSoon tab={findTab("weight")!} />;
+  return <Weight />;
 }

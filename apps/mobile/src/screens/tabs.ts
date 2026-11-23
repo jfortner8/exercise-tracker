@@ -39,4 +39,3 @@ export const OPTIONAL_TABS: TabDef[] = [
   { name: "injuries", label: "Injuries", sf: { default: "bandage", selected: "bandage.fill" }, md: "healing", flag: "showInjuries", web: "/injuries" },
 ];
 
-export const findTab = (name: string) => [...MAIN_TABS, SETTINGS_TAB, ...OPTIONAL_TABS].find((t) => t.name === name);

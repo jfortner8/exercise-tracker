@@ -100,7 +100,7 @@ export function Button({
   );
 }
 
-export function Field({ label, error, ...input }: TextInputProps & { label: string; error?: string }) {
+export function Field({ label, error, style, ...input }: TextInputProps & { label: string; error?: string }) {
   const t = useTheme();
   return (
     <View style={{ marginBottom: 14 }}>
@@ -108,7 +108,7 @@ export function Field({ label, error, ...input }: TextInputProps & { label: stri
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={t.muted}
-        style={[styles.input, { color: t.text, backgroundColor: t.surface, borderColor: error ? t.danger : t.border }]}
+        style={[styles.input, { color: t.text, backgroundColor: t.surface, borderColor: error ? t.danger : t.border }, style]}
         {...input}
       />
       {error ? <Text style={[styles.small, { color: t.danger, marginTop: 4 }]}>{error}</Text> : null}

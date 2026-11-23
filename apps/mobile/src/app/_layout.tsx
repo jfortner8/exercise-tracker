@@ -10,8 +10,10 @@ import { ApiError } from "@/api/client";
 import { cacheStorage } from "@/api/storage";
 import { SessionProvider, useSession } from "@/auth/session";
 import { useTheme } from "@/theme";
+import { restoreTheme } from "@/theme-pref";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+void restoreTheme();
 
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 
@@ -61,6 +63,8 @@ function Navigator() {
           options={{ headerShown: true, presentation: "formSheet", sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }}
         />
         <Stack.Screen name="workout" options={{ headerShown: true, presentation: "modal" }} />
+        <Stack.Screen name="club/[id]" options={{ headerShown: true, headerBackTitle: "Friends" }} />
+        <Stack.Screen name="benchmark/[id]" options={{ headerShown: true, headerBackTitle: "PBs" }} />
         <Stack.Screen name="(auth)" />
       </Stack>
     </>
