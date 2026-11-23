@@ -3,9 +3,11 @@
 import { refresh } from "next/cache";
 import { ulid } from "ulid";
 import { clubName, id, joinCode } from "@et/core/schemas";
+import { ApiError } from "@/lib/api-error";
 import { requireUser } from "@/lib/dal";
+import { leaveClub } from "@/lib/services/social";
 import * as repo from "@/lib/db/repo";
-import { CODE_FAILURES_PER_DAY, CODE_LENGTH, newCode, nextAdmin, normalizeCode } from "@et/core/social";
+import { CODE_FAILURES_PER_DAY, CODE_LENGTH, newCode, normalizeCode } from "@et/core/social";
 import type { Club } from "@et/core/types";
 
 /*
@@ -99,27 +101,21 @@ export async function createClubAction(rawName: string): Promise<SocialResult> {
 /** Leaving as admin passes admin to whoever joined first; the last one out deletes the club. */
 export async function leaveClubAction(clubId: string): Promise<SocialResult> {
   const { sub } = await me();
-  const club = await repo.getClub(id.parse(clubId));
-  if (!club) return { error: "That club no longer exists." };
-  const members = await repo.listClubMembers(club.id);
-  if (!members.some((m) => m.sub === sub)) return { error: "You're not in this club." };
-
-  const heir = nextAdmin(members, sub);
-  if (!heir) {
-    await repo.deleteClub(club);
-  } else if (club.adminSub === sub) {
-    if (!(await repo.removeClubMember(club.id, sub, heir))) return { error: "The club changed while you were leaving. Try again." };
-  } else {
-    await repo.removeClubMember(club.id, sub);
+  let left;
+  try {
+    left = await leaveClub(sub, clubId);
+  } catch (e) {
+    if (e instanceof ApiError) return { error: e.message };
+    throw e;
   }
   refresh();
-  const heirName = members.find((m) => m.sub === heir)?.displayName;
+  const { club, deleted, wasAdmin, heirName } = left;
   return {
     ok: true,
     href: "/friends",
-    message: !heir
+    message: deleted
       ? `You left ${club.name}. You were the last member, so it was deleted.`
-      : club.adminSub === sub
+      : wasAdmin
         ? `You left ${club.name}. ${heirName} is the admin now.`
         : `You left ${club.name}.`,
   };

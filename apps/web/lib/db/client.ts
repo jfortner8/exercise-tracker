@@ -11,12 +11,14 @@ let doc: DynamoDBDocumentClient | null = null;
  * On Vercel: exchange the deployment's OIDC token for a short-lived role session.
  * Locally: use the normal AWS CLI credential chain.
  */
+export function awsCredentials() {
+  const roleArn = env.awsRoleArn;
+  return process.env.VERCEL && roleArn ? awsCredentialsProvider({ roleArn }) : fromNodeProviderChain();
+}
+
 export function db() {
   if (doc) return doc;
-  const roleArn = env.awsRoleArn;
-  const credentials =
-    process.env.VERCEL && roleArn ? awsCredentialsProvider({ roleArn }) : fromNodeProviderChain();
-  const raw = new DynamoDBClient({ region: env.region, credentials });
+  const raw = new DynamoDBClient({ region: env.region, credentials: awsCredentials() });
   doc = DynamoDBDocumentClient.from(raw, {
     marshallOptions: { removeUndefinedValues: true, convertClassInstanceToMap: false },
   });

@@ -22,6 +22,8 @@ export interface ApiContext<P> {
   req: NextRequest;
   sub: string;
   email: string;
+  /** The name given at sign-up, if any. */
+  name?: string;
   params: P;
   /** The parsed JSON body (unvalidated: services validate with @et/core/schemas). */
   body: unknown;
@@ -61,6 +63,7 @@ export function api<P = Record<string, string>>(fn: (ctx: ApiContext<P>) => Prom
         req,
         sub: user.sub,
         email: user.email,
+        name: user.name,
         params: await route.params,
         body,
         today: async () =>

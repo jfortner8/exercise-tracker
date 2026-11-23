@@ -782,6 +782,32 @@ export async function updateSocialName(sub: string, displayName: string) {
   await Promise.all([...friends.map((f) => rename(friendKey(f.sub, sub))), ...clubs.map((c) => rename(memberKey(c.clubId, sub)))]);
 }
 
+// ---------- Account ----------
+/** Deletes every item under the user's own key: profile, workouts, days, results, friends, club list, board rows. */
+export async function deleteUserItems(sub: string): Promise<number> {
+  const keys: { PK: string; SK: string }[] = [];
+  let ExclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const res = await db().send(
+      new QueryCommand({
+        TableName: T(),
+        KeyConditionExpression: "PK = :pk",
+        ExpressionAttributeValues: { ":pk": pk(sub) },
+        ProjectionExpression: "PK, SK",
+        ExclusiveStartKey,
+      }),
+    );
+    for (const it of res.Items ?? []) keys.push({ PK: it.PK as string, SK: it.SK as string });
+    ExclusiveStartKey = res.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  await deleteAll(keys);
+  return keys.length;
+}
+
+/** Retires a friend code or a calendar-feed link outright (account deletion). */
+export const deleteFriendCode = (code: string) => db().send(new DeleteCommand({ TableName: T(), Key: codeKey(code) }));
+export const deleteCalendarLink = (token: string) => db().send(new DeleteCommand({ TableName: T(), Key: calKey(token) }));
+
 async function putAll(items: Record<string, unknown>[]) {
   for (let i = 0; i < items.length; i += 25) {
     await db().send(new BatchWriteCommand({ RequestItems: { [T()]: items.slice(i, i + 25).map((Item) => ({ PutRequest: { Item } })) } }));

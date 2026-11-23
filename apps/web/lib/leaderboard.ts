@@ -1,11 +1,23 @@
 import "server-only";
-import { updateTag } from "next/cache";
+import { revalidateTag, updateTag } from "next/cache";
 import { BENCHMARK_CATALOG } from "@et/core/benchmarks/catalog";
 import * as repo from "@/lib/db/repo";
 import { addDays, format, parseISO } from "date-fns";
 import { markRunningPBs, personalBest, resultScore, todayIn } from "@et/core/domain";
 import { CONSISTENCY_DAYS, consistencyDays, seasonBests } from "@et/core/leaderboard-views";
 import type { ConsistencyRow, LeaderboardEntry } from "@et/core/types";
+
+/**
+ * Drops the cached boards. A server action can use updateTag (the user sees their own change at
+ * once); Next allows it only there, so an /api/v1 route expires the tag with revalidateTag instead.
+ */
+export function expireBoards() {
+  try {
+    updateTag(repo.LEADERBOARD_TAG);
+  } catch {
+    revalidateTag(repo.LEADERBOARD_TAG, { expire: 0 });
+  }
+}
 
 /**
  * Bring this user's leaderboard rows in line with their results and opt-in setting.
@@ -71,7 +83,7 @@ export async function syncLeaderboard(sub: string, onlyKey?: string) {
     ...toPut.map((e) => repo.putLeaderboardEntry(e)),
     ...toDelete.map((k) => repo.deleteLeaderboardEntry(sub, k)),
   ]);
-  if (toPut.length || toDelete.length) updateTag(repo.LEADERBOARD_TAG);
+  if (toPut.length || toDelete.length) expireBoards();
 }
 
 /**

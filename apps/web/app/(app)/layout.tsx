@@ -4,8 +4,7 @@ import { BottomNav, Sidebar } from "@/components/nav";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { ZoneSync } from "@/components/zone-sync";
 import { requireProfile, requireToday } from "@/lib/dal";
-import { listInjuries } from "@/lib/db/repo";
-import { showInjuriesTab } from "@et/core/injuries";
+import { navFlags } from "@/lib/services/me";
 
 async function UserFooter() {
   const { profile, user } = await requireProfile();
@@ -46,12 +45,7 @@ async function Zone() {
 /** Nav with the optional tabs: Sports (after a completed sport workout) and Weight (when tracking it). */
 async function Nav({ part }: { part: "sidebar" | "bottom" }) {
   const { user, profile } = await requireProfile();
-  const flags = {
-    showSports: profile.hasSports === true,
-    showWeight: profile.trackWeight,
-    showRoutines: profile.hasRoutines === true,
-    showInjuries: showInjuriesTab(await listInjuries(user.sub), await requireToday()),
-  };
+  const flags = await navFlags(user.sub, profile, await requireToday());
   return part === "sidebar" ? <Sidebar footer={sidebarFooter} {...flags} /> : <BottomNav {...flags} />;
 }
 
