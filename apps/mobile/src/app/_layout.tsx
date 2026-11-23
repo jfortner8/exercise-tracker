@@ -5,15 +5,18 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ApiError } from "@/api/client";
 import { cacheStorage } from "@/api/storage";
 import { SessionProvider, useSession } from "@/auth/session";
 import { useTheme } from "@/theme";
 import { restoreTheme } from "@/theme-pref";
+import { configureNotifications } from "@/reminders";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 void restoreTheme();
+if (Platform.OS !== "web") configureNotifications();
 
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 

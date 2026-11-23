@@ -12,6 +12,8 @@ import { useSession } from "@/auth/session";
 import { API_URL } from "@/config";
 import { CalendarFeed } from "@/screens/settings/CalendarFeed";
 import { GoalsEditor } from "@/screens/settings/GoalsEditor";
+import { Reminders } from "@/screens/settings/Reminders";
+import { loadReminders, saveReminders } from "@/reminders";
 import { OPTIONAL_TABS } from "@/screens/tabs";
 import { useTheme } from "@/theme";
 import { useThemePref } from "@/theme-pref";
@@ -69,6 +71,9 @@ export default function Settings() {
           timeZone: deviceTimeZone(),
         },
       });
+      // Turning weight tracking off (or on) drops (or restores) the weigh-in reminder.
+      if (r.profile.trackWeight !== me.data?.profile.trackWeight && Platform.OS !== "web")
+        void loadReminders().then((rp) => saveReminders(rp, r.profile.trackWeight)).catch(() => {});
       qc.setQueryData(["me"], r);
       setDraft(null);
       setSaved(true);
@@ -221,6 +226,7 @@ export default function Settings() {
           <Button title={saved ? "Saved" : "Save settings"} onPress={() => void save()} loading={saving} disabled={!p.displayName.trim()} />
           <View style={{ height: 20 }} />
 
+          <Reminders trackWeight={me.data?.profile.trackWeight ?? false} clock={me.data?.profile.clock} />
           <CalendarFeed />
         </>
       )}

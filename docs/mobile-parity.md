@@ -33,14 +33,11 @@ The phone app (`apps/mobile`, Expo) does everything the website does, sold as a 
 - [x] App: Quick Done in the day sheet (time and distance from the plan, pace, warm-up or cool-down for extra time)
 - [x] App, without native code: Ranks (every board and view), Friends and clubs (share sheet, join, club page with admin actions), the full Settings form (units, clock, habits, goals editor, sharing, theme, calendar feed), Sports, Weight (stats and weigh-ins), Routines editor, Injuries, PBs (list, suggestions, custom benchmarks, detail with results, splits helper, workout link), calendar extras (long-press a day to move its planned workout, or Move… in the day sheet; the swap question; copy week from the week view; results, injuries and Record a result in the day sheet; the start-time zone hint)
 
+- [x] App, native: the phone's date and time pickers (`src/ui/date-field.tsx`; the web build keeps a stepper in `date-field.web.tsx`), charts on `react-native-svg` (PB history, Weight trend), haptics (moving a workout, ticking a goal, saving a result, copying), local reminders (a daily "log today's workout?" and a weekly weigh-in, in Settings; scheduled on the phone), and Copy for codes and the calendar link
+
 ### Next, in order
-1. [ ] **One native PR, then one TestFlight build.** Every native package together, since each changes the fingerprint and stops over-the-air updates reaching the installed build:
-   - `@react-native-community/datetimepicker`: the shared `DateField` (`src/ui/form.tsx`) and the start time
-   - a chart library: the PB history chart (small view-based bars until then) and the Weight trend (stats and a list until then)
-   - `expo-haptics`: on a move, a PB, a tick
-   - `expo-notifications`: local reminders (a daily "log today's workout?", a weekly weigh-in)
-   - `expo-clipboard`: Copy next to Share for codes and the calendar link
-2. [ ] The user tries that build on a real phone; fix whatever feels wrong
+1. [ ] **A new TestFlight build** (Actions → EAS → Run workflow → `ios-testflight`) once the native PR is merged. The native packages changed the fingerprint, so the installed build stops getting updates until then.
+2. [ ] The user tries that build on a real phone; fix whatever feels wrong (JavaScript fixes go out as over-the-air updates)
 3. [ ] Offline: queued writes that sync when back online (TanStack Query's paused mutations), with a "will sync" badge
 4. [ ] Release: store icon (1024 px), screenshots, privacy labels; App Store paid app; Google Play ($25 fee; new personal accounts need a 12-tester, 14-day closed test)
 

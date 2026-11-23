@@ -9,7 +9,7 @@ import { api } from "@/api/client";
 import { useBenchmarks, useMe } from "@/api/queries";
 import { useSession } from "@/auth/session";
 import { ResultForm } from "@/screens/benchmarks/ResultForm";
-import { Sparkline } from "@/screens/benchmarks/Sparkline";
+import { LineChart } from "@/ui/LineChart";
 import { useTheme } from "@/theme";
 import { Body, Button, Card, ErrorText, Screen } from "@/ui";
 import { ask } from "@/ui/confirm";
@@ -58,7 +58,17 @@ export default function BenchmarkScreen() {
                           Personal best · {format(parseISO(pb.date), "MMMM d, yyyy")}
                           {def.metricKind === "weight_reps" ? ` · ${formatResult(def, { value: resultScore(def, pb), reps: 1 }, units)} e1RM` : ""}
                         </Body>
-                        <Sparkline def={def} results={results} height={56} />
+                        <LineChart
+                          line={marked.map((r) => ({ date: r.date, y: r.score, mark: r.isPb }))}
+                          invert={def.direction === "lower"}
+                          formatY={(v) =>
+                            def.metricKind === "weight_reps"
+                              ? formatResult(def, { value: v, reps: 1 }, units)
+                              : formatResult(def, { value: def.metricKind === "time" ? Math.round(v) : v }, units)
+                          }
+                          label={`${def.name} history: ${marked.map((r) => formatResult(def, r, units)).join(", ")}`}
+                        />
+                        {marked.length >= 2 ? <Body muted style={{ fontSize: 12, marginTop: 4 }}>Filled dots mark a new PB. Up is always better.</Body> : null}
                       </>
                     ) : (
                       <Body muted>Record your first result to set a baseline.</Body>

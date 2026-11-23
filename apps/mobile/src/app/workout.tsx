@@ -20,7 +20,7 @@ import { useMe } from "@/api/queries";
 import { useSession } from "@/auth/session";
 import { DetailsFields } from "@/screens/workout/DetailsFields";
 import { Body, Button, ErrorText, Field, Screen } from "@/ui";
-import { Chips, DateField, MultiChips, Row, SectionTitle, SmallField, SwitchRow } from "@/ui/form";
+import { Chips, DateField, MultiChips, Row, SectionTitle, SmallField, SwitchRow, TimeField } from "@/ui/form";
 
 const num = (s: string) => (s.trim() === "" || isNaN(Number(s)) ? undefined : Number(s));
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -249,15 +249,14 @@ function WorkoutForm({
       <Field label="Location" value={location} onChangeText={setLocation} placeholder={type === "swim" ? "YMCA pool, open water…" : "Park, gym, treadmill…"} />
 
       <DateField label="Date" value={day} onChange={changeDay} />
-      <SmallField
-        label="Start time (optional, 24-hour)"
+      <TimeField
+        label="Start time (optional)"
         value={startTime}
-        onChangeText={(v) => {
+        clock={profile.clock}
+        onChange={(v) => {
           setStartTime(v);
           setStartZone(deviceTimeZone());
         }}
-        placeholder="07:30"
-        keyboardType="numbers-and-punctuation"
       />
       <StartZoneHint
         timed={{ date: day, startTime, startZone }}

@@ -11,6 +11,7 @@ import { setMoving, useMoving } from "@/screens/calendar/moving";
 import { useTheme } from "@/theme";
 import { Body, Button, Card, ErrorText, Screen } from "@/ui";
 import { choose } from "@/ui/confirm";
+import { haptic } from "@/ui/haptics";
 import { DateField, SectionTitle, SmallField } from "@/ui/form";
 import { Notice } from "@/ui/list";
 
@@ -35,7 +36,10 @@ export default function CalendarScreen() {
   /** Long press: one planned workout starts moving; with several, the day opens to pick one. */
   function startMove(d: string) {
     const ws = planned(d);
-    if (ws.length === 1) setMoving(ws[0]);
+    if (ws.length === 1) {
+      haptic.pickUp();
+      setMoving(ws[0]);
+    }
     else if (ws.length > 1) router.push({ pathname: "/day/[date]", params: { date: d } });
   }
 
@@ -56,6 +60,7 @@ export default function CalendarScreen() {
       swap = c === 0;
     }
     setMoving(null);
+    haptic.success();
     write.mutate(() => api(`/workouts/${w.date}/${w.id}/${swap ? "swap" : "move"}`, { body: { toDate: d } }));
   }
 
