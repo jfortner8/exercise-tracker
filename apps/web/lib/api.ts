@@ -2,9 +2,11 @@ import "server-only";
 import { unstable_rethrow } from "next/navigation";
 import { NextResponse, type NextRequest } from "next/server";
 import { ZodError } from "zod";
+import { clientIp } from "@et/core/api-input";
 import { todayIn, userZone } from "@et/core/domain";
 import { ApiError } from "@/lib/api-error";
 import { userFromRequest } from "@/lib/api-auth";
+import { limitAuthIp } from "@/lib/auth/limits";
 import { getProfile } from "@/lib/db/repo";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -72,6 +74,26 @@ export function api<P = Record<string, string>>(fn: (ctx: ApiContext<P>) => Prom
       return json(result ?? { ok: true });
     } catch (err) {
       // Next's own control-flow errors (e.g. "this route is dynamic") must reach Next, not become a 500.
+      unstable_rethrow(err);
+      return errorResponse(err);
+    }
+  };
+}
+
+/**
+ * Wraps a route anyone may call (sign-in, sign-up, passwords): the per-IP auth limit first, then the
+ * JSON body, then `fn`, with errors as JSON like api(). `fn` adds the per-email limit once it has
+ * the address.
+ */
+export function publicApi(fn: (ctx: { req: NextRequest; body: unknown }) => Promise<unknown>) {
+  return async (req: NextRequest) => {
+    try {
+      await limitAuthIp(clientIp(req.headers.get("x-forwarded-for")));
+      const body = await req.json().catch(() => {
+        throw new ApiError(400, "The request body isn't valid JSON.");
+      });
+      return json((await fn({ req, body })) ?? { ok: true });
+    } catch (err) {
       unstable_rethrow(err);
       return errorResponse(err);
     }

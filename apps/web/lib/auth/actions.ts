@@ -1,7 +1,10 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { z } from "zod";
+import { clientIp } from "@et/core/api-input";
+import { ApiError } from "@/lib/api-error";
+import { limitAuthEmail, limitAuthIp } from "./limits";
 import * as cognito from "./cognito";
 import { authErrorMessage } from "./errors";
 import { passwordLogin } from "./login";
@@ -14,6 +17,18 @@ function bad(e: z.ZodError): AuthResult {
   return { ok: false, error: e.issues[0]?.message ?? "Please check what you entered." };
 }
 
+/** The same limits as /api/v1/auth: per IP, then per email. Past either, an error to show. */
+async function limited(email: string): Promise<AuthResult | null> {
+  try {
+    await limitAuthIp(clientIp((await headers()).get("x-forwarded-for")));
+    await limitAuthEmail(email);
+    return null;
+  } catch (e) {
+    if (e instanceof ApiError) return { ok: false, error: e.message };
+    throw e;
+  }
+}
+
 async function startSession(e: string, p: string): Promise<AuthResult> {
   const user = await passwordLogin(e, p);
   (await cookies()).set(SESSION_COOKIE, await signSession(user), { ...cookieBase, maxAge: SESSION_MAX_AGE });
@@ -23,6 +38,8 @@ async function startSession(e: string, p: string): Promise<AuthResult> {
 export async function signInAction(input: { email: string; password: string }): Promise<AuthResult> {
   const parsed = signInInput.safeParse(input);
   if (!parsed.success) return bad(parsed.error);
+  const stop = await limited(parsed.data.email);
+  if (stop) return stop;
   try {
     return await startSession(parsed.data.email, parsed.data.password);
   } catch (err) {
@@ -38,6 +55,8 @@ export async function signInAction(input: { email: string; password: string }): 
 export async function signUpAction(input: { name: string; email: string; password: string }): Promise<AuthResult> {
   const parsed = signUpInput.safeParse(input);
   if (!parsed.success) return bad(parsed.error);
+  const stop = await limited(parsed.data.email);
+  if (stop) return stop;
   try {
     await cognito.signUp(parsed.data.email, parsed.data.password, parsed.data.name || undefined);
     return { ok: true };
@@ -54,6 +73,8 @@ export async function confirmAndSignInAction(input: {
 }): Promise<AuthResult> {
   const parsed = confirmInput.safeParse(input);
   if (!parsed.success) return bad(parsed.error);
+  const stop = await limited(parsed.data.email);
+  if (stop) return stop;
   try {
     await cognito.confirmSignUp(parsed.data.email, parsed.data.code);
     return await startSession(parsed.data.email, parsed.data.password);
@@ -65,6 +86,8 @@ export async function confirmAndSignInAction(input: {
 export async function resendCodeAction(input: { email: string }): Promise<AuthResult> {
   const parsed = emailOnlyInput.safeParse(input);
   if (!parsed.success) return bad(parsed.error);
+  const stop = await limited(parsed.data.email);
+  if (stop) return stop;
   try {
     await cognito.resendCode(parsed.data.email);
     return { ok: true };
@@ -76,6 +99,8 @@ export async function resendCodeAction(input: { email: string }): Promise<AuthRe
 export async function forgotPasswordAction(input: { email: string }): Promise<AuthResult> {
   const parsed = emailOnlyInput.safeParse(input);
   if (!parsed.success) return bad(parsed.error);
+  const stop = await limited(parsed.data.email);
+  if (stop) return stop;
   try {
     await cognito.forgotPassword(parsed.data.email);
   } catch (err) {
@@ -94,6 +119,8 @@ export async function resetPasswordAction(input: {
 }): Promise<AuthResult> {
   const parsed = resetPasswordInput.safeParse(input);
   if (!parsed.success) return bad(parsed.error);
+  const stop = await limited(parsed.data.email);
+  if (stop) return stop;
   try {
     await cognito.confirmForgotPassword(parsed.data.email, parsed.data.code, parsed.data.password);
     return await startSession(parsed.data.email, parsed.data.password);
