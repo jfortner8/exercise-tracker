@@ -13,13 +13,15 @@ import { syncAfterChange } from "./sync";
  * Plain functions of the user id: the website's server actions and the /api/v1 routes both call them.
  */
 
+/** Tracks a built-in benchmark. → its id (the existing one if it's already tracked). */
 export async function trackCatalogBenchmark(sub: string, key: string) {
   const entry = BENCHMARK_CATALOG.find((c) => c.key === key);
   if (!entry) throw new ApiError(400, "Unknown benchmark");
-  const existing = await repo.listBenchmarks(sub);
-  if (existing.some((b) => b.catalogKey === key)) return;
+  const existing = (await repo.listBenchmarks(sub)).find((b) => b.catalogKey === key);
+  if (existing) return existing.id;
+  const newId = ulid();
   await repo.saveBenchmark(sub, {
-    id: ulid(),
+    id: newId,
     name: entry.name,
     category: entry.category,
     metricKind: entry.metricKind,
@@ -28,6 +30,7 @@ export async function trackCatalogBenchmark(sub: string, key: string) {
     catalogKey: entry.key,
     createdAt: new Date().toISOString(),
   });
+  return newId;
 }
 
 export async function createBenchmark(sub: string, raw: BenchmarkInput) {
@@ -55,12 +58,15 @@ async function checkResult(sub: string, r: ResultInput) {
   return bm;
 }
 
+/** → the new result's id. */
 export async function addResult(sub: string, raw: ResultInput) {
   const r = resultInput.parse(raw);
   const bm = await checkResult(sub, r);
-  await repo.saveResult(sub, { ...r, id: ulid() });
+  const newId = ulid();
+  await repo.saveResult(sub, { ...r, id: newId });
   if (bm.catalogKey) await syncLeaderboard(sub, bm.catalogKey);
   await syncAfterChange(sub);
+  return newId;
 }
 
 /** Edit a result (value, reps, date, notes, workout link). Changing the date moves it. */

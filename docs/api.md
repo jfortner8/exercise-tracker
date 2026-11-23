@@ -60,8 +60,19 @@ JSON endpoints the Expo app calls. They're route handlers in `apps/web/app/api/v
 | POST | `/days/:date/rest` | Adds a rest day: completed if today or earlier where the user is, planned if later |
 | PUT | `/days/:date/goals/:goalId` | `{ done: boolean }` |
 
+### Benchmarks
+| Method | Path | Body → Response |
+|---|---|---|
+| GET | `/benchmarks` | → `{ benchmarks, results }`: everything tracked and every result. Work out PBs and trends with `@et/core`; the built-in catalog is `@et/core/benchmarks/catalog` |
+| GET | `/benchmarks/:id` | → `{ benchmark, results }` |
+| POST | `/benchmarks` | A custom benchmark `{ name, category, metricKind, direction, unit? }` → `{ id }` |
+| POST | `/benchmarks/catalog/:key` | Tracks a built-in benchmark → `{ id }`, the existing one if it's already tracked |
+| DELETE | `/benchmarks/:id` | The benchmark and all its results |
+| POST | `/benchmarks/:id/results` | `{ date, value, reps?, workoutId?, notes? }` → `{ id }`. `value` is canonical (seconds, meters, kg, a count, or the custom number). `workoutId` must be on the same date and of a fitting type |
+| PUT | `/benchmarks/:id/results/:date/:resultId` | The whole result again. A field left out is cleared; a new `date` moves it |
+| DELETE | `/benchmarks/:id/results/:date/:resultId` | |
+
 **Still to come**, in the order of the plan:
-- benchmarks and results
 - injuries, routines, sports and weight
 - friends, clubs and leaderboards
 - the calendar feed
