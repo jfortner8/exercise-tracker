@@ -29,6 +29,8 @@ export async function saveDay(
   const existing = (await repo.getDay(sub, d)) ?? { date: d };
   const pick = <K extends keyof typeof p>(k: K, old: unknown) => (p[k] === undefined ? old : (p[k] ?? undefined));
   await repo.saveDay(sub, {
+    // Fields this form doesn't edit (the day's ticked goals) are kept, not dropped.
+    ...existing,
     date: d,
     notes: (pick("notes", existing.notes) as string | undefined)?.trim() || undefined,
     drinks: (pick("drinks", existing.drinks) as number | undefined) || undefined,
