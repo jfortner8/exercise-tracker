@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import * as Clipboard from "expo-clipboard";
+import { useState } from "react";
 import { Linking, Share, Text, View } from "react-native";
 import type { CalendarFeedResponse } from "@et/core/api-types";
 import { useAction } from "@/api/action";
@@ -14,6 +16,7 @@ export function CalendarFeed() {
   const q = useQuery({ queryKey: ["calendar-feed"], queryFn: () => api<CalendarFeedResponse>("/calendar-feed") });
   const act = useAction([["calendar-feed"]]);
   const d = q.data;
+  const [copied, setCopied] = useState(false);
   const setOptions = (o: { includeNotes: boolean; plannedOnly: boolean }) => void act.run(() => api("/calendar-feed/options", { method: "PUT", body: o }));
 
   return (
@@ -36,6 +39,15 @@ export function CalendarFeed() {
             Anyone with this link can see these workouts. Keep it to yourself, or reset it to cut off old copies.
           </Text>
           {d.webcalUrl ? <Button title="Subscribe in Calendar" onPress={() => void Linking.openURL(d.webcalUrl!).catch(() => {})} /> : null}
+          <Button
+            title={copied ? "Copied" : "Copy link"}
+            variant="secondary"
+            onPress={async () => {
+              await Clipboard.setStringAsync(d.url!).catch(() => {});
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+          />
           <Button title="Share link" variant="secondary" onPress={() => void Share.share({ message: d.url! }).catch(() => {})} />
           <SwitchRow label="Include workout notes" value={d.includeNotes} onChange={(v) => setOptions({ includeNotes: v, plannedOnly: d.plannedOnly })} />
           <SwitchRow label="Only upcoming planned workouts" value={d.plannedOnly} onChange={(v) => setOptions({ includeNotes: d.includeNotes, plannedOnly: v })} />

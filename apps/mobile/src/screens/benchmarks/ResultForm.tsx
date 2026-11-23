@@ -11,6 +11,7 @@ import { useDayWorkouts } from "@/api/queries";
 import { useTheme } from "@/theme";
 import { Button, ErrorText, Field } from "@/ui";
 import { Chips, DateField, Row, SmallField } from "@/ui/form";
+import { haptic } from "@/ui/haptics";
 
 /**
  * Date, value, reps, workout link and notes. Records a new result, or edits `editing` (pre-filled,
@@ -71,6 +72,7 @@ export function ResultForm({
       editing ? api(`/benchmarks/${def.id}/results/${editing.date}/${editing.id}`, { method: "PUT", body }) : api(`/benchmarks/${def.id}/results`, { body }),
     );
     if (!r) return;
+    haptic.success();
     if (!editing) {
       setValue("");
       setReps("");

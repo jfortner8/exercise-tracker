@@ -18,6 +18,7 @@ import { QuickDone } from "@/screens/calendar/QuickDone";
 import { ResultForm } from "@/screens/benchmarks/ResultForm";
 import { InjuryForm } from "@/screens/optional/Injuries";
 import { Chips } from "@/ui/form";
+import { haptic } from "@/ui/haptics";
 import { useTheme } from "@/theme";
 import { Body, Button, Card, ErrorText, Screen } from "@/ui";
 
@@ -131,6 +132,7 @@ function GoalsCard({
             variant={isOn ? "primary" : "secondary"}
             title={`${isOn ? "✓ " : ""}${g.emoji ? `${g.emoji} ` : ""}${g.name}`}
             onPress={() => {
+              haptic.tick();
               setOn((cur) => (isOn ? cur.filter((x) => x !== g.id) : [...cur, g.id]));
               run(() =>
                 api(`/days/${date}/goals/${g.id}`, { method: "PUT", body: { done: !isOn } }).catch((e) => {
@@ -211,6 +213,7 @@ function WorkoutCard({
             accessibilityRole="button"
             accessibilityHint="Then tap the day on the calendar it moves to"
             onPress={() => {
+              haptic.pickUp();
               setMoving(w);
               if (router.canGoBack()) router.back();
               else router.replace("/");
