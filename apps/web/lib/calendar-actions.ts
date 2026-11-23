@@ -1,48 +1,36 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
 import { refresh } from "next/cache";
-import { z } from "zod";
-import { calendarOptionsInput } from "@et/core/schemas";
 import { requireUser } from "@/lib/dal";
-import * as repo from "@/lib/db/repo";
-import { validTimeZone } from "@et/core/domain";
+import * as feed from "@/lib/services/calendar-feed";
 
-/** 192 random bits, URL-safe: the link is the only thing protecting the feed. */
-const newToken = () => randomBytes(24).toString("base64url");
+/*
+ * The calendar feed: the website's actions. Each is the signed-in user, then the shared service
+ * (lib/services/calendar-feed.ts, which the /api/v1 routes call too), then a re-render.
+ */
 
-/** Turns the feed on (or gives it a new link, retiring the old one). Remembers the browser's time zone. */
-async function setToken(timeZone: string | undefined, replace: boolean) {
+/** Turns the feed on. Remembers the browser's time zone. */
+export async function enableCalendarFeedAction(timeZone?: string) {
   const { sub } = await requireUser();
-  const tz = z.string().max(64).optional().parse(timeZone);
-  const profile = await repo.getProfile(sub);
-  const old = profile?.calendarToken;
-  if (old && !replace) return;
-  // Older start times were entered in the saved zone: pin them there before it changes.
-  if (validTimeZone(profile?.timeZone) && validTimeZone(tz) && tz !== profile.timeZone) await repo.stampStartZones(sub, profile.timeZone);
-  const ok = await repo.setCalendarToken(sub, newToken(), old, validTimeZone(tz) ? tz : undefined);
-  if (!ok) throw new Error("Your calendar link changed in another tab. Reload and try again.");
+  await feed.enableFeed(sub, timeZone, false);
   refresh();
 }
 
-export async function enableCalendarFeedAction(timeZone?: string) {
-  await setToken(timeZone, false);
-}
-
+/** A new link; the old one stops working. */
 export async function resetCalendarFeedAction(timeZone?: string) {
-  await setToken(timeZone, true);
+  const { sub } = await requireUser();
+  await feed.enableFeed(sub, timeZone, true);
+  refresh();
 }
 
 export async function disableCalendarFeedAction() {
   const { sub } = await requireUser();
-  const old = (await repo.getProfile(sub))?.calendarToken;
-  if (old) await repo.clearCalendarToken(sub, old);
+  await feed.disableFeed(sub);
   refresh();
 }
 
 export async function saveCalendarOptionsAction(raw: { includeNotes: boolean; plannedOnly: boolean }) {
   const { sub } = await requireUser();
-  const o = calendarOptionsInput.parse(raw);
-  await repo.setCalendarOptions(sub, { calendarIncludeNotes: o.includeNotes, calendarPlannedOnly: o.plannedOnly });
+  await feed.saveFeedOptions(sub, raw);
   refresh();
 }

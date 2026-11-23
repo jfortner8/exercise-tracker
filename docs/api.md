@@ -115,6 +115,14 @@ JSON endpoints the Expo app calls. They're route handlers in `apps/web/app/api/v
 |---|---|---|
 | GET | `/leaderboards?g=friends\|everyone\|<clubId>` | → `{ groups, group, boards, consistency, hasConsistency, friendCount }`. `boards[catalogKey]` is that benchmark's entries; work out the views (best, season, improvement, consistency ranking) with `@et/core/leaderboard-views` and `@et/core/domain`. A club you're not in is a 404. Defaults to friends |
 
+### Calendar feed
+| Method | Path | Body → Response |
+|---|---|---|
+| GET | `/calendar-feed` | → `{ enabled, url, webcalUrl, includeNotes, plannedOnly }`. `url` is the private `.ics` link calendar apps subscribe to; `webcalUrl` opens the system's subscribe flow |
+| POST | `/calendar-feed` | Turns it on (no change if already on) → the same as GET. Start times are written in `{ timeZone }` if sent, else `X-Time-Zone` |
+| POST | `/calendar-feed/reset` | A new link; the old one stops working → the same as GET. 409 if it changed meanwhile |
+| DELETE | `/calendar-feed` | Turns it off |
+| PUT | `/calendar-feed/options` | `{ includeNotes, plannedOnly }` |
+
 **Still to come**, in the order of the plan:
-- the calendar feed
 - the rest of auth (sign-up, confirm, forgot and reset password)
