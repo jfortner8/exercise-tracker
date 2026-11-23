@@ -7,7 +7,6 @@ Everything the website needs in AWS (account 816079797917, us-east-1):
 | `dynamodb.tf` | The `exercise-tracker` table: keys, the leaderboard index, TTL on `expiresAt`, point-in-time recovery, deletion protection |
 | `cognito.tf` | The user pool (sign-in by email, codes by email) and the website's app client |
 | `vercel.tf` | The OIDC provider for Vercel and the `exercise-tracker-vercel` role the website assumes, with its permissions |
-| `imports.tf` | Adopts the resources the old CDK stack created (no-ops once applied) |
 
 State is in `s3://exercise-tracker-tfstate-816079797917`, which is versioned, private and encrypted, the same arrangement as archive-api and LocalLocatorAPI.
 
