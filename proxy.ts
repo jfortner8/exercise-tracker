@@ -12,5 +12,6 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api/auth|cal/|_next/static|_next/image|favicon.ico|icon.svg|apple-icon).*)"],
+  // /api/v1 is the phone app's API: it checks its own Bearer token and answers 401, never a redirect.
+  matcher: ["/((?!api/auth|api/v1/|cal/|_next/static|_next/image|favicon.ico|icon.svg|apple-icon).*)"],
 };

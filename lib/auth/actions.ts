@@ -2,15 +2,15 @@
 
 import { cookies } from "next/headers";
 import { z } from "zod";
-import { ensureProfile } from "@/lib/db/repo";
 import * as cognito from "./cognito";
 import { authErrorMessage } from "./errors";
+import { emailField, passwordField, passwordLogin } from "./login";
 import { cookieBase, SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "./session";
 
 export type AuthResult = { ok: true } | { ok: false; error: string; code?: "UNCONFIRMED" };
 
-const email = z.string().trim().email("Enter a valid email address.").max(254);
-const password = z.string().min(1, "Enter your password.").max(256);
+const email = emailField;
+const password = passwordField;
 const code = z.string().trim().regex(/^\d{4,8}$/, "Enter the code from the email.");
 
 function bad(e: z.ZodError): AuthResult {
@@ -18,8 +18,7 @@ function bad(e: z.ZodError): AuthResult {
 }
 
 async function startSession(e: string, p: string): Promise<AuthResult> {
-  const user = await cognito.signIn(e, p);
-  await ensureProfile(user.sub, user.email, user.name);
+  const user = await passwordLogin(e, p);
   (await cookies()).set(SESSION_COOKIE, await signSession(user), { ...cookieBase, maxAge: SESSION_MAX_AGE });
   return { ok: true };
 }
