@@ -1,0 +1,18 @@
+name: core
+# Shared logic: its tests and types. Runs only when packages/core or the workspace setup changes.
+on:
+  pull_request:
+    paths: [packages/core/**, package.json, package-lock.json, .github/workflows/core.yml]
+  push:
+    branches: [main]
+    paths: [packages/core/**, package.json, package-lock.json, .github/workflows/core.yml]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck -w @et/core
+      - run: npm run test -w @et/core
