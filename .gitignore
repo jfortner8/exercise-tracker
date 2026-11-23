@@ -44,6 +44,12 @@ next-env.d.ts
 .env*
 
 # infra
-infranode_modules/
+infra/**/.terraform/
+infra/**/tfplan
+infra/**/plan.txt
+*.tfstate
+*.tfstate.*
+# left over from the old CDK stack
+infra/node_modules/
 infra/cdk.out
 infra/outputs.json

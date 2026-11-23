@@ -1,8 +1,0 @@
-{
-  "app": "npx tsx bin/app.ts",
-  "context": {
-    "vercelTeamSlug": "john-90f0",
-    "vercelProject": "exercise-tracker",
-    "selfSignUp": true
-  }
-}
