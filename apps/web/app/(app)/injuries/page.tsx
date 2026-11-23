@@ -3,26 +3,14 @@ import { Suspense } from "react";
 import { InjuryList } from "@/components/injuries";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/dal";
-import { listInjuries, listWorkoutsForInjury } from "@/lib/db/repo";
+import { injuriesWithPain } from "@/lib/services/injuries";
 
 export const metadata: Metadata = { title: "Injuries" };
 
 async function Injuries() {
   const { sub } = await requireUser();
-  const injuries = await listInjuries(sub);
-  const pain = await Promise.all(
-    injuries.map(async (i) => {
-      const ws = await listWorkoutsForInjury(sub, i.id);
-      return [
-        i.id,
-        ws
-          .filter((w) => w.painLevel != null)
-          .map((w) => ({ date: w.date, level: w.painLevel!, title: w.title }))
-          .sort((a, b) => a.date.localeCompare(b.date)),
-      ] as const;
-    }),
-  );
-  return <InjuryList injuries={injuries} pain={Object.fromEntries(pain)} />;
+  const { injuries, pain } = await injuriesWithPain(sub);
+  return <InjuryList injuries={injuries} pain={pain} />;
 }
 
 export default function InjuriesPage() {

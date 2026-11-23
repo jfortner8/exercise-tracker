@@ -85,7 +85,7 @@ export async function setGoalDoneAction(date: string, goalId: string, done: bool
 
 // ---------- Injuries ----------
 export async function saveInjuryAction(raw: InjuryInput) {
-  return act((sub) => injuries.saveInjury(sub, raw));
+  await act((sub) => injuries.saveInjury(sub, raw));
 }
 export async function deleteInjuryAction(injuryId: string) {
   return act((sub) => injuries.deleteInjury(sub, injuryId));
