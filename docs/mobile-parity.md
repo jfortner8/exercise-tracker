@@ -35,7 +35,7 @@ The phone app (`apps/mobile`, Expo) does everything the website does, sold as a 
 ### Next, in order
 1. [ ] The user tries TestFlight on a real phone; fix whatever feels wrong
 2. [ ] **Native date and time pickers** for the form (`@react-native-community/datetimepicker`, a native package, so it needs a new build), batched with any other native additions
-3. [ ] **PBs:** benchmark list, detail with history chart (victory-native: native, so batch with step 3), add and edit result, splits helper, workout link
+3. [ ] **PBs:** benchmark list, detail with history chart (victory-native: native, so batch it with the date and time pickers), add and edit result, splits helper, workout link
 4. [ ] **Ranks:** leaderboards (friends, clubs, everyone; best, season, improvement; consistency)
 5. [ ] **Friends and clubs:** share code (share sheet), join, club page with admin actions
 6. [ ] **Settings:** the full form (units, week start, clock, habits, goals editor, sharing, weight tracking, calendar feed, theme)
