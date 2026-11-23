@@ -90,8 +90,5 @@ resource "aws_cognito_user_pool_client" "web" {
     # A new client means a new client id and secret, and every Vercel environment would need them
     # changed at the same moment. Never replace it from CI.
     prevent_destroy = true
-    # Cognito doesn't report whether a client was created with a secret, so after the import this
-    # reads as unset and would force a replacement. The client has one; the website uses it.
-    ignore_changes = [generate_secret]
   }
 }

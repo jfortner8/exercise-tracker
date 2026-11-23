@@ -6,7 +6,7 @@ locals {
   # ARNs built from names rather than taken from the resources, so the policies below are fully known
   # at plan time and a reviewer sees exactly what they'll say.
   table_arn       = "arn:aws:dynamodb:${var.aws_region}:${local.account_id}:table/${var.name_prefix}"
-  user_pool_arn   = "arn:aws:cognito-idp:${var.aws_region}:${local.account_id}:userpool/${local.user_pool_id}"
+  user_pool_arn   = aws_cognito_user_pool.users.arn
   vercel_issuer   = "oidc.vercel.com/${var.vercel_team_slug}"
   vercel_oidc_arn = "arn:aws:iam::${local.account_id}:oidc-provider/${local.vercel_issuer}"
 }
