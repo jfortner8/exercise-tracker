@@ -26,3 +26,14 @@ export function parseRange(from: string | null, to: string | null): { from: stri
   if (days > MAX_RANGE_DAYS) return { error: `at most ${MAX_RANGE_DAYS} days at a time` };
   return { from, to };
 }
+
+/** Start (epoch seconds) of the fixed rate-limit window that `nowMs` falls in. */
+export function rateWindow(nowMs: number, windowSec: number): number {
+  const now = Math.floor(nowMs / 1000);
+  return now - (now % windowSec);
+}
+
+/** The caller's IP from Vercel's x-forwarded-for (first hop), for limiting sign-in attempts. */
+export function clientIp(forwardedFor: string | null | undefined): string {
+  return forwardedFor?.split(",")[0]?.trim() || "unknown";
+}
