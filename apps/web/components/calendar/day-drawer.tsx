@@ -1,0 +1,679 @@
+"use client";
+
+import { format, parseISO } from "date-fns";
+import { Ban, Check, HeartPulse, MapPin, Minus, Moon, Repeat, Scale, Star, X, Pencil, Plus, Trash2, Trophy } from "lucide-react";
+import Link from "next/link";
+import { useOptimistic, useState, useTransition } from "react";
+import {
+  addResultAction,
+  deleteSeriesFromAction,
+  deleteWorkoutAction,
+  markRestDayAction,
+  resolveWorkoutAction,
+  saveDayAction,
+  setGoalDoneAction,
+} from "@/lib/actions";
+import { isClock, parseValue, valueLabel, valueToInput } from "@et/core/benchmarks/input";
+import { ClockInput } from "../clock-input";
+import { workoutCategory, type ActivityKey } from "@et/core/activities";
+import { suggestLink } from "@et/core/benchmarks/linking";
+import {
+  describeIntervals,
+  detailsDurationSec,
+  displayStatus,
+  displayToKg,
+  formatDistance,
+  formatDuration,
+  formatResult,
+  kgToDisplay,
+  weightUnit,
+} from "@et/core/domain";
+import { describeExercise } from "@et/core/routines";
+import { startTimeLabel } from "@et/core/start-time";
+import { habitCount, HABITS, profileHabits, type HabitKind } from "@et/core/habits";
+import { HabitIcon } from "../habit-icon";
+import { activeGoals, goalDone, type Goal } from "@et/core/goals";
+import type { BenchmarkDef, DayLog, DayResult, Injury, Profile, Routine, Workout, WorkoutDetails } from "@et/core/types";
+import { STATUS_LABEL } from "@et/core/workout-types";
+import { Sheet } from "../sheet";
+import { Button, Field, Input, Select, Textarea, cx } from "../ui";
+import { SplitsHelper } from "../benchmarks/splits-helper";
+import { WorkoutLinkField } from "../benchmarks/workout-link-field";
+import { InjuryForm } from "../injuries";
+import { WorkoutForm } from "../workouts/workout-form";
+import { QuickDone } from "./quick-done";
+
+function summarize(d: WorkoutDetails | undefined, profile: Profile) {
+  if (!d) return null;
+  const parts: string[] = [];
+  const iv = describeIntervals(d.intervals);
+  if (iv) parts.push(iv);
+  const dur = detailsDurationSec(d);
+  if (dur) parts.push(formatDuration(dur));
+  if (d.distanceM) parts.push(formatDistance(d.distanceM, profile.units));
+  if (d.avgHeartRate) parts.push(`${d.avgHeartRate} bpm`);
+  return (
+    <>
+      {d.exercises && d.exercises.length > 0 && (
+        <ul className="space-y-0.5">
+          {d.exercises.map((e, i) => (
+            <li key={i}>{describeExercise(e, profile.units)}</li>
+          ))}
+        </ul>
+      )}
+      {parts.length > 0 && <div>{parts.join(" · ")}</div>}
+      {d.description && <div className="whitespace-pre-wrap text-muted">{d.description}</div>}
+    </>
+  );
+}
+
+export function DayDrawer({
+  date,
+  today,
+  workouts,
+  log,
+  injuries,
+  activeInjuries,
+  missed,
+  benchmarks,
+  results,
+  recent,
+  routines,
+  profile,
+  onClose,
+}: {
+  date: string;
+  today: string;
+  workouts: Workout[];
+  log?: DayLog;
+  injuries: Injury[];
+  activeInjuries: Injury[];
+  /** Empty past day that counts as a miss. */
+  missed: boolean;
+  benchmarks: BenchmarkDef[];
+  /** This day's benchmark results. */
+  results: DayResult[];
+  /** Most recent activities, offered first in the workout form. */
+  recent: ActivityKey[];
+  routines: Routine[];
+  profile: Profile;
+  onClose: () => void;
+}) {
+  const [editing, setEditing] = useState<Workout | "new" | null>(null);
+  const [preset, setPreset] = useState<Workout["status"] | undefined>();
+  const [skipping, setSkipping] = useState<string | null>(null); // workout id with the reason field open
+  const [skipReason, setSkipReason] = useState("");
+  const [loggingInjury, setLoggingInjury] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null); // repeating workout id with the delete choice open
+  const [quick, setQuick] = useState<string | null>(null); // workout id with the quick "Done" panel open
+  const edit = (w: Workout | "new" | null, status?: Workout["status"]) => {
+    setPreset(status);
+    setEditing(w);
+  };
+  const [pending, start] = useTransition();
+  const d = parseISO(date);
+  const relative = !today ? "" : date === today ? "Today" : date < today ? "Past" : "Upcoming";
+
+  return (
+    <Sheet
+      title={format(d, "EEEE, MMMM d")}
+      subtitle={
+        <span className="flex flex-wrap items-center gap-2">
+          {relative}
+          {activeInjuries.map((i) => (
+            <span key={i.id} className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
+              <HeartPulse className="size-3" /> {i.name}
+            </span>
+          ))}
+        </span>
+      }
+      onClose={onClose}
+    >
+      {editing ? (
+        <WorkoutForm
+          key={editing === "new" ? "new" : editing.id}
+          date={date}
+          workout={editing === "new" ? undefined : editing}
+          units={profile.units}
+          weekStartsOn={profile.weekStartsOn}
+          zone={profile.timeZone}
+          clock={profile.clock}
+          injuries={injuries}
+          presetStatus={preset}
+          recent={recent}
+          routines={routines}
+          onDone={() => edit(null)}
+        />
+      ) : (
+        <div className="space-y-6">
+          <DayNotes date={date} log={log} profile={profile} />
+          {activeGoals(profile).length > 0 && (!today || date <= today) && (
+            <DayGoals date={date} log={log} goals={activeGoals(profile)} />
+          )}
+
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold">Workouts</h3>
+            {workouts.map((w) => {
+              const status = today ? displayStatus(w, today) : w.status;
+              const cat = workoutCategory(w);
+              const injury = injuries.find((i) => i.id === w.injuryId);
+              return (
+                <div key={w.id} className="rounded-xl border border-border p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-base leading-none" aria-hidden>
+                      {cat.emoji}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2">
+                        {w.startTime && <span className="text-sm tabular-nums text-muted">{startTimeLabel(w, profile.timeZone, profile.clock)}</span>}
+                        <span className="font-medium">{w.title}</span>
+                        <span
+                          className={cx(
+                            "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                            status === "needs_review" ? "bg-warn/15 text-warn" : "bg-surface-2 text-muted",
+                          )}
+                        >
+                          {STATUS_LABEL[status]}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted">
+                        {cat.label}
+                        {w.location && (
+                          <>
+                            {" · "}
+                            <MapPin className="inline size-3 -translate-y-px" aria-hidden />
+                            {" "}
+                            {w.location}
+                          </>
+                        )}
+                        {w.originalDate && ` · moved from ${format(parseISO(w.originalDate), "EEE MMM d")}`}
+                        {w.seriesId && (
+                          <>
+                            {" · "}
+                            <Repeat className="inline size-3 -translate-y-px" aria-hidden /> repeating
+                          </>
+                        )}
+                      </div>
+                      <div className="mt-2 space-y-1.5 text-sm">
+                        {w.planned && (
+                          <div>
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted">Plan</span>
+                            {summarize(w.planned, profile)}
+                          </div>
+                        )}
+                        {w.actual && (
+                          <div>
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted">Actual</span>
+                            {summarize(w.actual, profile)}
+                          </div>
+                        )}
+                        {w.reason && <div className="text-muted">↳ {w.reason}</div>}
+                        {(w.rpe != null || w.painLevel != null) && (
+                          <div className="text-xs text-muted">
+                            {w.rpe != null && `Effort ${w.rpe}/10`}
+                            {w.rpe != null && w.painLevel != null && " · "}
+                            {w.painLevel != null && `Pain ${w.painLevel}/10${injury ? ` (${injury.name})` : ""}`}
+                          </div>
+                        )}
+                        {w.notes && <div className="whitespace-pre-wrap text-muted">{w.notes}</div>}
+                        <ResultList results={results.filter((r) => r.workoutId === w.id)} profile={profile} />
+                      </div>
+                    </div>
+                  </div>
+                  {quick === w.id && (
+                    <QuickDone
+                      workout={w}
+                      units={profile.units}
+                      onMore={(draft) => {
+                        setQuick(null);
+                        edit(draft, "completed");
+                      }}
+                      onClose={() => setQuick(null)}
+                    />
+                  )}
+                  {status === "needs_review" && quick !== w.id && (
+                    <div className="mt-3 space-y-2 rounded-lg bg-warn/10 p-2">
+                      <div className="text-xs font-medium text-text">How did it go?</div>
+                      {skipping === w.id ? (
+                        <form
+                          className="flex gap-1.5"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            start(async () => {
+                              await resolveWorkoutAction(w.date, w.id, "skipped", skipReason);
+                              setSkipping(null);
+                              setSkipReason("");
+                            });
+                          }}
+                        >
+                          <Input
+                            autoFocus
+                            value={skipReason}
+                            onChange={(e) => setSkipReason(e.target.value)}
+                            placeholder="Why? Sick, travel, wedding…"
+                            className="h-8 flex-1 text-sm"
+                            required
+                          />
+                          <Button size="sm" type="submit" variant="primary" disabled={pending || !skipReason.trim()}>
+                            Save
+                          </Button>
+                          <Button size="sm" type="button" variant="ghost" onClick={() => setSkipping(null)}>
+                            <X className="size-3.5" />
+                          </Button>
+                        </form>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button size="sm" variant="primary" onClick={() => setQuick(w.id)}>
+                            <Check className="size-3.5" /> Done
+                          </Button>
+                          <Button size="sm" onClick={() => edit(w, "substituted")}>
+                            <Repeat className="size-3.5" /> Did something else…
+                          </Button>
+                          <Button size="sm" onClick={() => setSkipping(w.id)}>
+                            Skipped…
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            disabled={pending}
+                            onClick={() => start(() => resolveWorkoutAction(w.date, w.id, "missed"))}
+                          >
+                            <Ban className="size-3.5" /> Missed
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className={cx("mt-3 flex flex-wrap gap-1.5", quick === w.id && "hidden")}>
+                    {status === "planned" && (
+                      <Button size="sm" variant="primary" onClick={() => setQuick(w.id)}>
+                        <Check className="size-3.5" /> Done
+                      </Button>
+                    )}
+                    <Button size="sm" onClick={() => edit(w)}>
+                      <Pencil className="size-3.5" /> {status === "planned" ? "Log / edit" : "Edit"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      disabled={pending}
+                      aria-label="Delete"
+                      onClick={() =>
+                        w.seriesId
+                          ? setDeleting(deleting === w.id ? null : w.id)
+                          : confirm(`Delete "${w.title}"?`) && start(() => deleteWorkoutAction(w.date, w.id))
+                      }
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                  {deleting === w.id && (
+                    <div className="mt-2 space-y-2 rounded-lg bg-danger/10 p-2">
+                      <div className="text-xs font-medium text-text">Delete this repeating workout?</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={pending}
+                          onClick={() => start(async () => { await deleteWorkoutAction(w.date, w.id); setDeleting(null); })}
+                        >
+                          Just this one
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={pending}
+                          onClick={() => start(async () => { await deleteSeriesFromAction(w.date, w.id); setDeleting(null); })}
+                        >
+                          This and later planned ones
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDeleting(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted">Ones you&apos;ve already logged are kept.</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {workouts.length === 0 ? (
+              <>
+                {missed && <p className="text-sm text-danger">Nothing was planned or logged for this day.</p>}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button className="border-dashed" onClick={() => edit("new")}>
+                    <Plus className="size-4" /> Add a workout
+                  </Button>
+                  <Button
+                    className="border-dashed"
+                    disabled={pending || !today}
+                    onClick={() => start(() => markRestDayAction(date, today))}
+                  >
+                    <Moon className="size-4" /> Mark as rest day
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <Button className="w-full border-dashed" onClick={() => edit("new")}>
+                <Plus className="size-4" /> Add workout
+              </Button>
+            )}
+            {/* Injuries are logged from where you notice them; the Injuries tab appears once there's one. */}
+            <button
+              type="button"
+              onClick={() => setLoggingInjury(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-text"
+            >
+              <HeartPulse className="size-3.5" /> {activeInjuries.length ? "Log another injury" : "Hurt? Log an injury"}
+            </button>
+          </section>
+          {loggingInjury && <InjuryForm startDate={date} onClose={() => setLoggingInjury(false)} />}
+
+          <DayResults
+            results={results.filter((r) => !r.workoutId || !workouts.some((w) => w.id === r.workoutId))}
+            profile={profile}
+          />
+
+          {benchmarks.length > 0 && <QuickBenchmark date={date} benchmarks={benchmarks} profile={profile} workouts={workouts} />}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/** The day's yes/no goals. Each tick saves right away: a checklist should be one tap. */
+function DayGoals({ date, log, goals }: { date: string; log?: DayLog; goals: Goal[] }) {
+  const [done, setDone] = useOptimistic(
+    goals.filter((g) => goalDone(log, g.id)).map((g) => g.id),
+    (cur: string[], { id, on }: { id: string; on: boolean }) => (on ? [...cur, id] : cur.filter((x) => x !== id)),
+  );
+  const [, start] = useTransition();
+  const [error, setError] = useState(false);
+  return (
+    <section className="space-y-2">
+      <h3 className="text-sm font-semibold">Daily goals</h3>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {goals.map((g) => (
+          <label key={g.id} className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--accent)]"
+              checked={done.includes(g.id)}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setError(false);
+                start(async () => {
+                  setDone({ id: g.id, on });
+                  try {
+                    await setGoalDoneAction(date, g.id, on);
+                  } catch {
+                    setError(true);
+                  }
+                });
+              }}
+            />
+            {g.emoji && <span aria-hidden>{g.emoji}</span>}
+            {g.name}
+          </label>
+        ))}
+      </div>
+      {error && <p className="text-xs text-danger">Couldn&apos;t save that. Try again.</p>}
+    </section>
+  );
+}
+
+function DayNotes({ date, log, profile }: { date: string; log?: DayLog; profile: Profile }) {
+  const { trackWeight, units } = profile;
+  const habits = profileHabits(profile);
+  const savedWeight = log?.weightKg != null ? String(Math.round(kgToDisplay(log.weightKg, units) * 10) / 10) : "";
+  const [notes, setNotes] = useState(log?.notes ?? "");
+  const savedCounts = () => Object.fromEntries(habits.map((k) => [k, habitCount(log, k) ?? 0])) as Record<HabitKind, number>;
+  const [counts, setCounts] = useState(savedCounts);
+  const [weight, setWeight] = useState(savedWeight);
+  const [pending, start] = useTransition();
+  const weightNum = weight.trim() === "" ? null : Number(weight);
+  const weightBad = weightNum != null && (!isFinite(weightNum) || weightNum <= 0);
+  const dirty =
+    notes !== (log?.notes ?? "") || habits.some((k) => counts[k] !== (habitCount(log, k) ?? 0)) || weight !== savedWeight;
+
+  return (
+    // First section of the drawer: no divider above it, since the sheet header already has one.
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold">Day notes</h3>
+      <Textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Travel, wedding, sick, slept badly…"
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        {trackWeight && (
+          <label className="flex items-center gap-2 text-sm">
+            <Scale className="size-4 text-muted" />
+            <span className="text-muted">Weight</span>
+            <Input
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              inputMode="decimal"
+              placeholder="—"
+              aria-invalid={weightBad || undefined}
+              className={cx("h-8 w-20 text-sm", weightBad && "border-danger")}
+            />
+            <span className="text-muted">{weightUnit(units)}</span>
+          </label>
+        )}
+        {habits.map((k) => {
+          const h = HABITS[k];
+          const n = counts[k] ?? 0;
+          // From the latest count, so quick taps all land.
+          const bump = (by: number) => setCounts((c) => ({ ...c, [k]: Math.min(h.max, Math.max(0, (c[k] ?? 0) + by)) }));
+          return (
+            <div key={k} className="flex items-center gap-2 text-sm">
+              <HabitIcon kind={k} className="size-4 text-muted" />
+              <span className="text-muted">{h.short}</span>
+              {/* − takes off half a drink (people do log halves); + always adds a whole one. */}
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="size-8 px-0"
+                aria-label={`Fewer ${h.short.toLowerCase()}`}
+                onClick={() => bump(-h.step)}
+              >
+                <Minus className="size-3.5" />
+              </Button>
+              <span className="w-8 text-center font-semibold tabular-nums">{n}</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="size-8 px-0"
+                aria-label={`More ${h.short.toLowerCase()}`}
+                onClick={() => bump(1)}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
+          );
+        })}
+        <Button
+          className="ml-auto"
+          size="sm"
+          variant="primary"
+          disabled={!dirty || pending || weightBad}
+          onClick={() =>
+            start(() =>
+              saveDayAction(date, {
+                notes,
+                // Only send what's shown, so hidden fields keep their saved values.
+                ...Object.fromEntries(habits.map((k) => [HABITS[k].field, counts[k] ?? 0])),
+                ...(trackWeight ? { weightKg: weightNum == null ? null : displayToKg(weightNum, units) } : {}),
+              }),
+            )
+          }
+        >
+          {pending ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function QuickBenchmark({
+  date,
+  benchmarks,
+  profile,
+  workouts,
+}: {
+  date: string;
+  benchmarks: BenchmarkDef[];
+  profile: Profile;
+  workouts: Workout[];
+}) {
+  const [bmId, setBmId] = useState("");
+  const [value, setValue] = useState("");
+  const [reps, setReps] = useState("");
+  const [workoutId, setWorkoutId] = useState("");
+  /** "From splits, km 2–6" while the value is the one the splits helper filled in. */
+  const [splitsNote, setSplitsNote] = useState<string | undefined>();
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  const bm = benchmarks.find((b) => b.id === bmId);
+
+  const label = bm ? valueLabel(bm, profile.units) : "Value";
+
+  function save() {
+    if (!bm) return;
+    const v = parseValue(bm, value, profile.units);
+    if (!isFinite(v) || v < 0) return setMsg("Enter a valid value");
+    start(async () => {
+      await addResultAction({
+        benchmarkId: bm.id,
+        date,
+        value: v,
+        reps: bm.metricKind === "weight_reps" ? Number(reps) || 1 : undefined,
+        workoutId: workoutId || undefined,
+        notes: splitsNote,
+      });
+      setValue("");
+      setReps("");
+      setSplitsNote(undefined);
+      setMsg(`Saved to ${bm.name}`);
+    });
+  }
+
+  return (
+    <section className="space-y-3 border-t border-border pt-5">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+          <Trophy className="size-4 text-muted" /> Record a benchmark
+        </h3>
+        <Link href="/benchmarks" className="text-xs text-muted hover:text-text">
+          All benchmarks →
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Benchmark" className="col-span-2">
+          <Select
+            value={bmId}
+            onChange={(e) => {
+              setBmId(e.target.value);
+              // Pre-select the workout this result most likely came from.
+              const next = benchmarks.find((b) => b.id === e.target.value);
+              setWorkoutId(next ? (suggestLink(next, workouts, profile.units)?.id ?? "") : "");
+            }}
+          >
+            <option value="">Choose…</option>
+            {benchmarks.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {bm && (
+          <>
+            <Field label={label} className={bm.metricKind === "weight_reps" ? "" : "col-span-2"}>
+              {isClock(bm) ? (
+                <ClockInput
+                  value={value}
+                  onChange={(v) => {
+                    setValue(v);
+                    setSplitsNote(undefined);
+                  }}
+                />
+              ) : (
+                <Input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" />
+              )}
+            </Field>
+            {bm.metricKind === "weight_reps" && (
+              <Field label="Reps">
+                <Input value={reps} onChange={(e) => setReps(e.target.value)} inputMode="numeric" placeholder="1" />
+              </Field>
+            )}
+            <SplitsHelper
+              key={bm.id}
+              def={bm}
+              units={profile.units}
+              className="col-span-2"
+              onUse={(sec, note) => {
+                setValue(valueToInput(bm, sec, profile.units));
+                setSplitsNote(note);
+              }}
+            />
+            <WorkoutLinkField
+              def={bm}
+              workouts={workouts}
+              units={profile.units}
+              value={workoutId}
+              onChange={setWorkoutId}
+              className="col-span-2"
+            />
+          </>
+        )}
+      </div>
+      <div className="flex items-center justify-end gap-3">
+        {msg && <span className="text-sm text-muted">{msg}</span>}
+        <Button size="sm" variant="primary" disabled={!bm || !value || pending} onClick={save}>
+          Save result
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+/** Benchmark results as compact rows; PBs get a gold star. */
+function ResultList({ results, profile }: { results: DayResult[]; profile: Profile }) {
+  if (!results.length) return null;
+  return (
+    <ul className="space-y-1">
+      {results.map((r) => (
+        <li key={r.id}>
+          <Link
+            href={`/benchmarks/${r.benchmarkId}`}
+            className="flex items-center gap-1.5 rounded-md text-sm hover:underline"
+          >
+            <Star className={cx("size-3.5 shrink-0", r.isPb ? "fill-amber-400 text-amber-500" : "text-muted")} />
+            <span className="font-medium">{r.benchmarkName}</span>
+            <span className="tabular-nums">{formatResult(r, r, profile.units)}</span>
+            {r.isPb && (
+              <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                New PB
+              </span>
+            )}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Results logged for this day that aren't attached to one of its workouts (e.g. from the Benchmarks tab). */
+function DayResults({ results, profile }: { results: DayResult[]; profile: Profile }) {
+  if (!results.length) return null;
+  return (
+    <section className="space-y-2 border-t border-border pt-5">
+      <h3 className="text-sm font-semibold">Benchmarks</h3>
+      <ResultList results={results} profile={profile} />
+    </section>
+  );
+}

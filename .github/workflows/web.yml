@@ -1,0 +1,20 @@
+name: web
+# The website and API: types, lint and unit tests. Vercel builds it separately (and skips the build
+# when nothing here changed, see scripts/vercel-ignore.sh). Core is included because web imports it.
+on:
+  pull_request:
+    paths: [apps/web/**, packages/core/**, package.json, package-lock.json, .github/workflows/web.yml]
+  push:
+    branches: [main]
+    paths: [apps/web/**, packages/core/**, package.json, package-lock.json, .github/workflows/web.yml]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck -w @et/web
+      - run: npm run lint -w @et/web
+      - run: npm run test -w @et/web

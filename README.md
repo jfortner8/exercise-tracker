@@ -10,19 +10,25 @@ A calendar-first workout tracker. Past days show what you actually did, and futu
 - **Benchmarks**: PBs for anything measurable (time, distance, weight × reps scored as estimated 1RM, reps, duration, or a custom unit), built-in suggestions, charts.
 
 ## Architecture
-- `app/`: App Router pages (Cache Components on; session reads stream inside `<Suspense>`). `proxy.ts` does the optimistic auth redirect.
-- `lib/auth/`: the app's own sign-in, sign-up, confirm, and reset pages call Cognito's API from the server (`USER_PASSWORD_AUTH` + `SECRET_HASH`); the Cognito ID token is verified, then a signed HTTP-only session cookie (`jose`) is set.
-- `lib/dal.ts`: `requireUser()`, the only source of the user id for data access.
-- `lib/db/repo.ts`: single-table DynamoDB access (`PK=USER#<sub>`).
-- `lib/actions.ts`: server actions (Zod-validated).
-- `lib/domain.ts`: pure logic (intervals, PBs, statuses, units), tested in `lib/domain.test.ts`.
-- `infra/`: AWS CDK stack: DynamoDB table, Cognito user pool + managed login, and the IAM role Vercel assumes via **OIDC federation** (no AWS keys stored anywhere).
+An npm workspace with three packages:
+
+- `apps/web`: the Next.js website and the API the phone app calls.
+  - `app/`: App Router pages (Cache Components on; session reads stream inside `<Suspense>`). `proxy.ts` does the optimistic auth redirect for pages.
+  - `app/api/v1/`: JSON endpoints for the phone app. They authenticate with `Authorization: Bearer <session token>` (from `POST /api/v1/auth/login`) and take the user's zone from `X-Time-Zone`.
+  - `lib/auth/`: sign-in, sign-up, confirm and reset call Cognito's API from the server (`USER_PASSWORD_AUTH` + `SECRET_HASH`). The Cognito ID token is verified, then a signed session (`jose`) is set as an HTTP-only cookie (website) or returned as a Bearer token (app).
+  - `lib/dal.ts`: `requireUser()`, the only source of the user id for pages and server actions. `lib/api-auth.ts` is the same for API requests.
+  - `lib/services/`: data logic shared by pages, server actions and API routes.
+  - `lib/db/repo.ts`: single-table DynamoDB access (`PK=USER#<sub>`).
+  - `lib/actions.ts`: server actions.
+- `packages/core` (`@et/core`): pure logic shared by the website, the API and the phone app. It has no React and no server code. It covers dates and units, activities, goals and habits, splits, start-time zones, PBs, social codes, and the Zod input schemas (`schemas.ts`) that every input is validated with.
+- `apps/mobile`: the Expo phone app (coming).
+- `infra/`: AWS CDK stack: DynamoDB table, Cognito user pool + managed login, and the IAM role Vercel assumes via **OIDC federation** (no AWS keys stored anywhere). Not part of the workspace.
 
 ## Local development
 ```bash
 npm install
-vercel env pull .env.local   # or copy values from `cd infra && npm run deploy` outputs
-npm run dev
+vercel env pull apps/web/.env.local   # or copy values from `cd infra && npm run deploy` outputs
+npm run dev                          # runs the website from apps/web
 ```
 Locally the app uses your AWS CLI credentials. On Vercel it exchanges the deployment's OIDC token for the `exercise-tracker-vercel` role.
 
