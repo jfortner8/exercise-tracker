@@ -124,11 +124,11 @@ export function CalendarGrid({
   );
 }
 
-function DayNumber({ date, today, color }: { date: string; today: string; color: string }) {
+function DayNumber({ date, today, color, center }: { date: string; today: string; color: string; center?: boolean }) {
   const t = useTheme();
   const isToday = date === today;
   return (
-    <View style={[styles.dayNum, isToday && { backgroundColor: t.today }]}>
+    <View style={[styles.dayNum, center && { alignSelf: "center" }, isToday && { backgroundColor: t.today }]}>
       <Text style={[styles.dayNumText, { color: isToday ? t.accentFg : color, fontWeight: isToday ? "700" : "500" }]}>
         {format(parseISO(date), "d")}
       </Text>
@@ -231,7 +231,7 @@ function WeekRow({
       <View style={styles.weekRow}>
         <View style={{ width: 46, alignItems: "center", paddingTop: 2 }}>
           <Text style={[styles.small, { color: t.muted }]}>{format(parseISO(date), "EEE")}</Text>
-          <DayNumber date={date} today={today} color={t.text} />
+          <DayNumber date={date} today={today} color={t.text} center />
           {info?.pb && <Text style={{ color: t.pb }}>★</Text>}
         </View>
         <View style={{ flex: 1, gap: 4 }}>
@@ -324,7 +324,8 @@ function Footer({
         </View>
       )}
       {profile.trackWeight && (
-        <View style={[...cell, { backgroundColor: weight != null ? t.surface : t.surface2 }]}>
+        // On a month tile the weight needs room for three digits ("176"), so it gets twice the width.
+        <View style={[...cell, { flex: compact ? 2 : 1, backgroundColor: weight != null ? t.surface : t.surface2 }]}>
           {missedWeight && <View style={[styles.slash, { backgroundColor: t.muted }]} />}
           {weight != null && (
             <Text style={[styles.footText, { color: t.text }]} numberOfLines={1}>

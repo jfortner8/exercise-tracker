@@ -9,5 +9,5 @@ export default function MoreScreen() {
   const tab = OPTIONAL_TABS.find((t) => t.name === screen);
   if (useSession().status !== "signedIn") return <Redirect href="/sign-in" />;
   if (!tab) return <Redirect href="/settings" />;
-  return <ComingSoon tab={tab} />;
+  return <ComingSoon tab={tab} header />;
 }

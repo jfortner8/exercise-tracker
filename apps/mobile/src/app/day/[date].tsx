@@ -1,10 +1,10 @@
 import { format, parseISO } from "date-fns";
 import { Redirect, Stack, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { workoutCategory } from "@et/core/activities";
 import { displayStatus, displayToKg, kgToDisplay, weightUnit } from "@et/core/domain";
-import { activeGoals, goalDone } from "@et/core/goals";
+import { activeGoals } from "@et/core/goals";
 import { habitCount, HABITS, profileHabits } from "@et/core/habits";
 import { startTimeLabel } from "@et/core/start-time";
 import type { Workout } from "@et/core/types";
@@ -44,25 +44,12 @@ export default function DaySheet() {
   return (
     <>
       <Stack.Screen options={{ title: date ? format(parseISO(date), "EEEE, MMMM d") : "" }} />
-      <Screen>
+      <Screen header>
         <ErrorText>{(write.error ?? cal.error)?.message}</ErrorText>
         {profile && info && (
           <>
             {activeGoals(profile).length > 0 && date <= today && (
-              <Card>
-                <Body style={{ fontWeight: "600", marginBottom: 6 }}>Daily goals</Body>
-                {activeGoals(profile).map((g) => {
-                  const on = goalDone(info.log, g.id);
-                  return (
-                    <Button
-                      key={g.id}
-                      variant={on ? "primary" : "secondary"}
-                      title={`${on ? "✓ " : ""}${g.emoji ? `${g.emoji} ` : ""}${g.name}`}
-                      onPress={() => run(() => api(`/days/${date}/goals/${g.id}`, { method: "PUT", body: { done: !on } }))}
-                    />
-                  );
-                })}
-              </Card>
+              <GoalsCard key={(info.log?.goalsDone ?? []).join()} date={date} done={info.log?.goalsDone ?? []} goals={activeGoals(profile)} run={run} />
             )}
 
             <Body style={{ fontWeight: "600", marginBottom: 8 }}>Workouts</Body>
@@ -84,6 +71,72 @@ export default function DaySheet() {
         )}
       </Screen>
     </>
+  );
+}
+
+/**
+ * Asks before deleting, as the website does. A repeating workout offers just this one, or this
+ * and the rest of the series that's still planned (logged ones are kept).
+ */
+function confirmDelete(w: Workout, run: (f: () => Promise<unknown>) => void) {
+  const one = () => run(() => api(`/workouts/${w.date}/${w.id}`, { method: "DELETE" }));
+  const series = () => run(() => api(`/workouts/${w.date}/${w.id}/series`, { method: "DELETE" }));
+  if (Platform.OS === "web") {
+    // The web build (development only) has no native alerts.
+    if (globalThis.confirm?.(`Delete "${w.title}"?`)) one();
+    return;
+  }
+  Alert.alert(
+    w.seriesId ? "Delete this repeating workout?" : `Delete "${w.title}"?`,
+    w.seriesId ? "Ones you've already logged are kept." : undefined,
+    [
+      { text: "Cancel", style: "cancel" },
+      ...(w.seriesId
+        ? [
+            { text: "Just this one", style: "destructive" as const, onPress: one },
+            { text: "This and later planned ones", style: "destructive" as const, onPress: series },
+          ]
+        : [{ text: "Delete", style: "destructive" as const, onPress: one }]),
+    ],
+  );
+}
+
+/** The day's yes/no goals. A tap shows at once and saves behind it, as on the website. */
+function GoalsCard({
+  date,
+  done,
+  goals,
+  run,
+}: {
+  date: string;
+  done: string[];
+  goals: import("@et/core/goals").Goal[];
+  run: (f: () => Promise<unknown>) => void;
+}) {
+  const [on, setOn] = useState(done);
+  return (
+    <Card>
+      <Body style={{ fontWeight: "600", marginBottom: 6 }}>Daily goals</Body>
+      {goals.map((g) => {
+        const isOn = on.includes(g.id);
+        return (
+          <Button
+            key={g.id}
+            variant={isOn ? "primary" : "secondary"}
+            title={`${isOn ? "✓ " : ""}${g.emoji ? `${g.emoji} ` : ""}${g.name}`}
+            onPress={() => {
+              setOn((cur) => (isOn ? cur.filter((x) => x !== g.id) : [...cur, g.id]));
+              run(() =>
+                api(`/days/${date}/goals/${g.id}`, { method: "PUT", body: { done: !isOn } }).catch((e) => {
+                  setOn(done); // put it back if the save failed
+                  throw e;
+                }),
+              );
+            }}
+          />
+        );
+      })}
+    </Card>
   );
 }
 
@@ -136,7 +189,7 @@ function WorkoutCard({
             {status === "needs_review" && <Button title="Missed" variant="danger" onPress={() => resolve("missed")} />}
           </View>
         ))}
-      <Pressable accessibilityRole="button" onPress={() => run(() => api(`/workouts/${w.date}/${w.id}`, { method: "DELETE" }))}>
+      <Pressable accessibilityRole="button" onPress={() => confirmDelete(w, run)}>
         <Text style={{ color: t.danger, marginTop: 8 }}>Delete</Text>
       </Pressable>
     </Card>
