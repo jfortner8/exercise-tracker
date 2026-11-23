@@ -8,17 +8,15 @@ import { saveWorkoutAction } from "@/lib/actions";
 import type { RepeatInput, WorkoutInput } from "@et/core/schemas";
 import {
   describeDuration,
-  displayToMeters,
   distanceUnit,
   formatDuration,
   formatStartTime,
   formatMinutesInput,
   intervalTotalSec,
-  metersToDisplay,
   parseMinutesInput,
   repeatDates,
 } from "@et/core/domain";
-import { WORKOUT_STATUSES, WORKOUT_TYPES, type Clock, type Injury, type Routine, type Units, type Workout, type WorkoutDetails } from "@et/core/types";
+import { WORKOUT_STATUSES, WORKOUT_TYPES, type Clock, type Injury, type Routine, type Units, type Workout } from "@et/core/types";
 import { activityKey, activityMeta, applyActivity, autoTitle, DISTANCE_TYPES, type ActivityKey } from "@et/core/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@et/core/dance";
 import { currentInjuries } from "@et/core/injuries";
@@ -28,85 +26,20 @@ import { startTimeIn, zoneAbbr, zoneDiffers, zonedTimeToUtc } from "@et/core/sta
 import { STATUS_LABEL, TYPE_META } from "@et/core/workout-types";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
 import { InjuryForm } from "../injuries";
-import { ExerciseRows, fromExerciseDrafts, toExerciseDrafts, type ExerciseDraft } from "./exercise-rows";
-
-/** Form-friendly representation of WorkoutDetails (strings, display units). */
-interface DetailsDraft {
-  durationMin: string;
-  distance: string;
-  reps: string;
-  workSec: string;
-  restSec: string;
-  warmupMin: string;
-  cooldownMin: string;
-  description: string;
-  hr: string;
-  exercises: ExerciseDraft[];
-}
+import { ExerciseRows } from "./exercise-rows";
+import {
+  badHeartRate,
+  fromDraft,
+  fromExerciseDrafts,
+  INTERVAL_TYPES,
+  minutesField,
+  toDraft,
+  toExerciseDrafts,
+  unreadableDurations,
+  type DetailsDraft,
+} from "@et/core/workout-draft";
 
 const num = (s: string) => (s.trim() === "" || isNaN(Number(s)) ? undefined : Number(s));
-const str = (n?: number, digits = 2) => (n == null ? "" : String(Math.round(n * 10 ** digits) / 10 ** digits));
-
-function toDraft(d: WorkoutDetails | undefined, units: Units): DetailsDraft {
-  return {
-    durationMin: formatMinutesInput(d?.durationSec),
-    distance: d?.distanceM ? str(metersToDisplay(d.distanceM, units)) : "",
-    reps: str(d?.intervals?.reps, 0),
-    workSec: str(d?.intervals?.workSec, 0),
-    restSec: str(d?.intervals?.restSec, 0),
-    warmupMin: formatMinutesInput(d?.intervals?.warmupSec),
-    cooldownMin: formatMinutesInput(d?.intervals?.cooldownSec),
-    description: d?.description ?? "",
-    hr: str(d?.avgHeartRate, 0),
-    exercises: toExerciseDrafts(d?.exercises, units),
-  };
-}
-
-/** Seconds from a minutes field, or undefined when it's empty or unreadable. */
-const minutesField = (s: string) => {
-  const v = parseMinutesInput(s);
-  return v == null || Number.isNaN(v) ? undefined : v;
-};
-
-/** Heart rate must be a whole-ish number of bpm in a plausible range (or empty). */
-const badHeartRate = (d: DetailsDraft) => {
-  if (!d.hr.trim()) return false;
-  const v = Number(d.hr);
-  return !isFinite(v) || v < 30 || v > 250;
-};
-
-/** Labels of minutes fields whose text can't be read as a duration. */
-function unreadableDurations(d: DetailsDraft): string[] {
-  const fields: [string, string][] = [
-    ["Duration", d.durationMin],
-    ["Warm-up", d.warmupMin],
-    ["Cool-down", d.cooldownMin],
-  ];
-  return fields.filter(([, v]) => Number.isNaN(parseMinutesInput(v))).map(([label]) => label);
-}
-
-function fromDraft(d: DetailsDraft, units: Units): WorkoutDetails | undefined {
-  const durationSec = minutesField(d.durationMin);
-  const dist = num(d.distance);
-  const intervals = {
-    reps: num(d.reps),
-    workSec: num(d.workSec),
-    restSec: num(d.restSec),
-    warmupSec: minutesField(d.warmupMin),
-    cooldownSec: minutesField(d.cooldownMin),
-  };
-  const hasIntervals = Object.values(intervals).some((v) => v != null);
-  const exercises = fromExerciseDrafts(d.exercises, units);
-  const out: WorkoutDetails = {
-    exercises: exercises.length ? exercises : undefined,
-    durationSec,
-    distanceM: dist != null ? Math.round(displayToMeters(dist, units)) : undefined,
-    intervals: hasIntervals ? intervals : undefined,
-    description: d.description.trim() || undefined,
-    avgHeartRate: num(d.hr) != null ? Math.round(num(d.hr)!) : undefined,
-  };
-  return Object.values(out).some((v) => v != null) ? out : undefined;
-}
 
 /** Minutes field that also takes 87:45 / 1:27:45, with a live preview of how it was read. */
 export function MinutesInput({
@@ -138,8 +71,6 @@ export function MinutesInput({
     </>
   );
 }
-
-const INTERVAL_TYPES = new Set(["run", "walk", "swim", "bike", "row"]);
 
 function DetailsFields({
   value,
