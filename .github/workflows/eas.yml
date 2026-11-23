@@ -46,6 +46,8 @@ jobs:
       - name: Skip without EXPO_TOKEN
         if: env.HAS_EXPO_TOKEN != 'true'
         run: echo "EXPO_TOKEN not set; skipping."
+        # Before checkout apps/mobile doesn't exist yet, so this step can't run there.
+        working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
         if: env.HAS_EXPO_TOKEN == 'true'
       - uses: actions/setup-node@v4
@@ -81,6 +83,8 @@ jobs:
       - name: Skip without EXPO_TOKEN
         if: env.HAS_EXPO_TOKEN != 'true'
         run: echo "EXPO_TOKEN not set; skipping."
+        # Before checkout apps/mobile doesn't exist yet, so this step can't run there.
+        working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
         if: env.HAS_EXPO_TOKEN == 'true'
       - uses: actions/setup-node@v4
@@ -109,6 +113,8 @@ jobs:
       - name: Require EXPO_TOKEN
         if: env.HAS_EXPO_TOKEN != 'true'
         run: echo "Add the EXPO_TOKEN repo secret first." && exit 1
+        # Before checkout apps/mobile doesn't exist yet, so this step can't run there.
+        working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
