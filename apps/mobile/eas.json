@@ -25,6 +25,10 @@
         "buildType": "apk"
       }
     },
+    "testflight": {
+      "extends": "production",
+      "channel": "preview"
+    },
     "production": {
       "channel": "production",
       "autoIncrement": true,

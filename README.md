@@ -45,10 +45,21 @@ Scan the QR code it prints (iPhone: with the Camera app; Android: in Expo Go). T
 
 **In a browser, against your local API:** put `EXPO_PUBLIC_API_URL=http://localhost:3000` in `apps/mobile/.env.local`, run `npm run dev` for the API, then `npm run web -w @et/mobile`. In development only, the API allows cross-origin calls for this (`next.config.ts`).
 
-**Builds and the stores** go through EAS (`apps/mobile/eas.json`). The first time, link the project to your Expo account:
-```bash
-cd apps/mobile && npx eas-cli@latest login && npx eas-cli@latest init
-```
+**Builds, TestFlight and updates** run on EAS from GitHub Actions (`.github/workflows/eas.yml`), like photo-mapper:
+- **Every merge to `main` that changes the app** sends its JavaScript to installed preview and TestFlight builds (`eas update`, channel `preview`). A build only takes an update made from the same native code (`runtimeVersion: fingerprint`). Adding a native package needs a new build.
+- **By hand: Actions → EAS → Run workflow:**
+  - `ios-testflight`: a store build sent to TestFlight. It follows the `preview` channel, so merges reach testers.
+  - `android-preview-apk`: an installable APK link.
+  - `android-play-internal`: Play's internal testing track (once Play is set up).
+  - `update-production`: ships `main` to store builds.
+
+**One-time setup** (the workflow skips itself until step 1):
+1. **Expo token:** create one at expo.dev → Account settings → Access tokens. Add it as the `EXPO_TOKEN` secret in GitHub → Settings → Secrets and variables → Actions.
+2. **Apple:** run the first iOS build from your own terminal, because it signs in to your Apple Developer account. It creates the signing certificates, the App Store Connect app, and an App Store Connect API key for later submissions. After that, CI builds and submits on its own:
+   ```bash
+   cd apps/mobile && npx eas-cli@latest build --platform ios --profile testflight --auto-submit-with-profile production
+   ```
+3. **Google Play (later):** pay the $25 developer fee, upload the first build by hand (Play requires it), and add a service account key for `eas submit`. New personal Play accounts must run a closed test with at least 12 testers for 14 days before production access.
 
 ## Users
 Anyone can create an account at `/signup` (Cognito emails a confirmation code). To close sign-ups, set `self_sign_up` to `false` in `infra/terraform/variables.tf` and merge the change.

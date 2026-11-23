@@ -47,7 +47,7 @@
       "reactCompiler": true
     },
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "fingerprint"
     },
     "extra": {
       "router": {
@@ -59,6 +59,9 @@
         "projectId": "eb7587e8-2940-46bb-b52c-d55981720e05"
       }
     },
-    "owner": "jfortner8"
+    "owner": "jfortner8",
+    "updates": {
+      "url": "https://u.expo.dev/eb7587e8-2940-46bb-b52c-d55981720e05"
+    }
   }
 }

@@ -1,0 +1,105 @@
+# The phone app's cloud builds and over-the-air updates, through EAS (modelled on photo-mapper's).
+#
+# - Every merge to main that changes the app ships its JavaScript to installed preview builds
+#   (`eas update`, channel "preview"). Builds only take an update made from the same native code
+#   (runtimeVersion "fingerprint"), so an update can never reach a build it would crash.
+# - Builds, store submissions and production updates run by hand: Actions → EAS → Run workflow.
+#
+# Inert until the repo has an EXPO_TOKEN secret (expo.dev → Account settings → Access tokens):
+# without it every job skips. iOS builds also need the one-time Apple setup in README.md
+# ("Phone app"), done once from a terminal because it signs in to Apple.
+name: EAS
+
+on:
+  push:
+    branches: [main]
+    paths: [apps/mobile/**, packages/core/**, package-lock.json, .github/workflows/eas.yml]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to run
+        type: choice
+        options:
+          - ios-testflight
+          - android-preview-apk
+          - android-play-internal
+          - update-production
+        default: ios-testflight
+
+env:
+  HAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN != '' }}
+
+concurrency:
+  group: eas-${{ github.event_name }}-${{ inputs.action || 'update' }}
+  cancel-in-progress: false
+
+jobs:
+  update-preview:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: apps/mobile }
+    steps:
+      - name: Skip without EXPO_TOKEN
+        if: env.HAS_EXPO_TOKEN != 'true'
+        run: echo "EXPO_TOKEN not set; skipping."
+      - uses: actions/checkout@v4
+        if: env.HAS_EXPO_TOKEN == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_EXPO_TOKEN == 'true'
+        with: { node-version: 24, cache: npm }
+      - uses: expo/expo-github-action@v8
+        if: env.HAS_EXPO_TOKEN == 'true'
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - if: env.HAS_EXPO_TOKEN == 'true'
+        run: npm ci
+        working-directory: .
+      - if: env.HAS_EXPO_TOKEN == 'true'
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          EXPO_PUBLIC_API_URL: https://exercise.johnafortner.com
+        run: eas update --channel preview --message "$COMMIT_MESSAGE" --non-interactive
+
+  run:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: apps/mobile }
+    steps:
+      - name: Require EXPO_TOKEN
+        if: env.HAS_EXPO_TOKEN != 'true'
+        run: echo "Add the EXPO_TOKEN repo secret first." && exit 1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+        working-directory: .
+
+      # A store build of the iPhone app, sent to TestFlight when it's done (about 15 to 30 minutes on
+      # EAS). It follows the "preview" channel, so every merge reaches TestFlight testers as an update.
+      - name: iOS build and TestFlight
+        if: inputs.action == 'ios-testflight'
+        run: eas build --profile testflight --platform ios --auto-submit-with-profile production --non-interactive --no-wait
+
+      # An APK anyone can install from the link EAS gives (Android only; no store needed).
+      - name: Android preview APK
+        if: inputs.action == 'android-preview-apk'
+        run: eas build --profile preview --platform android --non-interactive --no-wait
+
+      # A store build sent to Google Play's internal testing track. Needs the Play setup first.
+      - name: Android build and Play internal track
+        if: inputs.action == 'android-play-internal'
+        run: eas build --profile production --platform android --auto-submit --non-interactive --no-wait
+
+      # Ships main's JavaScript to store builds made from the same native code.
+      - name: Update production
+        if: inputs.action == 'update-production'
+        env:
+          EXPO_PUBLIC_API_URL: https://exercise.johnafortner.com
+        run: eas update --channel production --message "Production update from ${GITHUB_SHA::7}" --non-interactive
