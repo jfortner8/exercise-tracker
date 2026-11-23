@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
+/** Pages anyone can open: signing in, and the privacy policy (linked from the app stores). */
+const PUBLIC_PAGES = ["/login", "/signup", "/forgot-password", "/privacy"];
 
 // Optimistic check only (cookie present). Real verification happens in lib/dal.ts.
 export function proxy(req: NextRequest) {
   // (No "signed in → leave auth pages" redirect: a stale cookie would loop with dal.ts.)
-  if (!req.cookies.has("et_session") && !AUTH_PAGES.includes(req.nextUrl.pathname)) {
+  if (!req.cookies.has("et_session") && !PUBLIC_PAGES.includes(req.nextUrl.pathname)) {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
   return NextResponse.next();

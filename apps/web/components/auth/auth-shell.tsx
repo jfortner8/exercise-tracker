@@ -1,4 +1,5 @@
 import { Activity } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 const WEEK = [
@@ -81,6 +82,11 @@ export function AuthShell({ title, subtitle, children, footer }: {
           {subtitle && <p className="mt-1.5 text-sm text-muted">{subtitle}</p>}
           <div className="mt-8">{children}</div>
           {footer && <div className="mt-8 text-center text-sm text-muted">{footer}</div>}
+          <p className="mt-6 text-center text-xs text-muted">
+            <Link href="/privacy" className="hover:text-text hover:underline">
+              Privacy
+            </Link>
+          </p>
         </div>
       </main>
     </div>
