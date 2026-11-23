@@ -90,6 +90,8 @@ export class TrackerStack extends cdk.Stack {
       }),
     });
     table.grantReadWriteData(role);
+    // Deleting an account from the app also deletes its sign-in (lib/auth/cognito-admin.ts).
+    userPool.grant(role, "cognito-idp:AdminDeleteUser");
 
     // ---------- Outputs ----------
     new cdk.CfnOutput(this, "TableName", { value: table.tableName });

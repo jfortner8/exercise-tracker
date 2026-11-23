@@ -27,6 +27,14 @@ JSON endpoints the Expo app calls. They're route handlers in `apps/web/app/api/v
 |---|---|---|
 | POST | `/auth/login` | `{ email, password }` → `{ token, expiresIn, user }`. Gives `403 { code: "UNCONFIRMED" }` when the email isn't confirmed yet (a fresh code is sent) |
 
+### Me
+| Method | Path | Body → Response |
+|---|---|---|
+| GET | `/me` | → `{ user: { sub, email }, profile, navFlags, today }`. `navFlags` says which optional tabs to show (Sports, Weight, Routines, Injuries) |
+| PUT | `/me/profile` | The settings form (`ProfileInput`) → the same as `GET /me`, with the saved settings |
+| POST | `/me/time-zone` | `{ timeZone }` (IANA). Send it when the phone's zone differs from `profile.timeZone` |
+| DELETE | `/me` | `{ confirm: true }` → `{ deleted }`. Deletes the account for good: leaves every club (admin passes to the longest-standing member; a club they were alone in is deleted), ends friendships on both sides, retires the friend code and calendar link, deletes all their data, then the sign-in. Safe to retry. The app should then drop its token |
+
 ### Calendar
 | Method | Path | Body → Response |
 |---|---|---|
@@ -53,7 +61,6 @@ JSON endpoints the Expo app calls. They're route handlers in `apps/web/app/api/v
 | PUT | `/days/:date/goals/:goalId` | `{ done: boolean }` |
 
 **Still to come**, in the order of the plan:
-- profile and `me` (including account deletion)
 - benchmarks and results
 - injuries, routines, sports and weight
 - friends, clubs and leaderboards
