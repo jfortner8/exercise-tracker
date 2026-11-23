@@ -94,7 +94,27 @@ JSON endpoints the Expo app calls. They're route handlers in `apps/web/app/api/v
 | GET | `/sports` | → `{ year, tallies }`: completed sessions per sport (`SportTally` in `@et/core/sports`). `thisYear` counts `year`, where the user is |
 | GET | `/weight` | → `{ trackWeight, today, series }`: weigh-ins in kg, oldest first, each with its 7-day average (`WeightPoint` in `@et/core/weight`). Empty while tracking is off. Weigh-ins are saved with `PUT /days/:date { weightKg }` |
 
+### Friends and clubs
+| Method | Path | Body → Response |
+|---|---|---|
+| GET | `/social` | → `{ friendCode, friends, clubs }`. The friend code is made the first time it's asked for. `clubs` is `[{ club, memberCount, isAdmin }]`, by name |
+| POST | `/social/join` | `{ code }` → `{ kind: "friend", friend, message }` or `{ kind: "club", club, message }`. A friend's code adds them; a club's code joins it. Dashes, spaces and case don't matter. 404 for an unknown code, 409 if already friends or in the club, 429 after 20 wrong codes in a day |
+| POST | `/social/code/reset` | → `{ friendCode }`. The old code stops working; friends stay |
+| DELETE | `/friends/:sub` | Ends the friendship on both sides |
+| POST | `/clubs` | `{ name }` → `{ club }`, with you as admin |
+| GET | `/clubs/:id` | → `{ club, members, isAdmin, heir }`. Members only: a 404 to anyone else. `heir` becomes admin if the admin leaves |
+| PATCH | `/clubs/:id` | `{ name }`. Admin only (403 otherwise) |
+| DELETE | `/clubs/:id` | Deletes it for everyone. Admin only |
+| POST | `/clubs/:id/leave` | → `{ deleted, message }`. Admin passes to the longest-standing member; the last one out deletes the club |
+| POST | `/clubs/:id/code/reset` | → `{ code }`. Admin only; members stay in |
+| DELETE | `/clubs/:id/members/:sub` | Admin only |
+| POST | `/clubs/:id/members/:sub/admin` | Hands admin over. Admin only |
+
+### Leaderboards
+| Method | Path | Body → Response |
+|---|---|---|
+| GET | `/leaderboards?g=friends\|everyone\|<clubId>` | → `{ groups, group, boards, consistency, hasConsistency, friendCount }`. `boards[catalogKey]` is that benchmark's entries; work out the views (best, season, improvement, consistency ranking) with `@et/core/leaderboard-views` and `@et/core/domain`. A club you're not in is a 404. Defaults to friends |
+
 **Still to come**, in the order of the plan:
-- friends, clubs and leaderboards
 - the calendar feed
 - the rest of auth (sign-up, confirm, forgot and reset password)

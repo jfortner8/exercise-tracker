@@ -7,22 +7,20 @@ import { Suspense } from "react";
 import { ClubExit, ClubName, CodeCard, MemberActions } from "@/components/social/social-ui";
 import { Card } from "@/components/ui";
 import { requireProfile } from "@/lib/dal";
-import { getClub, listClubMembers } from "@/lib/db/repo";
-import { nextAdmin } from "@et/core/social";
+import { ApiError } from "@/lib/api-error";
+import { clubDetail } from "@/lib/services/social";
 
 export const metadata: Metadata = { title: "Club" };
 
 async function ClubDetail({ params }: { params: PageProps<"/clubs/[id]">["params"] }) {
   const { id } = await params;
   const { user } = await requireProfile();
-  const [club, members] = await Promise.all([getClub(id), listClubMembers(id)]);
   // Only members can see a club; to anyone else it doesn't exist.
-  if (!club || !members.some((m) => m.sub === user.sub)) notFound();
-  const isAdmin = club.adminSub === user.sub;
-  const sorted = [...members].sort(
-    (a, b) => Number(b.sub === club.adminSub) - Number(a.sub === club.adminSub) || a.joinedAt.localeCompare(b.joinedAt),
-  );
-  const heir = nextAdmin(members, user.sub);
+  const { club, members: sorted, isAdmin, heir } = await clubDetail(user.sub, id).catch((e) => {
+    if (e instanceof ApiError && e.status === 404) notFound();
+    throw e;
+  });
+  const members = sorted;
 
   return (
     <div className="space-y-6">
@@ -85,11 +83,11 @@ async function ClubDetail({ params }: { params: PageProps<"/clubs/[id]">["params
           clubId={club.id}
           clubName={club.name}
           isAdmin={isAdmin}
-          heirName={heir ? (members.find((m) => m.sub === heir)?.displayName ?? null) : null}
+          heirName={heir?.displayName ?? null}
         />
         {isAdmin && heir && (
           <p className="mt-2 text-xs text-muted">
-            If you leave, admin passes to {members.find((m) => m.sub === heir)?.displayName}, the longest-standing member.
+            If you leave, admin passes to {heir.displayName}, the longest-standing member.
             Or hand it to someone with Make admin.
           </p>
         )}

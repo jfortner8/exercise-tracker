@@ -7,7 +7,8 @@ import { Suspense, type ReactNode } from "react";
 import { cx, PageHeader } from "@/components/ui";
 import { BENCHMARK_CATALOG, CATEGORY_LABEL } from "@et/core/benchmarks/catalog";
 import { requireProfile, requireToday } from "@/lib/dal";
-import { getBoardsFor, getLeaderboards, listClubMembers, listMyClubs } from "@/lib/db/repo";
+import { ApiError } from "@/lib/api-error";
+import { leaderboardData } from "@/lib/services/leaderboards";
 import {
   formatResult,
   IMPROVEMENT_WINDOWS,
@@ -18,8 +19,6 @@ import {
   type ImprovementWindow,
 } from "@et/core/domain";
 import { CONSISTENCY_DAYS, CONSISTENCY_MIN_DAYS, rankConsistency, seasonBoard } from "@et/core/leaderboard-views";
-import { everyoneBoard } from "@et/core/social";
-import { friendsCircle } from "@/lib/social-server";
 import type { ConsistencyRow, LeaderboardEntry, Units } from "@et/core/types";
 
 export const metadata: Metadata = { title: "Leaderboards" };
@@ -42,35 +41,17 @@ function scoreText(c: Catalog, score: number, units: Units) {
   return formatResult(c, { value: score }, units);
 }
 
-/** The boards you can look at: your friends, each of your clubs, and everyone who shares with everyone. */
-type Group = { key: string; label: string };
-
 async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards">["searchParams"] }) {
   const sp = await searchParams;
   const { user, profile } = await requireProfile();
 
-  // Membership is checked here, on the server, before any board is read.
-  const [circle, myClubs] = await Promise.all([friendsCircle(user.sub), listMyClubs(user.sub)]);
-  const clubs = [...myClubs].sort((a, b) => a.name.localeCompare(b.name));
-  const groups: Group[] = [
-    { key: "friends", label: "Friends" },
-    ...clubs.map((c) => ({ key: c.clubId, label: c.name })),
-    { key: "everyone", label: "Everyone" },
-  ];
+  // Membership is checked in the service, on the server, before any board is read.
   const groupKey = typeof sp.g === "string" ? sp.g : "friends";
-  if (!groups.some((g) => g.key === groupKey)) notFound(); // not your club, or no such club
-  const club = clubs.find((c) => c.clubId === groupKey);
-  // Friends and clubs read just their people's PB rows. Everyone reads the shared cached
-  // board (invalidated when someone's PB row changes), minus people who share with friends & clubs only.
-  // Consistency is for friends and clubs only, so the Everyone board has none.
-  const { boards: all, consistency } =
-    groupKey === "everyone"
-      ? {
-          boards: Object.fromEntries(Object.entries(await getLeaderboards()).map(([k, entries]) => [k, everyoneBoard(entries)])),
-          consistency: [] as ConsistencyRow[],
-        }
-      : await getBoardsFor(club ? (await listClubMembers(club.clubId)).map((m) => m.sub) : circle.people);
-  const hasConsistency = groupKey !== "everyone";
+  const data = await leaderboardData(user.sub, groupKey).catch((e) => {
+    if (e instanceof ApiError && e.status === 404) notFound(); // not your club, or no such club
+    throw e;
+  });
+  const { groups, boards: all, consistency, hasConsistency, friendCount } = data;
   const today = await requireToday();
   const year = today.slice(0, 4);
   const VIEWS = views(year);
@@ -124,7 +105,7 @@ async function Boards({ searchParams }: { searchParams: PageProps<"/leaderboards
         )
       )}
 
-      {groupKey === "friends" && circle.friends.length === 0 ? (
+      {groupKey === "friends" && friendCount === 0 ? (
         <Empty>
           Add friends with their friend code to compare PBs.{" "}
           <Link href="/friends" className="font-medium text-accent-ink hover:underline">

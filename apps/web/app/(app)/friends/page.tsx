@@ -6,29 +6,13 @@ import { Suspense } from "react";
 import { CodeCard, CreateClub, JoinWithCode, RemoveFriendButton } from "@/components/social/social-ui";
 import { Card, PageHeader } from "@/components/ui";
 import { requireProfile } from "@/lib/dal";
-import { getClub, listClubMembers, listMyClubs } from "@/lib/db/repo";
-import { ensureFriendCode, friendsCircle } from "@/lib/social-server";
+import { socialOverview } from "@/lib/services/social";
 
 export const metadata: Metadata = { title: "Friends & clubs" };
 
 async function FriendsAndClubs() {
   const { user, profile } = await requireProfile();
-  const [code, circle, myClubs] = await Promise.all([
-    ensureFriendCode(user.sub, profile),
-    friendsCircle(user.sub),
-    listMyClubs(user.sub),
-  ]);
-  const clubs = (
-    await Promise.all(
-      myClubs.map(async (c) => {
-        const [club, members] = await Promise.all([getClub(c.clubId), listClubMembers(c.clubId)]);
-        return club ? { club, count: members.length } : null;
-      }),
-    )
-  )
-    .filter((c) => c != null)
-    .sort((a, b) => a.club.name.localeCompare(b.club.name));
-  const friends = [...circle.friends].sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const { friendCode: code, friends, clubs } = await socialOverview(user.sub, profile);
 
   return (
     <div className="space-y-6">
@@ -96,13 +80,13 @@ async function FriendsAndClubs() {
         <p className="mb-3 text-sm text-muted">Everyone in a club sees the same leaderboard. Join one with its code above.</p>
         {clubs.length > 0 && (
           <Card className="mb-3 divide-y divide-border">
-            {clubs.map(({ club, count }) => (
+            {clubs.map(({ club, memberCount: count, isAdmin }) => (
               <Link key={club.id} href={`/clubs/${club.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{club.name}</span>
                   <span className="block text-xs text-muted">
                     {count} {count === 1 ? "member" : "members"}
-                    {club.adminSub === user.sub && (
+                    {isAdmin && (
                       <span className="ml-1.5 inline-flex items-center gap-0.5 text-accent-ink">
                         <Crown className="size-3" /> Admin
                       </span>
