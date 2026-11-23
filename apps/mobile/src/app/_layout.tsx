@@ -56,6 +56,10 @@ function Navigator() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="more/[screen]" options={{ headerShown: true, headerTitle: "", headerBackTitle: "Settings" }} />
+        <Stack.Screen
+          name="day/[date]"
+          options={{ headerShown: true, presentation: "formSheet", sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }}
+        />
         <Stack.Screen name="(auth)" />
       </Stack>
     </>
