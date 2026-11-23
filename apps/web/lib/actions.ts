@@ -93,7 +93,7 @@ export async function deleteInjuryAction(injuryId: string) {
 
 // ---------- Benchmarks ----------
 export async function trackCatalogBenchmarkAction(key: string) {
-  return act((sub) => benchmarks.trackCatalogBenchmark(sub, key));
+  await act((sub) => benchmarks.trackCatalogBenchmark(sub, key));
 }
 export async function createBenchmarkAction(raw: BenchmarkInput) {
   return act((sub) => benchmarks.createBenchmark(sub, raw));
