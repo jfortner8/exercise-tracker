@@ -21,7 +21,7 @@ An npm workspace with three packages:
   - `lib/db/repo.ts`: single-table DynamoDB access (`PK=USER#<sub>`).
   - `lib/actions.ts`: server actions.
 - `packages/core` (`@et/core`): pure logic shared by the website, the API and the phone app. It has no React and no server code. It covers dates and units, activities, goals and habits, splits, start-time zones, PBs, social codes, and the Zod input schemas (`schemas.ts`) that every input is validated with.
-- `apps/mobile`: the Expo phone app (coming).
+- `apps/mobile`: the Expo phone app (Expo SDK 58, Expo Router with native tabs). It talks to the website's `/api/v1` ([docs/api.md](docs/api.md)); see [Phone app](#phone-app).
 - `infra/terraform/`: Terraform for the AWS resources: the DynamoDB table, the Cognito user pool, and the IAM role Vercel assumes via **OIDC federation** (no AWS keys stored anywhere). GitHub Actions plans and applies it; see [infra/terraform/README.md](infra/terraform/README.md).
 
 ## Local development
@@ -33,6 +33,33 @@ npm run dev                          # runs the website from apps/web
 Locally the app uses your AWS CLI credentials. On Vercel it exchanges the deployment's OIDC token for the `exercise-tracker-vercel` role.
 
 Env vars: `APP_AWS_REGION`, `APP_AWS_ROLE_ARN` (Vercel only), `TABLE_NAME`, `COGNITO_ISSUER`, `COGNITO_CLIENT_ID`, `COGNITO_CLIENT_SECRET`, `AUTH_SECRET`.
+
+## Phone app
+The app in `apps/mobile` uses the live API (`https://exercise.johnafortner.com`) unless `EXPO_PUBLIC_API_URL` says otherwise.
+
+**On your phone, no build needed:** install **Expo Go** from the App Store or Play Store, then:
+```bash
+npm run mobile
+```
+Scan the QR code it prints (iPhone: with the Camera app; Android: in Expo Go). The phone and the computer need to be on the same Wi-Fi.
+
+**In a browser, against your local API:** put `EXPO_PUBLIC_API_URL=http://localhost:3000` in `apps/mobile/.env.local`, run `npm run dev` for the API, then `npm run web -w @et/mobile`. In development only, the API allows cross-origin calls for this (`next.config.ts`).
+
+**Builds, TestFlight and updates** run on EAS from GitHub Actions (`.github/workflows/eas.yml`), like photo-mapper:
+- **Every merge to `main` that changes the app** sends its JavaScript to installed preview and TestFlight builds (`eas update`, channel `preview`). A build only takes an update made from the same native code (`runtimeVersion: fingerprint`). Adding a native package needs a new build.
+- **By hand: Actions → EAS → Run workflow:**
+  - `ios-testflight`: a store build sent to TestFlight. It follows the `preview` channel, so merges reach testers.
+  - `android-preview-apk`: an installable APK link.
+  - `android-play-internal`: Play's internal testing track (once Play is set up).
+  - `update-production`: ships `main` to store builds.
+
+**One-time setup** (the workflow skips itself until step 1):
+1. **Expo token:** create one at expo.dev → Account settings → Access tokens. Add it as the `EXPO_TOKEN` secret in GitHub → Settings → Secrets and variables → Actions.
+2. **Apple:** run the first iOS build from your own terminal, because it signs in to your Apple Developer account. It creates the signing certificates, the App Store Connect app, and an App Store Connect API key for later submissions. After that, CI builds and submits on its own:
+   ```bash
+   cd apps/mobile && npx eas-cli@latest build --platform ios --profile testflight --auto-submit-with-profile production
+   ```
+3. **Google Play (later):** pay the $25 developer fee, upload the first build by hand (Play requires it), and add a service account key for `eas submit`. New personal Play accounts must run a closed test with at least 12 testers for 14 days before production access.
 
 ## Users
 Anyone can create an account at `/signup` (Cognito emails a confirmation code). To close sign-ups, set `self_sign_up` to `false` in `infra/terraform/variables.tf` and merge the change.

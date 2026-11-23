@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import type { CalendarFeedResponse } from "@et/core/api-types";
 import { validTimeZone } from "@et/core/domain";
 import { calendarOptionsInput } from "@et/core/schemas";
 import { ApiError } from "@/lib/api-error";
@@ -43,7 +44,7 @@ export async function saveFeedOptions(sub: string, raw: { includeNotes: boolean;
 }
 
 /** The feed's state, with its links on `origin` when it's on. */
-export async function feedInfo(sub: string, origin: string) {
+export async function feedInfo(sub: string, origin: string): Promise<CalendarFeedResponse> {
   const p = await repo.getProfile(sub);
   const url = p?.calendarToken ? `${origin}/cal/${p.calendarToken}.ics` : null;
   return {

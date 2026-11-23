@@ -1,5 +1,6 @@
 import "server-only";
 import { showInjuriesTab } from "@et/core/injuries";
+import type { MeResponse } from "@et/core/api-types";
 import type { NavFlags } from "@et/core/nav-flags";
 import type { Profile } from "@et/core/types";
 import { ApiError } from "@/lib/api-error";
@@ -23,7 +24,7 @@ export async function navFlags(sub: string, profile: Profile, today: string): Pr
 }
 
 /** Who's signed in, their settings, which tabs to show, and today where they are. */
-export async function me(sub: string, email: string, name: string | undefined, today: string) {
+export async function me(sub: string, email: string, name: string | undefined, today: string): Promise<MeResponse> {
   const profile = { ...((await repo.getProfile(sub)) ?? repo.defaultProfile(email, name)), email };
   return { user: { sub, email }, profile, navFlags: await navFlags(sub, profile, today), today };
 }

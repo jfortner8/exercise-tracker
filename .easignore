@@ -1,0 +1,14 @@
+# What EAS uploads for a phone app build (it archives the whole repo in a monorepo). Replaces
+# .gitignore for EAS, so its patterns are repeated here. apps/web stays as its package.json only:
+# npm ci needs every workspace's package.json, not the website itself.
+/apps/web/*
+!/apps/web/package.json
+/infra/
+/docs/
+node_modules/
+.next/
+.expo/
+dist/
+coverage/
+*.tsbuildinfo
+.env*

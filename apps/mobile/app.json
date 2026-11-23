@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "Exercise Tracker",
+    "slug": "exercise-tracker",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "exercisetracker",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.jfortner8.exercisetracker",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.jfortner8.exercisetracker",
+      "allowBackup": false,
+      "predictiveBackGestureEnabled": false,
+      "adaptiveIcon": {
+        "backgroundColor": "#15140f",
+        "foregroundImage": "./assets/icon.png"
+      }
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-localization",
+      "expo-sqlite",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#15140f",
+          "image": "./assets/icon.png",
+          "imageWidth": 96
+        }
+      ],
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "eb7587e8-2940-46bb-b52c-d55981720e05"
+      }
+    },
+    "owner": "jfortner8",
+    "updates": {
+      "url": "https://u.expo.dev/eb7587e8-2940-46bb-b52c-d55981720e05"
+    }
+  }
+}

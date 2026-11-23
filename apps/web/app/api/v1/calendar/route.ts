@@ -1,4 +1,5 @@
 import { parseRange } from "@et/core/api-input";
+import type { CalendarResponse } from "@et/core/api-types";
 import { recentActivities } from "@et/core/activities";
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/api-error";
@@ -20,5 +21,5 @@ export const GET = api(async ({ req, sub, today }) => {
     listRoutines(sub),
     recentWorkouts(sub, t),
   ]);
-  return { ...range, today: t, startDate, ...data, routines, recent: recentActivities(recent) };
+  return { ...range, today: t, startDate, ...data, routines, recent: recentActivities(recent) } satisfies CalendarResponse;
 });

@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "-w", "@et/web"], "port": 3000 }
+    { "name": "dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "-w", "@et/web"], "port": 3000 },
+    { "name": "mobile-web", "runtimeExecutable": "npm", "runtimeArgs": ["run", "web", "-w", "@et/mobile", "--", "--port", "8081"], "port": 8081 }
   ]
 }
