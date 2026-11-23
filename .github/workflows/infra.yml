@@ -3,7 +3,11 @@ name: infra
 # - pull requests: format check, validate, and a read-only plan posted as a comment;
 # - merges to main: the same plan, checked to delete nothing, then applied;
 # - every Monday: a plan of main, which fails (and emails) if AWS has drifted from the code.
-# Runs only when infra/terraform or this file changes. The roles it assumes are in infra/terraform/ci.tf.
+# Runs only when infra/terraform or this file changes.
+#
+# It signs in to AWS as the account's shared github-actions-runner role, through GitHub OIDC (no
+# access keys). The role is defined in archive-api's Terraform (infra/terraform/ci.tf there); its ARN
+# is in the AWS_PLAN_ROLE_ARN and AWS_APPLY_ROLE_ARN repository variables.
 
 on:
   pull_request:
@@ -107,7 +111,7 @@ jobs:
           exit 1
 
   apply:
-    # Skipped until the apply role's ARN is set as a repository variable (see infra/terraform/README.md).
+    # Skipped until AWS_APPLY_ROLE_ARN is set as a repository variable (see infra/terraform/README.md).
     if: github.event_name == 'push' && vars.AWS_APPLY_ROLE_ARN != ''
     runs-on: ubuntu-latest
     # Never two applies at once, and never cancel one halfway.

@@ -21,13 +21,3 @@ output "cognito_client_id" {
 output "user_pool_id" {
   value = aws_cognito_user_pool.users.id
 }
-
-output "ci_plan_role_arn" {
-  description = "AWS_PLAN_ROLE_ARN in the repository's Actions variables."
-  value       = aws_iam_role.ci_plan.arn
-}
-
-output "ci_apply_role_arn" {
-  description = "AWS_APPLY_ROLE_ARN in the repository's Actions variables. Until it's set, CI skips the apply."
-  value       = aws_iam_role.ci_apply.arn
-}

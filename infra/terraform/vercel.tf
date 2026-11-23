@@ -1,6 +1,16 @@
 # The role the website assumes from Vercel through OIDC federation: each deployment exchanges its
 # Vercel-signed token for short-lived AWS credentials, so no AWS keys are stored anywhere.
 
+locals {
+  account_id = data.aws_caller_identity.current.account_id
+  # ARNs built from names rather than taken from the resources, so the policies below are fully known
+  # at plan time and a reviewer sees exactly what they'll say.
+  table_arn       = "arn:aws:dynamodb:${var.aws_region}:${local.account_id}:table/${var.name_prefix}"
+  user_pool_arn   = "arn:aws:cognito-idp:${var.aws_region}:${local.account_id}:userpool/${local.user_pool_id}"
+  vercel_issuer   = "oidc.vercel.com/${var.vercel_team_slug}"
+  vercel_oidc_arn = "arn:aws:iam::${local.account_id}:oidc-provider/${local.vercel_issuer}"
+}
+
 resource "aws_iam_openid_connect_provider" "vercel" {
   url             = "https://${local.vercel_issuer}"
   client_id_list  = ["https://vercel.com/${var.vercel_team_slug}"]

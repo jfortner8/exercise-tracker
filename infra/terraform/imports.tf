@@ -3,9 +3,7 @@
 # Once applied these blocks are no-ops; they can be deleted in any later change.
 
 locals {
-  # Cognito generates pool ids, so this one is written down. The CI policies use it too, which keeps
-  # them independent of the pool resource: the bootstrap can create the CI roles on their own
-  # (README.md) without importing or changing anything else.
+  # Cognito generates pool ids, so this one is written down. The Vercel role's policy uses it too.
   user_pool_id = "us-east-1_Qn070C54V"
 }
 
