@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   description: "What Exercise Tracker stores, who can see it, and how to delete it.",
 };
 
-/** Shown under "Questions" when set. Left out until there's an address to publish. */
-const CONTACT_EMAIL: string | null = null;
+/** Where privacy questions and data requests go. */
+const CONTACT_EMAIL: string | null = "jafortner8@gmail.com";
 const UPDATED = "November 23, 2026";
 
 /** The privacy policy, for the website and the app store listings. Public: no sign-in needed (proxy.ts). */
