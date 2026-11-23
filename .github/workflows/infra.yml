@@ -1,19 +1,157 @@
 name: infra
-# The AWS stack: type-checks it (no AWS access, nothing is deployed).
+# Terraform for the AWS resources (infra/terraform). Nobody runs terraform by hand:
+# - pull requests: format check, validate, and a read-only plan posted as a comment;
+# - merges to main: the same plan, checked to delete nothing, then applied;
+# - every Monday: a plan of main, which fails (and emails) if AWS has drifted from the code.
+# Runs only when infra/terraform or this file changes.
+#
+# It signs in to AWS as the account's shared github-actions-runner role, through GitHub OIDC (no
+# access keys). The role is defined in archive-api's Terraform (infra/terraform/ci.tf there); its ARN
+# is in the AWS_PLAN_ROLE_ARN and AWS_APPLY_ROLE_ARN repository variables.
+
 on:
   pull_request:
-    paths: [infra/**, .github/workflows/infra.yml]
+    paths: [infra/terraform/**, .github/workflows/infra.yml]
   push:
     branches: [main]
-    paths: [infra/**, .github/workflows/infra.yml]
+    paths: [infra/terraform/**, .github/workflows/infra.yml]
+  schedule:
+    - cron: "0 13 * * 1"
+
+env:
+  TF_VERSION: 1.16.2
+
 jobs:
-  check:
+  plan:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
+    concurrency:
+      group: infra-plan-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      id-token: write # the OIDC token AWS trusts, instead of an access key
+      contents: read
+      pull-requests: write # to post the plan
     defaults:
-      run: { working-directory: infra }
+      run:
+        working-directory: infra/terraform
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: npm, cache-dependency-path: infra/package-lock.json }
-      - run: npm ci
-      - run: npx tsc --noEmit
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Validate
+        run: terraform init -input=false -backend=false && terraform validate
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: vars.AWS_PLAN_ROLE_ARN != ''
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # -lock=false keeps this a pure read: taking the state lock needs write access to the state bucket.
+      # -detailed-exitcode: 0 no changes, 2 changes, anything else an error.
+      - name: Plan
+        id: plan
+        if: vars.AWS_PLAN_ROLE_ARN != ''
+        run: |
+          terraform init -input=false -reconfigure
+          set +e
+          terraform plan -input=false -lock=false -no-color -detailed-exitcode > plan.txt 2>&1
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then tail -40 plan.txt; exit 1; fi
+          echo "changes=$([ "$code" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          {
+            echo "summary<<PLANEOF"
+            grep -E "^(Plan:|No changes|  # )" plan.txt | head -60
+            echo "PLANEOF"
+          } >> "$GITHUB_OUTPUT"
+          grep -E "^(Plan:|No changes|  # )" plan.txt || true
+
+      - name: Comment the plan on the pull request
+        if: github.event_name == 'pull_request' && steps.plan.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          SUMMARY: ${{ steps.plan.outputs.summary }}
+        with:
+          script: |
+            const body = [
+              '<!-- terraform-plan -->',
+              '### Terraform plan',
+              '',
+              '```',
+              process.env.SUMMARY.trim() || 'No changes.',
+              '```',
+              '',
+              '_Merging to main applies this automatically. An apply that would delete or replace anything is refused._',
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((c) => c.body.includes('<!-- terraform-plan -->'));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
+            }
+
+      - name: Fail on drift
+        if: github.event_name == 'schedule' && steps.plan.outputs.changes == 'true'
+        run: |
+          echo "::error::AWS no longer matches infra/terraform on main. Someone changed something by hand, or a merge didn't apply. Read the plan above."
+          exit 1
+
+  apply:
+    # Skipped until AWS_APPLY_ROLE_ARN is set as a repository variable (see infra/terraform/README.md).
+    if: github.event_name == 'push' && vars.AWS_APPLY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    # Never two applies at once, and never cancel one halfway.
+    concurrency:
+      group: terraform-apply
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Plan
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -no-color -out=tfplan
+
+      # An unattended apply must never delete anything. A destroy or a replacement (a destroy and then a
+      # create) is almost always a mistake, and the table and the user pool can't be recovered. If a change
+      # really needs one, it has to be done deliberately, outside this workflow.
+      - name: Refuse to delete or replace anything
+        run: |
+          if terraform show -json tfplan | jq -e '[.resource_changes[]? | select(.change.actions | index("delete"))] | length > 0' > /dev/null; then
+            echo "::error::This plan deletes or replaces resources. Not applying it."
+            terraform show -no-color tfplan | grep -E "^  # |must be replaced|will be destroyed"
+            exit 1
+          fi
+
+      - name: Apply
+        run: terraform apply -input=false tfplan

@@ -22,12 +22,12 @@ An npm workspace with three packages:
   - `lib/actions.ts`: server actions.
 - `packages/core` (`@et/core`): pure logic shared by the website, the API and the phone app. It has no React and no server code. It covers dates and units, activities, goals and habits, splits, start-time zones, PBs, social codes, and the Zod input schemas (`schemas.ts`) that every input is validated with.
 - `apps/mobile`: the Expo phone app (coming).
-- `infra/`: AWS CDK stack: DynamoDB table, Cognito user pool + managed login, and the IAM role Vercel assumes via **OIDC federation** (no AWS keys stored anywhere). Not part of the workspace.
+- `infra/terraform/`: Terraform for the AWS resources: the DynamoDB table, the Cognito user pool, and the IAM role Vercel assumes via **OIDC federation** (no AWS keys stored anywhere). GitHub Actions plans and applies it; see [infra/terraform/README.md](infra/terraform/README.md).
 
 ## Local development
 ```bash
 npm install
-vercel env pull apps/web/.env.local   # or copy values from `cd infra && npm run deploy` outputs
+vercel env pull apps/web/.env.local
 npm run dev                          # runs the website from apps/web
 ```
 Locally the app uses your AWS CLI credentials. On Vercel it exchanges the deployment's OIDC token for the `exercise-tracker-vercel` role.
@@ -35,12 +35,10 @@ Locally the app uses your AWS CLI credentials. On Vercel it exchanges the deploy
 Env vars: `APP_AWS_REGION`, `APP_AWS_ROLE_ARN` (Vercel only), `TABLE_NAME`, `COGNITO_ISSUER`, `COGNITO_CLIENT_ID`, `COGNITO_CLIENT_SECRET`, `AUTH_SECRET`.
 
 ## Users
-Anyone can create an account at `/signup` (Cognito emails a confirmation code). To close sign-ups, set `"selfSignUp": false` in `infra/cdk.json` and redeploy the infra.
+Anyone can create an account at `/signup` (Cognito emails a confirmation code). To close sign-ups, set `self_sign_up` to `false` in `infra/terraform/variables.tf` and merge the change.
 
 ## Infra changes
-```bash
-cd infra && npm install && npm run deploy
-```
+Edit `infra/terraform` in a pull request. The `infra` workflow posts the plan on the pull request, and merging to `main` applies it. Nobody runs `terraform apply` by hand.
 
 ## Tests
 ```bash
