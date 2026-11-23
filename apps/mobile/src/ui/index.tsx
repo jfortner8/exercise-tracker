@@ -14,21 +14,26 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/theme";
 
-/** A scrolling page on the app's background, inside the safe area. */
+/**
+ * A scrolling page on the app's background, inside the safe area. `header`: the screen has a
+ * navigation header (a sheet or pushed screen), which already clears the top of the phone.
+ */
 export function Screen({
   children,
   onRefresh,
   refreshing = false,
+  header = false,
 }: {
   children: ReactNode;
   onRefresh?: () => void;
   refreshing?: boolean;
+  header?: boolean;
 }) {
   const t = useTheme();
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: t.bg }}>
+    <SafeAreaView edges={header ? ["left", "right"] : ["top", "left", "right"]} style={{ flex: 1, backgroundColor: t.bg }}>
       <ScrollView
-        contentContainerStyle={styles.screen}
+        contentContainerStyle={[styles.screen, header && { paddingTop: 16 }]}
         keyboardShouldPersistTaps="handled"
         contentInsetAdjustmentBehavior="automatic"
         refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}

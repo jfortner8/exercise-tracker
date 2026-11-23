@@ -4,9 +4,9 @@ import type { TabDef } from "@/screens/tabs";
 import { Body, Button, Card, Screen, Title } from "@/ui";
 
 /** A screen the app doesn't have yet: says so, and opens the same page on the website meanwhile. */
-export function ComingSoon({ tab }: { tab: TabDef }) {
+export function ComingSoon({ tab, header }: { tab: TabDef; header?: boolean }) {
   return (
-    <Screen>
+    <Screen header={header}>
       <Title>{tab.label}</Title>
       <Card>
         <Body>This screen is coming in a later version of the app.</Body>
