@@ -1,181 +1,103 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { ulid } from "ulid";
-import { clubName, id, joinCode } from "@et/core/schemas";
 import { ApiError } from "@/lib/api-error";
 import { requireUser } from "@/lib/dal";
-import { leaveClub } from "@/lib/services/social";
-import * as repo from "@/lib/db/repo";
-import { CODE_FAILURES_PER_DAY, CODE_LENGTH, newCode, normalizeCode } from "@et/core/social";
-import type { Club } from "@et/core/types";
+import * as social from "@/lib/services/social";
 
 /*
- * Friends and clubs. Every action checks on the server that the signed-in user may do it:
- * only members can leave, and only the club's admin can rename, reset the code, remove
- * members, hand over admin or delete. Failures come back as { error } with a message to show.
+ * Friends and clubs: the website's actions. Each is the signed-in user, then the shared service
+ * (lib/services/social.ts, which the /api/v1 routes call too), then a re-render. A service's ApiError
+ * comes back as { error } with its message to show.
  */
 
 export type SocialResult = { error: string } | { ok: true; message?: string; href?: string };
 
-const now = () => new Date().toISOString();
-
 async function me() {
   const user = await requireUser();
-  const profile = await repo.getProfile(user.sub);
-  return { sub: user.sub, displayName: profile?.displayName ?? user.name ?? user.email.split("@")[0], profile };
+  return { sub: user.sub, displayName: await social.displayNameOf(user.sub, user.email, user.name) };
 }
 
-/** One box for both kinds of code: a friend's code adds them, a club's code joins it. */
-export async function joinWithCodeAction(raw: string): Promise<SocialResult> {
-  const { sub, displayName } = await me();
-  const code = normalizeCode(joinCode.parse(raw));
-  if (code.length !== CODE_LENGTH) return { error: "Codes are 16 letters and numbers, like ABCD-EFGH-JKMN-PQRS." };
-  // After too many wrong codes today, every attempt fails with a generic error (see CODE_FAILURES_PER_DAY).
-  const today = new Date().toISOString().slice(0, 10);
-  if ((await repo.getCodeFailures(sub, today)) >= CODE_FAILURES_PER_DAY) return { error: "An error occurred." };
-  const target = await repo.getCode(code);
-  if (!target) {
-    await repo.addCodeFailure(sub, today);
-    return { error: "No friend or club has that code. Check it and try again." };
-  }
-
-  if (target.kind === "friend") {
-    if (target.sub === sub) return { error: "That's your own code. Send it to a friend instead." };
-    const them = await repo.getProfile(target.sub);
-    if (!them) {
-      await repo.addCodeFailure(sub, today);
-      return { error: "No friend or club has that code. Check it and try again." };
-    }
-    const since = now();
-    const added = await repo.addFriendship({ sub, displayName, since }, { sub: target.sub, displayName: them.displayName, since });
-    if (!added) return { error: `You and ${them.displayName} are already friends.` };
-    refresh();
-    return { ok: true, message: `You and ${them.displayName} are now friends.` };
-  }
-
-  const club = await repo.getClub(target.clubId);
-  if (!club) return { error: "That club no longer exists." };
-  const joined = await repo.joinClub(club, { sub, displayName, joinedAt: now() });
-  if (!joined) return { error: `You're already in ${club.name}.` };
-  refresh();
-  return { ok: true, message: `You joined ${club.name}.`, href: `/clubs/${club.id}` };
-}
-
-export async function removeFriendAction(friendSub: string): Promise<SocialResult> {
-  const { sub } = await me();
-  await repo.removeFriendship(sub, id.parse(friendSub));
-  refresh();
-  return { ok: true };
-}
-
-/** A new friend code; the old one stops working. Existing friends stay friends. */
-export async function resetFriendCodeAction(): Promise<SocialResult> {
-  const { sub, profile } = await me();
-  let current = profile?.friendCode;
-  for (let i = 0; i < 5; i++) {
-    if (await repo.setFriendCode(sub, newCode(), current)) {
-      refresh();
-      return { ok: true, message: "New code ready. The old one no longer works." };
-    }
-    current = (await repo.getProfile(sub))?.friendCode;
-  }
-  return { error: "Couldn't make a new code. Try again." };
-}
-
-export async function createClubAction(rawName: string): Promise<SocialResult> {
-  const { sub, displayName } = await me();
-  const parsed = clubName.safeParse(rawName);
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const createdAt = now();
-  for (let i = 0; i < 5; i++) {
-    const club: Club = { id: ulid(), name: parsed.data, adminSub: sub, code: newCode(), createdAt };
-    if (await repo.createClub(club, { sub, displayName, joinedAt: createdAt })) {
-      refresh();
-      return { ok: true, href: `/clubs/${club.id}` };
-    }
-  }
-  return { error: "Couldn't create the club. Try again." };
-}
-
-/** Leaving as admin passes admin to whoever joined first; the last one out deletes the club. */
-export async function leaveClubAction(clubId: string): Promise<SocialResult> {
-  const { sub } = await me();
-  let left;
+async function run(fn: (me: { sub: string; displayName: string }) => Promise<SocialResult>): Promise<SocialResult> {
   try {
-    left = await leaveClub(sub, clubId);
+    const result = await fn(await me());
+    refresh();
+    return result;
   } catch (e) {
     if (e instanceof ApiError) return { error: e.message };
     throw e;
   }
-  refresh();
-  const { club, deleted, wasAdmin, heirName } = left;
-  return {
-    ok: true,
-    href: "/friends",
-    message: deleted
-      ? `You left ${club.name}. You were the last member, so it was deleted.`
-      : wasAdmin
-        ? `You left ${club.name}. ${heirName} is the admin now.`
-        : `You left ${club.name}.`,
-  };
 }
 
-/** The club, if the signed-in user is its admin. */
-async function asAdmin(clubId: string): Promise<{ sub: string; club: Club } | { error: string }> {
-  const { sub } = await me();
-  const club = await repo.getClub(id.parse(clubId));
-  if (!club) return { error: "That club no longer exists." };
-  if (club.adminSub !== sub) return { error: "Only the club's admin can do that." };
-  return { sub, club };
+/** One box for both kinds of code: a friend's code adds them, a club's code joins it. */
+export async function joinWithCodeAction(raw: string): Promise<SocialResult> {
+  return run(async ({ sub, displayName }) => {
+    const r = await social.joinWithCode(sub, displayName, raw);
+    return r.kind === "club" ? { ok: true, message: r.message, href: `/clubs/${r.club.id}` } : { ok: true, message: r.message };
+  });
+}
+
+export async function removeFriendAction(friendSub: string): Promise<SocialResult> {
+  return run(async ({ sub }) => {
+    await social.removeFriend(sub, friendSub);
+    return { ok: true };
+  });
+}
+
+/** A new friend code; the old one stops working. Existing friends stay friends. */
+export async function resetFriendCodeAction(): Promise<SocialResult> {
+  return run(async ({ sub }) => {
+    await social.resetFriendCode(sub);
+    return { ok: true, message: "New code ready. The old one no longer works." };
+  });
+}
+
+export async function createClubAction(rawName: string): Promise<SocialResult> {
+  return run(async ({ sub, displayName }) => {
+    const club = await social.createClub(sub, displayName, rawName);
+    return { ok: true, href: `/clubs/${club.id}` };
+  });
+}
+
+/** Leaving as admin passes admin to whoever joined first; the last one out deletes the club. */
+export async function leaveClubAction(clubId: string): Promise<SocialResult> {
+  return run(async ({ sub }) => {
+    const { message } = await social.leaveClub(sub, clubId);
+    return { ok: true, href: "/friends", message };
+  });
 }
 
 export async function renameClubAction(clubId: string, rawName: string): Promise<SocialResult> {
-  const a = await asAdmin(clubId);
-  if ("error" in a) return a;
-  const parsed = clubName.safeParse(rawName);
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  await repo.renameClub(a.club.id, parsed.data, await repo.listClubMembers(a.club.id));
-  refresh();
-  return { ok: true };
+  return run(async ({ sub }) => {
+    await social.renameClub(sub, clubId, rawName);
+    return { ok: true };
+  });
 }
 
 export async function resetClubCodeAction(clubId: string): Promise<SocialResult> {
-  const a = await asAdmin(clubId);
-  if ("error" in a) return a;
-  for (let i = 0; i < 5; i++) {
-    if (await repo.resetClubCode(a.club, newCode())) {
-      refresh();
-      return { ok: true, message: "New code ready. The old one no longer works; members stay in." };
-    }
-  }
-  return { error: "Couldn't make a new code. Try again." };
+  return run(async ({ sub }) => {
+    await social.resetClubCode(sub, clubId);
+    return { ok: true, message: "New code ready. The old one no longer works; members stay in." };
+  });
 }
 
 export async function removeMemberAction(clubId: string, memberSub: string): Promise<SocialResult> {
-  const a = await asAdmin(clubId);
-  if ("error" in a) return a;
-  const target = id.parse(memberSub);
-  if (target === a.sub) return { error: "To go yourself, use Leave club." };
-  await repo.removeClubMember(a.club.id, target);
-  refresh();
-  return { ok: true };
+  return run(async ({ sub }) => {
+    await social.removeMember(sub, clubId, memberSub);
+    return { ok: true };
+  });
 }
 
 export async function makeAdminAction(clubId: string, memberSub: string): Promise<SocialResult> {
-  const a = await asAdmin(clubId);
-  if ("error" in a) return a;
-  const target = id.parse(memberSub);
-  if (target === a.sub) return { ok: true };
-  if (!(await repo.setClubAdmin(a.club.id, a.sub, target))) return { error: "They're no longer in the club." };
-  refresh();
-  return { ok: true };
+  return run(async ({ sub }) => {
+    await social.makeAdmin(sub, clubId, memberSub);
+    return { ok: true };
+  });
 }
 
 export async function deleteClubAction(clubId: string): Promise<SocialResult> {
-  const a = await asAdmin(clubId);
-  if ("error" in a) return a;
-  await repo.deleteClub(a.club);
-  refresh();
-  return { ok: true, href: "/friends", message: `${a.club.name} was deleted.` };
+  return run(async ({ sub }) => {
+    const club = await social.deleteClub(sub, clubId);
+    return { ok: true, href: "/friends", message: `${club.name} was deleted.` };
+  });
 }
