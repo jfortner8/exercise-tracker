@@ -72,8 +72,29 @@ JSON endpoints the Expo app calls. They're route handlers in `apps/web/app/api/v
 | PUT | `/benchmarks/:id/results/:date/:resultId` | The whole result again. A field left out is cleared; a new `date` moves it |
 | DELETE | `/benchmarks/:id/results/:date/:resultId` | |
 
+### Injuries
+| Method | Path | Body → Response |
+|---|---|---|
+| GET | `/injuries` | → `{ injuries, pain }`. `pain[injuryId]` is the pain levels logged on workouts linked to it, oldest first: `[{ date, level, title }]` |
+| POST | `/injuries` | `{ name, bodyPart?, startDate, endDate?, status, notes? }` → `{ id }`. `status` is `active`, `recovering` or `healed` |
+| PUT | `/injuries/:id` | The whole injury again. A field left out is cleared |
+| DELETE | `/injuries/:id` | Workouts linked to it are left as they are |
+
+### Routines
+| Method | Path | Body → Response |
+|---|---|---|
+| GET | `/routines` | → `{ routines }` |
+| POST | `/routines` | `{ name, exercises: [{ name, sets?, reps?, weightKg? }] }` → `{ id }`. Names are unique, ignoring case; at least one exercise |
+| PUT | `/routines/:id` | The same body. Workouts already on the calendar keep their own copy |
+| DELETE | `/routines/:id` | The Routines tab (`navFlags.showRoutines`) goes with the last one |
+
+### Sports and weight
+| Method | Path | Body → Response |
+|---|---|---|
+| GET | `/sports` | → `{ year, tallies }`: completed sessions per sport (`SportTally` in `@et/core/sports`). `thisYear` counts `year`, where the user is |
+| GET | `/weight` | → `{ trackWeight, today, series }`: weigh-ins in kg, oldest first, each with its 7-day average (`WeightPoint` in `@et/core/weight`). Empty while tracking is off. Weigh-ins are saved with `PUT /days/:date { weightKg }` |
+
 **Still to come**, in the order of the plan:
-- injuries, routines, sports and weight
 - friends, clubs and leaderboards
 - the calendar feed
 - the rest of auth (sign-up, confirm, forgot and reset password)
