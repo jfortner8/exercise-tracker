@@ -10,8 +10,9 @@
     "dev": "npm run dev -w @et/web",
     "build": "npm run build -w @et/web",
     "start": "npm run start -w @et/web",
-    "lint": "npm run lint -w @et/web",
+    "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "mobile": "npm run start -w @et/mobile"
   }
 }

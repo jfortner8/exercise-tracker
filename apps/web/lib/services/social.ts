@@ -1,5 +1,6 @@
 import "server-only";
 import { ulid } from "ulid";
+import type { ClubResponse, JoinResponse, SocialResponse } from "@et/core/api-types";
 import { clubName, id, joinCode } from "@et/core/schemas";
 import { CODE_FAILURES_PER_DAY, CODE_LENGTH, newCode, nextAdmin, normalizeCode } from "@et/core/social";
 import type { Club, Profile } from "@et/core/types";
@@ -25,7 +26,7 @@ export async function displayNameOf(sub: string, email: string, name?: string) {
 // ---------- Reads ----------
 
 /** The Friends & clubs screen: your friend code, your friends, your clubs with member counts. */
-export async function socialOverview(sub: string, profile: Profile) {
+export async function socialOverview(sub: string, profile: Profile): Promise<SocialResponse> {
   const [code, circle, myClubs] = await Promise.all([ensureFriendCode(sub, profile), friendsCircle(sub), repo.listMyClubs(sub)]);
   const clubs = (
     await Promise.all(
@@ -45,7 +46,7 @@ export async function socialOverview(sub: string, profile: Profile) {
  * One club, for its members only: to anyone else it doesn't exist. Members come admin first, then by
  * when they joined. `heir` is who becomes admin if the admin leaves.
  */
-export async function clubDetail(sub: string, clubId: string) {
+export async function clubDetail(sub: string, clubId: string): Promise<ClubResponse> {
   const [club, members] = await Promise.all([repo.getClub(clubId), repo.listClubMembers(clubId)]);
   if (!club || !members.some((m) => m.sub === sub)) throw new ApiError(404, "That club no longer exists.");
   const sorted = [...members].sort(
@@ -66,10 +67,7 @@ export async function joinWithCode(
   sub: string,
   displayName: string,
   raw: string,
-): Promise<
-  | { kind: "friend"; friend: { sub: string; displayName: string }; message: string }
-  | { kind: "club"; club: { id: string; name: string }; message: string }
-> {
+): Promise<JoinResponse> {
   const code = normalizeCode(joinCode.parse(raw));
   if (code.length !== CODE_LENGTH) throw new ApiError(400, "Codes are 16 letters and numbers, like ABCD-EFGH-JKMN-PQRS.");
   // After too many wrong codes today, every attempt fails with a generic error (see CODE_FAILURES_PER_DAY).

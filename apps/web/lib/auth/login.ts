@@ -1,4 +1,5 @@
 import "server-only";
+import type { AuthSession } from "@et/core/api-types";
 import { ApiError } from "@/lib/api-error";
 import { ensureProfile } from "@/lib/db/repo";
 import * as cognito from "./cognito";
@@ -18,7 +19,7 @@ export async function passwordLogin(email: string, password: string) {
 }
 
 /** What the app keeps after signing in: the session token (sent as "Authorization: Bearer"), how long it lasts, and who. */
-export async function appSession(user: SessionUser) {
+export async function appSession(user: SessionUser): Promise<AuthSession> {
   return { token: await signSession(user), expiresIn: SESSION_MAX_AGE, user };
 }
 

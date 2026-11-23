@@ -1,4 +1,5 @@
 import "server-only";
+import type { LeaderboardsResponse } from "@et/core/api-types";
 import { everyoneBoard } from "@et/core/social";
 import type { ConsistencyRow, LeaderboardEntry } from "@et/core/types";
 import { ApiError } from "@/lib/api-error";
@@ -14,7 +15,7 @@ export type BoardGroup = { key: string; label: string };
  * Membership is checked before any board is read: a club you're not in is a 404.
  * The views (best, this season, improvement) are worked out from these with @et/core/leaderboard-views.
  */
-export async function leaderboardData(sub: string, groupKey: string) {
+export async function leaderboardData(sub: string, groupKey: string): Promise<LeaderboardsResponse> {
   const [circle, myClubs] = await Promise.all([friendsCircle(sub), listMyClubs(sub)]);
   const clubs = [...myClubs].sort((a, b) => a.name.localeCompare(b.name));
   const groups: BoardGroup[] = [

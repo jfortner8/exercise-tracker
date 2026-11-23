@@ -1,0 +1,24 @@
+name: mobile
+# The phone app: types, lint, unit tests and expo-doctor (SDK version checks). Runs only when the app,
+# the shared core, or the workspace setup changes. Builds go through EAS, not this workflow.
+on:
+  pull_request:
+    paths: [apps/mobile/**, packages/core/**, package.json, package-lock.json, .github/workflows/mobile.yml]
+  push:
+    branches: [main]
+    paths: [apps/mobile/**, packages/core/**, package.json, package-lock.json, .github/workflows/mobile.yml]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: apps/mobile }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+        working-directory: .
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- --ci
+      - run: npx expo-doctor

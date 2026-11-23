@@ -21,7 +21,7 @@ An npm workspace with three packages:
   - `lib/db/repo.ts`: single-table DynamoDB access (`PK=USER#<sub>`).
   - `lib/actions.ts`: server actions.
 - `packages/core` (`@et/core`): pure logic shared by the website, the API and the phone app. It has no React and no server code. It covers dates and units, activities, goals and habits, splits, start-time zones, PBs, social codes, and the Zod input schemas (`schemas.ts`) that every input is validated with.
-- `apps/mobile`: the Expo phone app (coming).
+- `apps/mobile`: the Expo phone app (Expo SDK 58, Expo Router with native tabs). It talks to the website's `/api/v1` ([docs/api.md](docs/api.md)); see [Phone app](#phone-app).
 - `infra/terraform/`: Terraform for the AWS resources: the DynamoDB table, the Cognito user pool, and the IAM role Vercel assumes via **OIDC federation** (no AWS keys stored anywhere). GitHub Actions plans and applies it; see [infra/terraform/README.md](infra/terraform/README.md).
 
 ## Local development
@@ -33,6 +33,22 @@ npm run dev                          # runs the website from apps/web
 Locally the app uses your AWS CLI credentials. On Vercel it exchanges the deployment's OIDC token for the `exercise-tracker-vercel` role.
 
 Env vars: `APP_AWS_REGION`, `APP_AWS_ROLE_ARN` (Vercel only), `TABLE_NAME`, `COGNITO_ISSUER`, `COGNITO_CLIENT_ID`, `COGNITO_CLIENT_SECRET`, `AUTH_SECRET`.
+
+## Phone app
+The app in `apps/mobile` uses the live API (`https://exercise.johnafortner.com`) unless `EXPO_PUBLIC_API_URL` says otherwise.
+
+**On your phone, no build needed:** install **Expo Go** from the App Store or Play Store, then:
+```bash
+npm run mobile
+```
+Scan the QR code it prints (iPhone: with the Camera app; Android: in Expo Go). The phone and the computer need to be on the same Wi-Fi.
+
+**In a browser, against your local API:** put `EXPO_PUBLIC_API_URL=http://localhost:3000` in `apps/mobile/.env.local`, run `npm run dev` for the API, then `npm run web -w @et/mobile`. In development only, the API allows cross-origin calls for this (`next.config.ts`).
+
+**Builds and the stores** go through EAS (`apps/mobile/eas.json`). The first time, link the project to your Expo account:
+```bash
+cd apps/mobile && npx eas-cli@latest login && npx eas-cli@latest init
+```
 
 ## Users
 Anyone can create an account at `/signup` (Cognito emails a confirmation code). To close sign-ups, set `self_sign_up` to `false` in `infra/terraform/variables.tf` and merge the change.

@@ -1,5 +1,6 @@
 import "server-only";
 import { ulid } from "ulid";
+import type { InjuriesResponse } from "@et/core/api-types";
 import { id, injuryInput, type InjuryInput } from "@et/core/schemas";
 import * as repo from "@/lib/db/repo";
 import { syncAfterChange } from "./sync";
@@ -10,7 +11,7 @@ import { syncAfterChange } from "./sync";
  */
 
 /** Every injury, with the pain levels logged on workouts linked to each (oldest first), keyed by injury id. */
-export async function injuriesWithPain(sub: string) {
+export async function injuriesWithPain(sub: string): Promise<InjuriesResponse> {
   const injuries = await repo.listInjuries(sub);
   const pain = await Promise.all(
     injuries.map(async (i) => {
