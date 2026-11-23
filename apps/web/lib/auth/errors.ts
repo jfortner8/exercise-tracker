@@ -1,3 +1,5 @@
+import { ApiError } from "../api-error";
+
 const MESSAGES: Record<string, string> = {
   UsernameExistsException: "An account with that email already exists. Try signing in.",
   NotAuthorizedException: "Incorrect email or password.",
@@ -21,4 +23,29 @@ export function authErrorMessage(err: unknown): string {
   const msg = name ? MESSAGES[name] : undefined;
   if (!msg) console.error("Unhandled auth error", err);
   return msg ?? "Something went wrong. Please try again.";
+}
+
+/** HTTP status for each Cognito error the API passes on; anything else is a 500. */
+const STATUS: Record<string, number> = {
+  UsernameExistsException: 409,
+  NotAuthorizedException: 401,
+  UserNotFoundException: 401,
+  UserNotConfirmedException: 403,
+  CodeMismatchException: 400,
+  ExpiredCodeException: 400,
+  InvalidParameterException: 400,
+  InvalidPasswordException: 400,
+  LimitExceededException: 429,
+  TooManyRequestsException: 429,
+  TooManyFailedAttemptsException: 429,
+  CodeDeliveryFailureException: 400,
+  NewPasswordRequired: 403,
+};
+
+/** A Cognito error as an ApiError for /api/v1, with the same message the website shows. */
+export function authApiError(err: unknown): ApiError {
+  const name = err instanceof Error ? err.name : "";
+  const status = STATUS[name] ?? 500;
+  const code = name === "UserNotConfirmedException" ? "UNCONFIRMED" : status === 429 ? "RATE_LIMITED" : undefined;
+  return new ApiError(status, authErrorMessage(err), code);
 }

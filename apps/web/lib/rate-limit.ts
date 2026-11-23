@@ -9,7 +9,7 @@ import { env } from "@/lib/env";
  * Counts a request against `key` in a fixed window and throws 429 past `max`. One small DynamoDB
  * item per key per window (PK "RL#<key>"); `expiresAt` lets the table's TTL clear old ones.
  */
-export async function rateLimit(key: string, max: number, windowSec: number) {
+export async function rateLimit(key: string, max: number, windowSec: number, message = "Too many requests. Wait a minute and try again.") {
   const start = rateWindow(Date.now(), windowSec);
   const res = await db().send(
     new UpdateCommand({
@@ -22,6 +22,6 @@ export async function rateLimit(key: string, max: number, windowSec: number) {
     }),
   );
   if (((res.Attributes?.count as number | undefined) ?? 0) > max) {
-    throw new ApiError(429, "Too many requests. Wait a minute and try again.", "RATE_LIMITED");
+    throw new ApiError(429, message, "RATE_LIMITED");
   }
 }

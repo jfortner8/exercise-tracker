@@ -23,9 +23,16 @@ JSON endpoints the Expo app calls. They're route handlers in `apps/web/app/api/v
 ## Endpoints
 
 ### Auth
+None of these need a token. They share a limit of 30 attempts per 10 minutes per IP address, counted before the body is read, and 10 per 10 minutes per email address. Past either, the answer is `429 { code: "RATE_LIMITED" }`. Cognito also throttles codes per address on its own (about 5 reset emails), with the same 429.
+
 | Method | Path | Body → Response |
 |---|---|---|
-| POST | `/auth/login` | `{ email, password }` → `{ token, expiresIn, user }`. Gives `403 { code: "UNCONFIRMED" }` when the email isn't confirmed yet (a fresh code is sent) |
+| POST | `/auth/login` | `{ email, password }` → `{ token, expiresIn, user }`. 401 for a wrong email or password. `403 { code: "UNCONFIRMED" }` when the email isn't confirmed yet: a fresh code is sent, so go to the confirm step |
+| POST | `/auth/signup` | `{ name?, email, password }` → `{ ok: true }`. Cognito emails a code. 409 if the email already has an account. Passwords need at least 10 characters |
+| POST | `/auth/confirm` | `{ email, password, code }` → `{ token, expiresIn, user }`. Confirms the code, then signs in |
+| POST | `/auth/resend` | `{ email }` → `{ ok: true }`. A new confirmation code |
+| POST | `/auth/forgot` | `{ email }` → `{ ok: true }`, whether or not the email has an account |
+| POST | `/auth/reset` | `{ email, code, password }` → `{ token, expiresIn, user }`. Sets the new password, then signs in |
 
 ### Me
 | Method | Path | Body → Response |
@@ -123,6 +130,3 @@ JSON endpoints the Expo app calls. They're route handlers in `apps/web/app/api/v
 | POST | `/calendar-feed/reset` | A new link; the old one stops working → the same as GET. 409 if it changed meanwhile |
 | DELETE | `/calendar-feed` | Turns it off |
 | PUT | `/calendar-feed/options` | `{ includeNotes, plannedOnly }` |
-
-**Still to come**, in the order of the plan:
-- the rest of auth (sign-up, confirm, forgot and reset password)
