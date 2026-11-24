@@ -293,6 +293,17 @@ export function DayDrawer({
                     <Button size="sm" onClick={() => edit(w)}>
                       <Pencil className="size-3.5" /> {status === "planned" ? "Log / edit" : "Edit"}
                     </Button>
+                    {/* Today's plan can be marked missed (red) before the day is over; Skipped is the excused one. */}
+                    {status === "planned" && !!today && w.date <= today && (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        disabled={pending}
+                        onClick={() => start(() => resolveWorkoutAction(w.date, w.id, "missed"))}
+                      >
+                        <Ban className="size-3.5" /> Missed
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="danger"
