@@ -13,6 +13,7 @@ import { API_URL } from "@/config";
 import { CalendarFeed } from "@/screens/settings/CalendarFeed";
 import { GoalsEditor } from "@/screens/settings/GoalsEditor";
 import { Reminders } from "@/screens/settings/Reminders";
+import { TipJar } from "@/screens/settings/TipJar";
 import { loadReminders, saveReminders } from "@/reminders";
 import { OPTIONAL_TABS } from "@/screens/tabs";
 import { useTheme } from "@/theme";
@@ -231,6 +232,7 @@ export default function Settings() {
         </>
       )}
 
+      <TipJar />
       <Button title="Privacy" variant="link" onPress={() => WebBrowser.openBrowserAsync(`${API_URL}/privacy`)} />
       <Button title="Sign out" variant="secondary" onPress={() => void signOut()} />
       <Button title="Delete account" variant="danger" onPress={() => void deleteAccount()} loading={deleting} />

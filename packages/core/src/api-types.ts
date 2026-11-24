@@ -4,6 +4,7 @@
  */
 import type { ActivityKey } from "./activities";
 import type { NavFlags } from "./nav-flags";
+import type { RaceSportTally } from "./race-distances";
 import type { SportTally } from "./sports";
 import type {
   BenchmarkDef,
@@ -104,6 +105,12 @@ export interface RoutinesResponse {
 export interface SportsResponse {
   year: string;
   tallies: SportTally[];
+}
+
+/** GET /race-distances. */
+export interface RaceDistancesResponse {
+  year: string;
+  sports: RaceSportTally[];
 }
 
 export interface WeightResponse {

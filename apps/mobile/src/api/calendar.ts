@@ -33,6 +33,7 @@ export function useCalendarWrite<V>(fn: (v: V) => Promise<unknown>) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSettled: () => Promise.all([qc.invalidateQueries({ queryKey: ["calendar"] }), qc.invalidateQueries({ queryKey: ["me"] })]),
+    onSettled: () =>
+      Promise.all(["calendar", "me", "race-distances", "sports"].map((k) => qc.invalidateQueries({ queryKey: [k] }))),
   });
 }

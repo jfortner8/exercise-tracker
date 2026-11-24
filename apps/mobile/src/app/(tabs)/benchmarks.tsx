@@ -1,4 +1,5 @@
 import { format, parseISO } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -9,6 +10,7 @@ import { BENCHMARK_CATEGORIES, METRIC_KINDS, type BenchmarkCategory, type Benchm
 import { useAction } from "@/api/action";
 import { api } from "@/api/client";
 import { useBenchmarks, useMe } from "@/api/queries";
+import { RaceDistances } from "@/screens/benchmarks/RaceDistances";
 import { Sparkline } from "@/screens/benchmarks/Sparkline";
 import { useTheme } from "@/theme";
 import { Body, Button, Card, ErrorText, Field, Screen, Title } from "@/ui";
@@ -19,6 +21,7 @@ import { Empty } from "@/ui/list";
 export default function PBs() {
   const units = useMe().data?.profile.units;
   const q = useBenchmarks();
+  const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const act = useAction([["benchmarks"]]);
   const byBm = useMemo(() => {
@@ -32,9 +35,16 @@ export default function PBs() {
   const available = BENCHMARK_CATALOG.filter((c) => !tracked.has(c.key));
 
   return (
-    <Screen onRefresh={() => void q.refetch()} refreshing={q.isRefetching}>
+    <Screen
+      onRefresh={() => {
+        void q.refetch();
+        void qc.invalidateQueries({ queryKey: ["race-distances"] });
+      }}
+      refreshing={q.isRefetching}
+    >
       <Title subtitle="Benchmarks you test now and then, and your personal bests.">PBs</Title>
       <ErrorText>{act.error ?? q.error?.message}</ErrorText>
+      {units && <RaceDistances units={units} />}
       {adding ? <CreateBenchmark onClose={() => setAdding(false)} /> : <Button title="+ Add benchmark" onPress={() => setAdding(true)} />}
       <View style={{ height: 14 }} />
       {q.data && !benchmarks.length && <Empty>No benchmarks yet. Pick a few suggestions below, or create your own.</Empty>}

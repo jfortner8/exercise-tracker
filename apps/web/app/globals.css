@@ -190,3 +190,8 @@ body {
     font-size: 16px;
   }
 }
+
+/* <details> tiles (race distances): hide Safari's disclosure triangle; list-none covers the rest. */
+summary.list-none::-webkit-details-marker {
+  display: none;
+}

@@ -39,8 +39,19 @@ The phone app (`apps/mobile`, Expo) does everything the website does, sold as a 
 - [x] Offline saving: calendar, day sheet, workout form, results, injuries and routines writes go through `src/api/outbox.ts` (kept on the phone in order, sent at launch, on return to the app, every 20 s and before the next write; a refused one is dropped and shown). Friends, clubs and Settings stay online-only
 - [x] Generated workout names stay placeholders: `autoTitle` on the workout; older ones count as generated when the title matches
 
+- [x] Race distances on PBs (website and app): each completed run, swim, ride or row counts once for the longest common race distance it reaches, 2% slack (`@et/core/race-distances`, `GET /race-distances`)
+- [x] Tip jar in the app's Settings (`expo-iap`, native: ships with the next build). Free app; the website has a Buy Me a Coffee link instead
+
 ### Next, in order
-1. [ ] Release: store icon (1024 px), screenshots, privacy labels; App Store paid app; Google Play ($25 fee; new personal accounts need a 12-tester, 14-day closed test)
+1. [ ] **Tip jar store setup (the user):**
+   - App Store Connect: sign the Paid Apps agreement, add tax and banking, then create three **consumable** in-app purchases with these product ids, each with a price, a display name, a description ("A tip to support development. Unlocks nothing.") and a review screenshot of the Support card:
+     - `com.jfortner8.exercisetracker.tip.small` ($1.99)
+     - `com.jfortner8.exercisetracker.tip.medium` ($4.99)
+     - `com.jfortner8.exercisetracker.tip.large` ($9.99)
+   - Google Play Console, later: a payments profile, then the same three ids as one-time products.
+   - The tips card stays hidden until the store returns the products, so the build can ship before this is done.
+2. [ ] **One new build** for `expo-iap` and the new app icon together (Actions → EAS → `ios-testflight`). Test a tip with a sandbox Apple account in TestFlight; it isn't charged.
+3. [ ] Release: store icon (1024 px), screenshots, privacy labels; free app on both stores (see the pricing decision); Google Play ($25 fee; new personal accounts need a 12-tester, 14-day closed test)
 
 ## Parity checklist (tick on a real device before public release)
 Sign-in flows · month and week calendar · day sheet · workout form · Quick Done · drag and swap · copy week · benchmarks · leaderboards · friends and clubs · injuries · routines · sports · weight · settings · calendar feed · delete account
