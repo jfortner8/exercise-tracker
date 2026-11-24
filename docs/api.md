@@ -95,10 +95,11 @@ None of these need a token. They share a limit of 30 attempts per 10 minutes per
 | PUT | `/routines/:id` | The same body. Workouts already on the calendar keep their own copy |
 | DELETE | `/routines/:id` | The Routines tab (`navFlags.showRoutines`) goes with the last one |
 
-### Sports and weight
+### Sports, race distances and weight
 | Method | Path | Body → Response |
 |---|---|---|
 | GET | `/sports` | → `{ year, tallies }`: completed sessions per sport (`SportTally` in `@et/core/sports`). `thisYear` counts `year`, where the user is |
+| GET | `/race-distances` | → `{ year, sports }`: how many times each common race distance was covered, per sport (running, swimming, cycling, rowing). Each completed workout counts once, for the longest race distance it reaches, with 2% slack (`raceTallies` in `@et/core/race-distances`). Each distance has `total`, `thisYear` and its `workouts`, newest first |
 | GET | `/weight` | → `{ trackWeight, today, series }`: weigh-ins in kg, oldest first, each with its 7-day average (`WeightPoint` in `@et/core/weight`). Empty while tracking is off. Weigh-ins are saved with `PUT /days/:date { weightKg }` |
 
 ### Friends and clubs

@@ -214,7 +214,7 @@ function WorkoutForm({
       await write("/workouts", {
         body: { workout: input, repeat: canRepeat && repeating ? repeat : undefined, saveAsRoutine: savingRoutine ? { name: routineName.trim() } : undefined },
       });
-      await Promise.all([qc.invalidateQueries({ queryKey: ["calendar"] }), qc.invalidateQueries({ queryKey: ["me"] })]);
+      await Promise.all(["calendar", "me", "race-distances", "sports"].map((k) => qc.invalidateQueries({ queryKey: [k] })));
       close();
     } catch (e) {
       setError((e as ApiError).message);
