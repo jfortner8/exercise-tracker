@@ -6,6 +6,7 @@ import type { Routine, Units } from "@et/core/types";
 import { blankExercise, fromExerciseDrafts, toExerciseDrafts } from "@et/core/workout-draft";
 import { useAction } from "@/api/action";
 import { api } from "@/api/client";
+import { write } from "@/api/outbox";
 import { useMe } from "@/api/queries";
 import { ExerciseList } from "@/screens/workout/DetailsFields";
 import { Button, Card, ErrorText, Field, Screen, Title } from "@/ui";
@@ -48,7 +49,7 @@ function RoutineCard({ routine, units, onDone }: { routine?: Routine; units: Uni
     const exercises = fromExerciseDrafts(rows, units);
     if (!exercises.length) return setError("Add at least one exercise.");
     const body = { name: name.trim(), exercises };
-    const r = await act.run(() => (routine ? api(`/routines/${routine.id}`, { method: "PUT", body }) : api("/routines", { body })));
+    const r = await act.run(() => (routine ? write(`/routines/${routine.id}`, { method: "PUT", body }) : write("/routines", { body })));
     if (r) onDone?.();
   }
 
@@ -64,7 +65,7 @@ function RoutineCard({ routine, units, onDone }: { routine?: Routine; units: Uni
           variant="link"
           onPress={async () => {
             if (await ask(`Delete "${routine.name}"?`, "Workouts that used it keep their exercises.", "Delete", true))
-              void act.run(() => api(`/routines/${routine.id}`, { method: "DELETE" }));
+              void act.run(() => write(`/routines/${routine.id}`, { method: "DELETE" }));
           }}
         />
       ) : (

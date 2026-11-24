@@ -81,6 +81,11 @@ export interface Workout {
   seriesId?: string;
   type: WorkoutType;
   title: string;
+  /**
+   * The title was filled in from the details ("10 km Run"), not typed. The form shows it as a
+   * placeholder, and it follows the details when they change.
+   */
+  autoTitle?: boolean;
   location?: string; // e.g. "Piedmont Park", "YMCA pool", "Treadmill"
   /** For type "sport": key from lib/sports.ts ("soccer", "roller-derby", "other"). */
   sport?: string;

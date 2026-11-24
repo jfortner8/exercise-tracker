@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ApiError } from "@/api/client";
 import { cacheStorage } from "@/api/storage";
 import { SessionProvider, useSession } from "@/auth/session";
+import { OutboxSync } from "@/screens/SyncNote";
 import { useTheme } from "@/theme";
 import { restoreTheme } from "@/theme-pref";
 import { configureNotifications } from "@/reminders";
@@ -57,6 +58,7 @@ function Navigator() {
   return (
     <>
       <StatusBar style="auto" />
+      {status === "signedIn" && <OutboxSync />}
       {/* Each group's layout redirects to the other when it's the wrong side of signed in. */}
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.bg } }}>
         <Stack.Screen name="(tabs)" />

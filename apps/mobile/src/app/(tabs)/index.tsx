@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ymd } from "@et/core/domain";
 import { calendarDays, stepAnchor, useCalendar, useCalendarWrite, type CalendarView } from "@/api/calendar";
-import { api } from "@/api/client";
+import { isQueued, write as send } from "@/api/outbox";
 import { useMe } from "@/api/queries";
 import { CalendarGrid, useDays } from "@/screens/calendar/Calendar";
+import { SyncNote } from "@/screens/SyncNote";
 import { setMoving, useMoving } from "@/screens/calendar/moving";
 import { useTheme } from "@/theme";
 import { Body, Button, Card, ErrorText, Screen } from "@/ui";
@@ -61,7 +62,7 @@ export default function CalendarScreen() {
     }
     setMoving(null);
     haptic.success();
-    write.mutate(() => api(`/workouts/${w.date}/${w.id}/${swap ? "swap" : "move"}`, { body: { toDate: d } }));
+    write.mutate(() => send(`/workouts/${w.date}/${w.id}/${swap ? "swap" : "move"}`, { body: { toDate: d } }));
   }
 
   const title = !at ? " " : view === "month" ? format(parseISO(at), "MMMM yyyy") : `Week of ${format(parseISO(range!.from), "MMM d")}`;
@@ -84,6 +85,7 @@ export default function CalendarScreen() {
         <NavButton label="›" a11y="Next" onPress={() => setAnchor(stepAnchor(at, view, 1))} />
       </View>
       <ErrorText>{(write.error ?? me.error ?? cal.error)?.message}</ErrorText>
+      <SyncNote />
       {moving ? (
         <Notice>
           <Body>Moving {moving.title}. Tap the day it goes to.</Body>
@@ -123,7 +125,7 @@ function CopyWeek({ from, count, onClose }: { from: string; count: number; onClo
   const [to, setTo] = useState(ymd(addDays(parseISO(from), 7)));
   const [times, setTimes] = useState("1");
   const [msg, setMsg] = useState<string | null>(null);
-  const write = useCalendarWrite((f: () => Promise<{ copied: number }>) => f());
+  const write = useCalendarWrite((f: () => Promise<unknown>) => f());
   const n = Math.max(1, Math.min(52, Number(times) || 1));
   return (
     <Card>
@@ -144,9 +146,9 @@ function CopyWeek({ from, count, onClose }: { from: string; count: number; onClo
             title={`Copy ${count * n} workout${count * n === 1 ? "" : "s"}`}
             loading={write.isPending}
             onPress={() =>
-              write.mutate(() => api<{ copied: number }>("/weeks/copy", { body: { fromStart: from, toStart: to, times: n } }), {
+              write.mutate(() => send<{ copied: number }>("/weeks/copy", { body: { fromStart: from, toStart: to, times: n } }), {
                 onSuccess: (r) => {
-                  setMsg(`Added ${(r as { copied: number }).copied} planned workouts.`);
+                  setMsg(isQueued(r) ? "Saved on this phone. It copies when you're back online." : `Added ${(r as { copied: number }).copied} planned workouts.`);
                   setTimeout(onClose, 900);
                 },
               })

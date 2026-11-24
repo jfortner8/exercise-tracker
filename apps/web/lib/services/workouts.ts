@@ -16,7 +16,7 @@ import {
 import { repeatDates, validTimeZone } from "@et/core/domain";
 import { cleanExercises, findRoutineByName } from "@et/core/routines";
 import { quickActual, type ExtraAs } from "@et/core/quick-done";
-import { DISTANCE_TYPES } from "@et/core/activities";
+import { autoTitle, DISTANCE_TYPES } from "@et/core/activities";
 import * as repo from "@/lib/db/repo";
 import { sportMeta } from "@et/core/sports";
 import type { Workout, WorkoutDetails } from "@et/core/types";
@@ -170,7 +170,7 @@ export async function quickDone(
   const input = quickDoneInput.parse(raw);
   const w = await repo.getWorkout(sub, day.parse(date), id.parse(workoutId));
   if (!w) throw notFound("Workout");
-  await repo.saveWorkout(sub, {
+  const done: Workout = {
     ...w,
     status: "completed",
     actual: quickActual(w.actual ?? w.planned, {
@@ -180,7 +180,10 @@ export async function quickDone(
     }),
     reason: undefined,
     updatedAt: new Date().toISOString(),
-  });
+  };
+  // A generated title follows what was really done: a planned "10 km Run" done as 12 km.
+  if (w.autoTitle) done.title = autoTitle(done, (await repo.getProfile(sub))?.units);
+  await repo.saveWorkout(sub, done);
   await noteSport(sub, { type: w.type, status: "completed" });
   await syncAfterChange(sub);
 }
@@ -259,6 +262,7 @@ export async function copyWeek(sub: string, fromStart: string, toStart: string, 
         startZone: w.startZone,
         type: w.type,
         title: w.title,
+        autoTitle: w.autoTitle,
         location: w.location,
         sport: w.sport,
         sportName: w.sportName,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { activityMeta, applyActivity, blockMetrics, recentActivities, workoutCategory } from "./activities";
 import { SPORTS, sportCategory, sportTallies } from "./sports";
-import { autoTitle } from "./activities";
+import { autoTitle, titleIsAuto } from "./activities";
 import type { Units, Workout } from "./types";
 
 const km: Units = { distance: "km", weight: "kg" };
@@ -137,5 +137,18 @@ describe("autoTitle", () => {
   it("leaves sports and rest without amounts", () => {
     expect(autoTitle({ type: "sport", sport: "roller-derby", sportSession: "bout", planned: { durationSec: 7200 } }, km)).toBe("Roller Derby Bout");
     expect(autoTitle({ type: "rest" }, km)).toBe("Rest");
+  });
+});
+
+describe("titleIsAuto", () => {
+  const km = { distance: "km", weight: "kg" } as const;
+  const run = { type: "run" as const, status: "planned" as const, planned: { distanceM: 10000 } };
+  it("trusts the stored flag either way", () => {
+    expect(titleIsAuto({ ...run, title: "Long one", autoTitle: true }, km)).toBe(true);
+    expect(titleIsAuto({ ...run, title: autoTitle(run, km), autoTitle: false }, km)).toBe(false);
+  });
+  it("treats an older title as generated when it matches what would be generated", () => {
+    expect(titleIsAuto({ ...run, title: autoTitle(run, km) }, km)).toBe(true);
+    expect(titleIsAuto({ ...run, title: "Tempo with Sam" }, km)).toBe(false);
   });
 });
