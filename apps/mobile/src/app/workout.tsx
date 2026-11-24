@@ -11,9 +11,9 @@ import { currentInjuries } from "@et/core/injuries";
 import { findRoutineByName, sameExercises } from "@et/core/routines";
 import type { RepeatInput, WorkoutInput } from "@et/core/schemas";
 import { SPORTS, sportMeta } from "@et/core/sports";
-import { WORKOUT_STATUSES, WORKOUT_TYPES, type Workout } from "@et/core/types";
+import { WORKOUT_TYPES, type Workout } from "@et/core/types";
 import { badHeartRate, fromDraft, fromExerciseDrafts, statusForDay, toDraft, toExerciseDrafts, unreadableDurations } from "@et/core/workout-draft";
-import { STATUS_LABEL } from "@et/core/workout-types";
+import { formStatuses, STATUS_LABEL } from "@et/core/workout-types";
 import { calendarDays, useCalendar } from "@/api/calendar";
 import { ApiError, deviceTimeZone } from "@/api/client";
 import { write } from "@/api/outbox";
@@ -103,6 +103,7 @@ function WorkoutForm({
   const [startZone, setStartZone] = useState(workout?.startZone);
   const [day, setDay] = useState(workout?.date ?? date);
   const [status, setStatus] = useState<Workout["status"]>(presetStatus ?? workout?.status ?? statusForDay(date, today));
+  const [initialStatus] = useState(status);
   const [statusChosen, setStatusChosen] = useState(!!workout || !!presetStatus);
   const [planned, setPlanned] = useState(() => toDraft(workout?.planned, units));
   // Logging a planned workout as done starts "What you did" from the plan.
@@ -282,7 +283,7 @@ function WorkoutForm({
 
       <Chips
         label="Status"
-        options={WORKOUT_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] }))}
+        options={formStatuses(initialStatus).map((s) => ({ value: s, label: STATUS_LABEL[s] }))}
         value={status}
         onChange={(s) => {
           if (!s) return;

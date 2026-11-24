@@ -16,14 +16,14 @@ import {
   parseMinutesInput,
   repeatDates,
 } from "@et/core/domain";
-import { WORKOUT_STATUSES, WORKOUT_TYPES, type Clock, type Injury, type Routine, type Units, type Workout } from "@et/core/types";
+import { WORKOUT_TYPES, type Clock, type Injury, type Routine, type Units, type Workout } from "@et/core/types";
 import { activityKey, activityMeta, applyActivity, autoTitle, DISTANCE_TYPES, titleIsAuto, type ActivityKey } from "@et/core/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@et/core/dance";
 import { currentInjuries } from "@et/core/injuries";
 import { findRoutineByName, sameExercises } from "@et/core/routines";
 import { SPORTS, sportMeta } from "@et/core/sports";
 import { startTimeIn, zoneAbbr, zoneDiffers, zonedTimeToUtc } from "@et/core/start-time";
-import { STATUS_LABEL, TYPE_META } from "@et/core/workout-types";
+import { formStatuses, STATUS_LABEL, TYPE_META } from "@et/core/workout-types";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui";
 import { InjuryForm } from "../injuries";
 import { ExerciseRows } from "./exercise-rows";
@@ -338,6 +338,7 @@ export function WorkoutForm({
   // Follows the date until the user picks a status themselves.
   const statusForDay = (d: string): Workout["status"] => (d < format(new Date(), "yyyy-MM-dd") ? "completed" : "planned");
   const [status, setStatus] = useState<Workout["status"]>(() => presetStatus ?? workout?.status ?? statusForDay(date));
+  const [initialStatus] = useState(status);
   const [statusChosen, setStatusChosen] = useState(!!workout || !!presetStatus);
   const [planned, setPlanned] = useState(toDraft(workout?.planned, units));
   // Logging a planned workout as done starts "What you did" from the plan.
@@ -651,7 +652,7 @@ export function WorkoutForm({
 
       <Field label="Status">
         <div className="flex flex-wrap gap-1.5">
-          {WORKOUT_STATUSES.map((s) => (
+          {formStatuses(initialStatus).map((s) => (
             <button
               type="button"
               key={s}

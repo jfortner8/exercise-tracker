@@ -27,3 +27,14 @@ export const STATUS_LABEL: Record<WorkoutStatus | "needs_review", string> = {
   substituted: "Did something else",
   needs_review: "Needs review",
 };
+
+/**
+ * The status choices in the workout form: just Planned and Completed. Skipped, Missed and
+ * "Did something else" are quick actions on a planned workout in the day sheet, and doing less
+ * than planned is still Completed (the real numbers go in "What you did"). A workout saved
+ * earlier with one of the others keeps it as a third choice, so editing doesn't silently change it.
+ */
+export function formStatuses(current: WorkoutStatus): WorkoutStatus[] {
+  const base: WorkoutStatus[] = ["planned", "completed"];
+  return base.includes(current) ? base : [...base, current];
+}
