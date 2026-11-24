@@ -28,6 +28,18 @@ export default function SettingsPage() {
       <Suspense fallback={<div className="h-80 animate-pulse rounded-xl bg-surface-2" />}>
         <Settings />
       </Suspense>
+      <div className="mt-8 flex flex-col items-center gap-2 text-center text-sm text-muted">
+        <p>Exercise Tracker is free and made by one person. If it helps your training, you can chip in.</p>
+        {/* Buy Me a Coffee's button as a plain styled link rather than their widget script, so opening Settings loads nothing from their servers. */}
+        <a
+          href="https://www.buymeacoffee.com/johnfortner"
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-black bg-[#ffdd00] px-3 py-1.5 text-sm font-semibold text-black hover:brightness-95"
+        >
+          <span aria-hidden>☕</span> Buy me a coffee
+        </a>
+      </div>
       <p className="mt-6 text-center text-xs text-muted">
         <Link href="/privacy" className="hover:text-text hover:underline">
           Privacy
