@@ -31,6 +31,9 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
  * website's form (activity, plan and actual, exercises and routines, weekly repeat, effort and
  * injury), saved with POST /workouts.
  */
+/** Statuses where something was done, so the form asks what you did rather than what's planned. */
+const didIt = (s: Workout["status"]) => s !== "planned" && s !== "skipped" && s !== "missed";
+
 export default function WorkoutScreen() {
   const params = useLocalSearchParams<{ date: string; id?: string; status?: Workout["status"] }>();
   const signedIn = useSession().status === "signedIn";
@@ -102,7 +105,8 @@ function WorkoutForm({
   const [status, setStatus] = useState<Workout["status"]>(presetStatus ?? workout?.status ?? statusForDay(date, today));
   const [statusChosen, setStatusChosen] = useState(!!workout || !!presetStatus);
   const [planned, setPlanned] = useState(() => toDraft(workout?.planned, units));
-  const [actual, setActual] = useState(() => toDraft(workout?.actual ?? (presetStatus === "completed" ? workout?.planned : undefined), units));
+  // Logging a planned workout as done starts "What you did" from the plan.
+  const [actual, setActual] = useState(() => toDraft(workout?.actual ?? (didIt(status) ? workout?.planned : undefined), units));
   const [reason, setReason] = useState(workout?.reason ?? "");
   const [rpe, setRpe] = useState(workout?.rpe != null ? String(workout.rpe) : "");
   const [pain, setPain] = useState(workout?.painLevel != null ? String(workout.painLevel) : "");
@@ -116,7 +120,7 @@ function WorkoutForm({
   const [saveRoutine, setSaveRoutine] = useState(false);
   const [routineName, setRoutineName] = useState("");
 
-  const showActual = status !== "planned" && status !== "skipped" && status !== "missed";
+  const showActual = didIt(status);
   const showReason = status !== "planned" && status !== "completed";
   const canRepeat = !workout && status === "planned";
   const primary = fromExerciseDrafts((showActual ? actual : planned).exercises, units);
@@ -161,14 +165,20 @@ function WorkoutForm({
     setRoutineSel(id);
     const r = routines.find((x) => x.id === id);
     if (!r) return;
-    setPlanned((d) => ({ ...d, exercises: toExerciseDrafts(r.exercises, units) }));
-    setActual((d) => ({ ...d, exercises: toExerciseDrafts(r.exercises, units) }));
+    // Into the fields on show: the plan while planned, what you did once done.
+    (showActual ? setActual : setPlanned)((d) => ({ ...d, exercises: toExerciseDrafts(r.exercises, units) }));
     setSaveRoutine(false);
+  }
+
+  /** A new status; moving to a done one fills "What you did" from the plan if it's still empty. */
+  function chooseStatus(s: Workout["status"]) {
+    if (didIt(s) && !didIt(status) && !fromDraft(actual, units)) setActual(planned);
+    setStatus(s);
   }
 
   function changeDay(next: string) {
     setDay(next);
-    if (!statusChosen) setStatus(statusForDay(next, today));
+    if (!statusChosen) chooseStatus(statusForDay(next, today));
   }
 
   async function save() {
@@ -276,7 +286,7 @@ function WorkoutForm({
         value={status}
         onChange={(s) => {
           if (!s) return;
-          setStatus(s);
+          chooseStatus(s);
           setStatusChosen(true);
         }}
       />
@@ -331,13 +341,18 @@ function WorkoutForm({
         </View>
       )}
 
-      <SectionTitle>Plan</SectionTitle>
-      <DetailsFields value={planned} onChange={setPlanned} units={units} type={type} />
-
-      {showActual && (
+      {/* One set of fields at a time: the plan while it's planned, what you did once it's done (the plan is kept). */}
+      {showActual ? (
         <>
-          <SectionTitle right={<Button title="Same as plan" variant="link" onPress={() => setActual(planned)} />}>What you actually did</SectionTitle>
+          <SectionTitle right={fromDraft(planned, units) ? <Button title="Same as plan" variant="link" onPress={() => setActual(planned)} /> : undefined}>
+            What you did
+          </SectionTitle>
           <DetailsFields value={actual} onChange={setActual} units={units} type={type} showHeartRate />
+        </>
+      ) : (
+        <>
+          <SectionTitle>Plan</SectionTitle>
+          <DetailsFields value={planned} onChange={setPlanned} units={units} type={type} />
         </>
       )}
 

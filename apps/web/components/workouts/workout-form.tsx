@@ -273,6 +273,9 @@ function RepeatFields({
   );
 }
 
+/** Statuses where something was done, so the form asks what you did rather than what's planned. */
+const didIt = (s: Workout["status"]) => s !== "planned" && s !== "skipped" && s !== "missed";
+
 export function WorkoutForm({
   date,
   workout,
@@ -337,7 +340,8 @@ export function WorkoutForm({
   const [status, setStatus] = useState<Workout["status"]>(() => presetStatus ?? workout?.status ?? statusForDay(date));
   const [statusChosen, setStatusChosen] = useState(!!workout || !!presetStatus);
   const [planned, setPlanned] = useState(toDraft(workout?.planned, units));
-  const [actual, setActual] = useState(toDraft(workout?.actual, units));
+  // Logging a planned workout as done starts "What you did" from the plan.
+  const [actual, setActual] = useState(() => toDraft(workout?.actual ?? (didIt(status) ? workout?.planned : undefined), units));
   const [reason, setReason] = useState(workout?.reason ?? "");
   const [pain, setPain] = useState(workout?.painLevel != null ? String(workout.painLevel) : "");
   const [injuryId, setInjuryId] = useState(workout?.injuryId ?? "");
@@ -354,7 +358,12 @@ export function WorkoutForm({
   const [repeat, setRepeat] = useState<RepeatInput>(() => ({ weekdays: [parseISO(date).getDay()], every: 1, weeks: 12 }));
   const canRepeat = !workout && status === "planned";
 
-  const showActual = status !== "planned" && status !== "skipped" && status !== "missed";
+  const showActual = didIt(status);
+  /** A new status; moving to a done one fills "What you did" from the plan if it's still empty. */
+  const chooseStatus = (s: Workout["status"]) => {
+    if (didIt(s) && !didIt(status) && !fromDraft(actual, units)) setActual(planned);
+    setStatus(s);
+  };
   const showReason = status !== "planned" && status !== "completed";
 
   // Routine: picking one fills the exercises. It stays selected only while the list still matches it;
@@ -373,8 +382,8 @@ export function WorkoutForm({
     const r = routines.find((x) => x.id === id);
     if (!r) return;
     const drafts = toExerciseDrafts(r.exercises, units);
-    setPlanned((d) => ({ ...d, exercises: drafts }));
-    setActual((d) => ({ ...d, exercises: toExerciseDrafts(r.exercises, units) }));
+    // Into the fields on show: the plan while planned, what you did once done.
+    (showActual ? setActual : setPlanned)((d) => ({ ...d, exercises: drafts }));
     setSaveRoutine(false);
   }
   // What the title becomes if left blank, from the choices so far: "10 km Run", "Roller Derby Bout".
@@ -503,7 +512,7 @@ export function WorkoutForm({
             value={day}
             onChange={(e) => {
               setDay(e.target.value);
-              if (!statusChosen && /^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) setStatus(statusForDay(e.target.value));
+              if (!statusChosen && /^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) chooseStatus(statusForDay(e.target.value));
             }}
             required
           />
@@ -647,7 +656,7 @@ export function WorkoutForm({
               type="button"
               key={s}
               onClick={() => {
-                setStatus(s);
+                chooseStatus(s);
                 setStatusChosen(true);
               }}
               className={cx(
@@ -721,20 +730,23 @@ export function WorkoutForm({
         </div>
       )}
 
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold">Plan</h3>
-        <DetailsFields value={planned} onChange={setPlanned} units={units} type={type} />
-      </section>
-
-      {showActual && (
+      {/* One set of fields at a time: the plan while it's planned, what you did once it's done (the plan is kept). */}
+      {showActual ? (
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">What you actually did</h3>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setActual(planned)}>
-              Same as plan
-            </Button>
+            <h3 className="text-sm font-semibold">What you did</h3>
+            {fromDraft(planned, units) && (
+              <Button type="button" size="sm" variant="ghost" onClick={() => setActual(planned)}>
+                Same as plan
+              </Button>
+            )}
           </div>
           <DetailsFields value={actual} onChange={setActual} units={units} type={type} showHeartRate />
+        </section>
+      ) : (
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold">Plan</h3>
+          <DetailsFields value={planned} onChange={setPlanned} units={units} type={type} />
         </section>
       )}
 
