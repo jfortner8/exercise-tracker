@@ -27,6 +27,27 @@ Your checklist for the App Store (and later Google Play). The app is **free**, w
 - [ ] Install it from the TestFlight app. Open the app twice to pick up any over-the-air updates published since.
 - [ ] Try a tip with a **sandbox** Apple account (App Store Connect → Users and Access → Sandbox → Test Accounts). Sandbox purchases aren't charged.
 
+## 3b. Testing with friends (optional, before release)
+Make the new build first: build 3 can't get the newer features over the air.
+
+**iPhone (TestFlight external testers)**
+- [ ] App Store Connect → Exercise Tracker → **TestFlight → External Testing → +**: make a group ("Friends") and add the build.
+- [ ] Fill in **Test Information**: what to test, a feedback email, and the **demo account's** sign-in (make it now and reuse it for the App Store review).
+- [ ] The first external build goes through **Beta App Review** (usually under a day). Later builds are quicker.
+- [ ] Invite by email, or turn on the **public link** and text it. Friends install the free **TestFlight** app, then open the link.
+- Builds expire after 90 days. Tips in TestFlight are free test purchases.
+- ("Internal Testing" is only for people added as users on your developer account.)
+
+**Android (Google Play testing tracks)**
+- [ ] Needs the Play developer account ($25, below). Build with **Actions → EAS → `android-play-internal`**.
+- [ ] **Internal testing:** add friends' Google account emails (up to 100), no review, send them the opt-in link.
+- [ ] Better: put them in a **closed test**. 12 people opted in for 14 days is Google's requirement before a new personal account can go public, so friends testing early counts toward it.
+
+**From your phone**
+- Starting builds: the **GitHub** app (repo → Actions → EAS → Run workflow).
+- TestFlight testers and groups: the **App Store Connect** app; anything it doesn't offer works at appstoreconnect.apple.com in Safari (the desktop site, a bit cramped).
+- Play Console: in the phone's browser at play.google.com/console.
+
 ## 4. The App Store page (App Store Connect → Exercise Tracker → iOS App → 1.0)
 - [ ] **Screenshots:** at least 3, from a 6.9" iPhone (iPhone 16/17 Pro Max size, 1320 × 2868). Take them on your phone with real-looking data; Claude can help pick which screens.
 - [ ] **Promotional text** (170 characters, changeable any time), **description** (up to 4,000) and **keywords** (100 characters, comma separated). Claude can draft these.

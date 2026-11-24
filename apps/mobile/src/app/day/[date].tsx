@@ -203,7 +203,10 @@ function WorkoutCard({
             <Button title="✓ Done" onPress={() => setQuick(true)} />
             {status === "needs_review" && <Button title="Did something else…" variant="secondary" onPress={() => open("substituted")} />}
             <Button title="Skipped…" variant="secondary" onPress={() => setSkipping(true)} />
-            {status === "needs_review" && <Button title="Missed" variant="danger" onPress={() => resolve("missed")} />}
+            {/* Missed (red) for today too, not just once the day is over; Skipped is the excused one. */}
+            {(status === "needs_review" || (!!today && w.date <= today)) && (
+              <Button title="Missed" variant="danger" onPress={() => resolve("missed")} />
+            )}
           </View>
         ))}
       <View style={{ flexDirection: "row", gap: 18, marginTop: 10 }}>
