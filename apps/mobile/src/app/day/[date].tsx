@@ -9,12 +9,13 @@ import { habitCount, HABITS, profileHabits } from "@et/core/habits";
 import { startTimeLabel } from "@et/core/start-time";
 import type { BenchmarkDef, DayResult, Injury, Profile, Workout } from "@et/core/types";
 import { calendarDays, useCalendar, useCalendarWrite } from "@/api/calendar";
-import { api } from "@/api/client";
+import { write as send } from "@/api/outbox";
 import { useMe } from "@/api/queries";
 import { useSession } from "@/auth/session";
 import { useDays } from "@/screens/calendar/Calendar";
 import { setMoving } from "@/screens/calendar/moving";
 import { QuickDone } from "@/screens/calendar/QuickDone";
+import { SyncNote } from "@/screens/SyncNote";
 import { ResultForm } from "@/screens/benchmarks/ResultForm";
 import { InjuryForm } from "@/screens/optional/Injuries";
 import { Chips } from "@/ui/form";
@@ -52,6 +53,7 @@ export default function DaySheet() {
       <Stack.Screen options={{ title: date ? format(parseISO(date), "EEEE, MMMM d") : "" }} />
       <Screen header>
         <ErrorText>{(write.error ?? cal.error)?.message}</ErrorText>
+        <SyncNote />
         {profile && info && (
           <>
             {activeGoals(profile).length > 0 && date <= today && (
@@ -65,7 +67,7 @@ export default function DaySheet() {
             {info.workouts.length === 0 && info.missed && <Body style={{ marginBottom: 8 }}>Nothing was planned or logged for this day.</Body>}
             <Button title="+ Add workout" variant="secondary" onPress={() => router.push({ pathname: "/workout", params: { date } })} />
             {info.workouts.length === 0 && (
-              <Button title="Mark as rest day" variant="secondary" onPress={() => run(() => api(`/days/${date}/rest`, { method: "POST" }))} />
+              <Button title="Mark as rest day" variant="secondary" onPress={() => run(() => send(`/days/${date}/rest`, { method: "POST" }))} />
             )}
             <InjuryLine date={date} today={today} injuries={injuriesOn(cal.data?.injuries ?? [], date, today)} />
             <View style={{ height: 14 }} />
@@ -86,8 +88,8 @@ export default function DaySheet() {
  * and the rest of the series that's still planned (logged ones are kept).
  */
 function confirmDelete(w: Workout, run: (f: () => Promise<unknown>) => void) {
-  const one = () => run(() => api(`/workouts/${w.date}/${w.id}`, { method: "DELETE" }));
-  const series = () => run(() => api(`/workouts/${w.date}/${w.id}/series`, { method: "DELETE" }));
+  const one = () => run(() => send(`/workouts/${w.date}/${w.id}`, { method: "DELETE" }));
+  const series = () => run(() => send(`/workouts/${w.date}/${w.id}/series`, { method: "DELETE" }));
   if (Platform.OS === "web") {
     // The web build (development only) has no native alerts.
     if (globalThis.confirm?.(`Delete "${w.title}"?`)) one();
@@ -135,7 +137,7 @@ function GoalsCard({
               haptic.tick();
               setOn((cur) => (isOn ? cur.filter((x) => x !== g.id) : [...cur, g.id]));
               run(() =>
-                api(`/days/${date}/goals/${g.id}`, { method: "PUT", body: { done: !isOn } }).catch((e) => {
+                send(`/days/${date}/goals/${g.id}`, { method: "PUT", body: { done: !isOn } }).catch((e) => {
                   setOn(done); // put it back if the save failed
                   throw e;
                 }),
@@ -172,7 +174,7 @@ function WorkoutCard({
   /** Opens the workout form on this workout, optionally starting on a status. */
   const open = (s?: Workout["status"]) => router.push({ pathname: "/workout", params: { date: w.date, id: w.id, ...(s ? { status: s } : {}) } });
   const resolve = (s: "completed" | "missed" | "skipped", r?: string) =>
-    run(() => api(`/workouts/${w.date}/${w.id}/resolve`, { body: { status: s, ...(r ? { reason: r } : {}) } }));
+    run(() => send(`/workouts/${w.date}/${w.id}/resolve`, { body: { status: s, ...(r ? { reason: r } : {}) } }));
   return (
     <Card>
       <Body style={{ fontWeight: "600" }}>
@@ -279,7 +281,7 @@ function DayLogCard({
         disabled={weightNum != null && (!isFinite(weightNum) || weightNum <= 0)}
         onPress={() =>
           run(() =>
-            api(`/days/${date}`, {
+            send(`/days/${date}`, {
               method: "PUT",
               body: {
                 notes,

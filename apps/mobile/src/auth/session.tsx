@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AuthSession } from "@et/core/api-types";
 import { configureClient } from "@/api/client";
+import { clearOutbox } from "@/api/outbox";
 import { deleteToken, readToken, saveToken } from "./token";
 
 type Status = "loading" | "signedOut" | "signedIn";
@@ -23,6 +24,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     configureClient(null, null);
+    // Unsent changes belong to this account; they mustn't go out under the next one.
+    clearOutbox();
     await deleteToken().catch(() => {});
     queryClient.clear();
     setStatus("signedOut");

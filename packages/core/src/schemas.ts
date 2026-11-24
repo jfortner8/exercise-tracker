@@ -75,6 +75,7 @@ export const workoutInput = z.object({
   originalDate: day.optional(), // the workout's current key date when editing
   type: z.enum(WORKOUT_TYPES),
   title: z.string().trim().min(1).max(200),
+  autoTitle: z.boolean().optional(),
   location: z.string().trim().max(200).optional(),
   sport: z.enum(SPORT_KEYS).optional(),
   sportName: z.string().trim().max(60).optional(),

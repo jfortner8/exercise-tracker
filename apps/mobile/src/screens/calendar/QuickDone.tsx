@@ -4,7 +4,7 @@ import { DISTANCE_TYPES } from "@et/core/activities";
 import { describeDuration, displayToMeters, distanceUnit, formatDuration, formatMinutesInput, intervalTotalSec, metersToDisplay, parseMinutesInput } from "@et/core/domain";
 import { extraBeyondIntervals, formatPace, plannedTimeSec, type ExtraAs } from "@et/core/quick-done";
 import type { Units, Workout } from "@et/core/types";
-import { api } from "@/api/client";
+import { write } from "@/api/outbox";
 import { useTheme } from "@/theme";
 import { Body, Button } from "@/ui";
 import { Chips, Row, SmallField } from "@/ui/form";
@@ -88,7 +88,7 @@ export function QuickDone({
         title="Save"
         disabled={timeBad || distBad}
         onPress={() => {
-          run(() => api(`/workouts/${w.date}/${w.id}/quick-done`, { body: { timeSec, distanceM, extraAs } }));
+          run(() => write(`/workouts/${w.date}/${w.id}/quick-done`, { body: { timeSec, distanceM, extraAs } }));
           onClose();
         }}
       />

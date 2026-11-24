@@ -35,11 +35,12 @@ The phone app (`apps/mobile`, Expo) does everything the website does, sold as a 
 
 - [x] App, native: the phone's date and time pickers (`src/ui/date-field.tsx`; the web build keeps a stepper in `date-field.web.tsx`), charts on `react-native-svg` (PB history, Weight trend), haptics (moving a workout, ticking a goal, saving a result, copying), local reminders (a daily "log today's workout?" and a weekly weigh-in, in Settings; scheduled on the phone), and Copy for codes and the calendar link
 
+- [x] TestFlight build 3 with every native package, tried on a real phone
+- [x] Offline saving: calendar, day sheet, workout form, results, injuries and routines writes go through `src/api/outbox.ts` (kept on the phone in order, sent at launch, on return to the app, every 20 s and before the next write; a refused one is dropped and shown). Friends, clubs and Settings stay online-only
+- [x] Generated workout names stay placeholders: `autoTitle` on the workout; older ones count as generated when the title matches
+
 ### Next, in order
-1. [ ] **A new TestFlight build** (Actions → EAS → Run workflow → `ios-testflight`) once the native PR is merged. The native packages changed the fingerprint, so the installed build stops getting updates until then.
-2. [ ] The user tries that build on a real phone; fix whatever feels wrong (JavaScript fixes go out as over-the-air updates)
-3. [ ] Offline: queued writes that sync when back online (TanStack Query's paused mutations), with a "will sync" badge
-4. [ ] Release: store icon (1024 px), screenshots, privacy labels; App Store paid app; Google Play ($25 fee; new personal accounts need a 12-tester, 14-day closed test)
+1. [ ] Release: store icon (1024 px), screenshots, privacy labels; App Store paid app; Google Play ($25 fee; new personal accounts need a 12-tester, 14-day closed test)
 
 ## Parity checklist (tick on a real device before public release)
 Sign-in flows · month and week calendar · day sheet · workout form · Quick Done · drag and swap · copy week · benchmarks · leaderboards · friends and clubs · injuries · routines · sports · weight · settings · calendar feed · delete account

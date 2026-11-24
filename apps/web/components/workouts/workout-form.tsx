@@ -17,7 +17,7 @@ import {
   repeatDates,
 } from "@et/core/domain";
 import { WORKOUT_STATUSES, WORKOUT_TYPES, type Clock, type Injury, type Routine, type Units, type Workout } from "@et/core/types";
-import { activityKey, activityMeta, applyActivity, autoTitle, DISTANCE_TYPES, type ActivityKey } from "@et/core/activities";
+import { activityKey, activityMeta, applyActivity, autoTitle, DISTANCE_TYPES, titleIsAuto, type ActivityKey } from "@et/core/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@et/core/dance";
 import { currentInjuries } from "@et/core/injuries";
 import { findRoutineByName, sameExercises } from "@et/core/routines";
@@ -324,7 +324,8 @@ export function WorkoutForm({
       setSportSession("");
     }
   }
-  const [title, setTitle] = useState(workout?.title ?? "");
+  // A generated title ("10 km Run") stays a placeholder, so it keeps following the details.
+  const [title, setTitle] = useState(workout && !titleIsAuto(workout, units) ? workout.title : "");
   const [location, setLocation] = useState(workout?.location ?? "");
   const [startTime, setStartTime] = useState(workout?.startTime ?? "");
   // The zone the start time is in. A new one is in the zone the user is in when they save.
@@ -432,6 +433,7 @@ export function WorkoutForm({
       startZone: startTime ? (startZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone) : undefined,
       type,
       title: title.trim() || autoName,
+      autoTitle: !title.trim(),
       location: location.trim() || undefined,
       ...(type === "sport"
         ? {

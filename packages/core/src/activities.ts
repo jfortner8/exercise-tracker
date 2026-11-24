@@ -104,6 +104,14 @@ export function autoTitle(
   return [amount, titleCase(intervals ? `${label} intervals` : label)].filter(Boolean).join(" ");
 }
 
+/**
+ * Whether a saved title is the generated one rather than typed. Workouts from before `autoTitle`
+ * was stored count as generated when the title matches what would be generated now.
+ */
+export function titleIsAuto(w: Parameters<typeof autoTitle>[0] & { title: string; autoTitle?: boolean }, units?: Units): boolean {
+  return w.autoTitle ?? w.title === autoTitle(w, units);
+}
+
 /** Types whose calendar block shows time · distance. */
 export const METRIC_TYPES = new Set<WorkoutType>(["run", "walk", "swim", "bike", "row"]);
 

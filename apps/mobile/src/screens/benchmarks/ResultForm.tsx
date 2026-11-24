@@ -6,7 +6,7 @@ import { formatClock } from "@et/core/domain";
 import { fastestWindow, parseSplits, splitsNeeded } from "@et/core/splits";
 import type { BenchmarkDef, BenchmarkResult, DistanceUnit, Units } from "@et/core/types";
 import { useAction } from "@/api/action";
-import { api } from "@/api/client";
+import { write } from "@/api/outbox";
 import { useDayWorkouts } from "@/api/queries";
 import { useTheme } from "@/theme";
 import { Button, ErrorText, Field } from "@/ui";
@@ -69,7 +69,7 @@ export function ResultForm({
       workoutId: workoutId || undefined,
     };
     const r = await act.run(() =>
-      editing ? api(`/benchmarks/${def.id}/results/${editing.date}/${editing.id}`, { method: "PUT", body }) : api(`/benchmarks/${def.id}/results`, { body }),
+      editing ? write(`/benchmarks/${def.id}/results/${editing.date}/${editing.id}`, { method: "PUT", body }) : write(`/benchmarks/${def.id}/results`, { body }),
     );
     if (!r) return;
     haptic.success();

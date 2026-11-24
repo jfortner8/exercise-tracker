@@ -3,7 +3,7 @@ import { format, parseISO } from "date-fns";
 import { Redirect, router, Stack, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
-import { activityKey, activityMeta, applyActivity, autoTitle } from "@et/core/activities";
+import { activityKey, activityMeta, applyActivity, autoTitle, titleIsAuto } from "@et/core/activities";
 import { DANCE_SESSIONS, DANCE_STYLES } from "@et/core/dance";
 import { formatStartTime, repeatDates, START_TIME_RE } from "@et/core/domain";
 import { startTimeIn, zoneAbbr, zoneDiffers, zonedTimeToUtc } from "@et/core/start-time";
@@ -15,7 +15,8 @@ import { WORKOUT_STATUSES, WORKOUT_TYPES, type Workout } from "@et/core/types";
 import { badHeartRate, fromDraft, fromExerciseDrafts, statusForDay, toDraft, toExerciseDrafts, unreadableDurations } from "@et/core/workout-draft";
 import { STATUS_LABEL } from "@et/core/workout-types";
 import { calendarDays, useCalendar } from "@/api/calendar";
-import { api, ApiError, deviceTimeZone } from "@/api/client";
+import { ApiError, deviceTimeZone } from "@/api/client";
+import { write } from "@/api/outbox";
 import { useMe } from "@/api/queries";
 import { useSession } from "@/auth/session";
 import { DetailsFields } from "@/screens/workout/DetailsFields";
@@ -91,7 +92,8 @@ function WorkoutForm({
   const [danceStyle, setDanceStyle] = useState(workout?.danceStyle ?? "");
   const [danceStyleName, setDanceStyleName] = useState(workout?.danceStyleName ?? "");
   const [danceSession, setDanceSession] = useState(workout?.danceSession ?? "");
-  const [title, setTitle] = useState(workout?.title ?? "");
+  // A generated title ("10 km Run") stays a placeholder, so it keeps following the details.
+  const [title, setTitle] = useState(workout && !titleIsAuto(workout, profile.units) ? workout.title : "");
   const [location, setLocation] = useState(workout?.location ?? "");
   const [startTime, setStartTime] = useState(workout?.startTime ?? "");
   // The zone the start time was entered in; typing a new time means it's in the phone's zone.
@@ -191,6 +193,7 @@ function WorkoutForm({
       startZone: startTime ? (startZone ?? deviceTimeZone()) : undefined,
       type,
       title: title.trim() || autoName,
+      autoTitle: !title.trim(),
       location: location.trim() || undefined,
       ...(type === "sport" ? { sport: sport || undefined, sportName: sport === "other" ? sportName.trim() || undefined : undefined, sportSession: sportSession || undefined } : {}),
       ...(type === "dance"
@@ -208,7 +211,7 @@ function WorkoutForm({
     };
     setBusy(true);
     try {
-      await api("/workouts", {
+      await write("/workouts", {
         body: { workout: input, repeat: canRepeat && repeating ? repeat : undefined, saveAsRoutine: savingRoutine ? { name: routineName.trim() } : undefined },
       });
       await Promise.all([qc.invalidateQueries({ queryKey: ["calendar"] }), qc.invalidateQueries({ queryKey: ["me"] })]);

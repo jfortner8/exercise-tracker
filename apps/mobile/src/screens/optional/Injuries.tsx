@@ -6,6 +6,7 @@ import type { InjuriesResponse } from "@et/core/api-types";
 import type { Injury } from "@et/core/types";
 import { useAction } from "@/api/action";
 import { api } from "@/api/client";
+import { write } from "@/api/outbox";
 import { useMe } from "@/api/queries";
 import { useTheme } from "@/theme";
 import { Body, Button, Card, ErrorText, Field, Screen, Title } from "@/ui";
@@ -72,7 +73,7 @@ export function Injuries({ header }: { header?: boolean }) {
                   <Button
                     title="Mark healed"
                     variant="secondary"
-                    onPress={() => void act.run(() => api(`/injuries/${i.id}`, { method: "PUT", body: { ...i, id: undefined, status: "healed", endDate: i.endDate ?? today } }))}
+                    onPress={() => void act.run(() => write(`/injuries/${i.id}`, { method: "PUT", body: { ...i, id: undefined, status: "healed", endDate: i.endDate ?? today } }))}
                   />
                 </View>
               )}
@@ -85,7 +86,7 @@ export function Injuries({ header }: { header?: boolean }) {
               variant="link"
               onPress={async () => {
                 if (await ask(`Delete "${i.name}"?`, "Workouts linked to it are left as they are.", "Delete", true))
-                  void act.run(() => api(`/injuries/${i.id}`, { method: "DELETE" }));
+                  void act.run(() => write(`/injuries/${i.id}`, { method: "DELETE" }));
               }}
             />
           </Card>
@@ -115,7 +116,7 @@ export function InjuryForm({ injury, today, startDate, onClose }: { injury?: Inj
       status: v.status,
       notes: v.notes || undefined,
     };
-    const r = await act.run(() => (injury ? api(`/injuries/${injury.id}`, { method: "PUT", body }) : api("/injuries", { body })));
+    const r = await act.run(() => (injury ? write(`/injuries/${injury.id}`, { method: "PUT", body }) : write("/injuries", { body })));
     if (r) onClose();
   }
   return (
