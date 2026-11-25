@@ -10,7 +10,7 @@ type Draft = Pick<Goal, "id" | "name" | "emoji" | "off">;
 /**
  * Settings: tick the yes/no goals to track (they appear in the day view), then pick one of those
  * for the calendar. The common goals are always listed; your own are added below them.
- * Unticking keeps a goal (and its check-offs) so ticking it again restores it. Saved with the form.
+ * Unticking keeps a goal (and its check-offs) so ticking it again restores it. Saved as soon as it changes.
  */
 export function GoalsEditor({
   goals,

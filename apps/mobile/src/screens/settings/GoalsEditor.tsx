@@ -12,7 +12,7 @@ const newId = () => Array.from({ length: 24 }, () => "abcdefghijklmnopqrstuvwxyz
 
 /**
  * Yes/no daily goals: the common ones are always listed, your own below. Switching one off keeps
- * it (and its check-offs) so switching it back on restores it. Saved with the settings form.
+ * it (and its check-offs) so switching it back on restores it. Saved as soon as it changes.
  */
 export function GoalsEditor({
   goals,
