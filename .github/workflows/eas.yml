@@ -24,6 +24,7 @@ on:
         type: choice
         options:
           - ios-testflight
+          - ios-app-store
           - android-preview-apk
           - android-play-internal
           - update-production
@@ -130,6 +131,13 @@ jobs:
       - name: iOS build and TestFlight
         if: inputs.action == 'ios-testflight'
         run: eas build --profile testflight --platform ios --auto-submit-with-profile production --non-interactive --no-wait
+
+      # The build for the App Store itself. Same upload to App Store Connect as above, but it follows
+      # the "production" channel, so store users only get JavaScript sent with update-production,
+      # not every merge. Attach this one (not a TestFlight build) to the App Store version.
+      - name: iOS build for the App Store
+        if: inputs.action == 'ios-app-store'
+        run: eas build --profile production --platform ios --auto-submit-with-profile production --non-interactive --no-wait
 
       # An APK anyone can install from the link EAS gives (Android only; no store needed).
       - name: Android preview APK
