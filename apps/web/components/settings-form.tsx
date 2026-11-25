@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { saveProfileAction } from "@/lib/actions";
 import { calendarHabit, HABIT_KINDS, HABITS, profileHabits, type HabitKind } from "@et/core/habits";
 import { HabitIcon } from "./habit-icon";
 import { GoalsEditor } from "./goals-editor";
 import type { Clock, DistanceUnit, Profile, Share, WeightUnit } from "@et/core/types";
 import { ThemeSwitch } from "./theme-switch";
-import { Button, Card, Field, Input, Select, cx } from "./ui";
+import { Card, Field, Input, Select, cx } from "./ui";
+import { useAutosave } from "./use-autosave";
 
 const SHARE_OPTIONS: { value: Share; label: string; description: string }[] = [
   { value: "off", label: "Nobody", description: "You don't appear on any leaderboard." },
@@ -19,36 +20,43 @@ const SHARE_OPTIONS: { value: Share; label: string; description: string }[] = [
   { value: "everyone", label: "Everyone", description: "Friends and clubs, plus the Everyone board that anyone with an account can see." },
 ];
 
+/** What the server saves from the form. */
+const toInput = (p: Profile) => ({
+  displayName: p.displayName,
+  units: p.units,
+  weekStartsOn: p.weekStartsOn,
+  clock: p.clock ?? "12h",
+  habits: profileHabits(p),
+  habitOnCalendar: calendarHabit(p) ?? undefined,
+  goals: (p.goals ?? []).map(({ id, name, emoji, off }) => ({ id, name, emoji, off })),
+  goalOnCalendar: p.goalOnCalendar,
+  share: p.share,
+  shareConsistency: p.share !== "off" && p.shareConsistency === true,
+  trackWeight: p.trackWeight,
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+});
+
+/**
+ * Settings save themselves a moment after each change; there's no Save button. Nothing here
+ * deletes data: switching a counter, goal or weight off only hides it, and deleting a goal asks first.
+ */
 export function SettingsForm({ profile }: { profile: Profile }) {
-  const [p, setP] = useState(profile);
+  const [p, setProfile] = useState(profile);
+  const { schedule, state, error } = useAutosave((next: Profile) => saveProfileAction(toInput(next)));
+  const setP = (next: Profile) => {
+    setProfile(next);
+    // A blank name isn't saved (it's required); the rest waits until there is one.
+    if (next.displayName.trim()) schedule(next);
+  };
   const habits = profileHabits(p);
   const toggleHabit = (k: HabitKind, on: boolean) =>
     setP({ ...p, habits: HABIT_KINDS.filter((h) => (h === k ? on : habits.includes(h))) });
-  const [pending, start] = useTransition();
-  const [saved, setSaved] = useState(false);
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        setSaved(false);
-        start(async () => {
-          await saveProfileAction({
-            displayName: p.displayName,
-            units: p.units,
-            weekStartsOn: p.weekStartsOn,
-            clock: p.clock ?? "12h",
-            habits,
-            habitOnCalendar: calendarHabit(p) ?? undefined,
-            goals: (p.goals ?? []).map(({ id, name, emoji, off }) => ({ id, name, emoji, off })),
-            goalOnCalendar: p.goalOnCalendar,
-            share: p.share,
-            shareConsistency: p.share !== "off" && p.shareConsistency === true,
-            trackWeight: p.trackWeight,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          });
-          setSaved(true);
-        });
+        if (p.displayName.trim()) schedule(p, true);
       }}
     >
       <Card className="divide-y divide-border">
@@ -206,12 +214,19 @@ export function SettingsForm({ profile }: { profile: Profile }) {
           </label>
         </fieldset>
       </Card>
-      <div className="mt-4 flex items-center justify-end gap-3">
-        {saved && <span className="text-sm text-muted">Saved</span>}
-        <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? "Saving…" : "Save settings"}
-        </Button>
-      </div>
+      <p className="mt-3 h-5 text-right text-sm text-muted" aria-live="polite">
+        {!p.displayName.trim() ? (
+          <span className="text-danger">Enter a display name to save changes.</span>
+        ) : state === "saving" ? (
+          "Saving…"
+        ) : state === "error" ? (
+          <span className="text-danger">Couldn&apos;t save: {error}</span>
+        ) : state === "saved" ? (
+          "Saved"
+        ) : (
+          "Changes save automatically."
+        )}
+      </p>
     </form>
   );
 }

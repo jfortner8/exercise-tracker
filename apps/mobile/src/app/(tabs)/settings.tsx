@@ -20,6 +20,7 @@ import { useTheme } from "@/theme";
 import { useThemePref } from "@/theme-pref";
 import { Body, Button, Card, ErrorText, Field, Screen, Title } from "@/ui";
 import { ask } from "@/ui/confirm";
+import { useAutosave } from "@/ui/autosave";
 import { Chips, SectionTitle, SwitchRow } from "@/ui/form";
 
 const SHARE_OPTIONS: { value: Share; label: string; description: string }[] = [
@@ -35,55 +36,50 @@ export default function Settings() {
   const qc = useQueryClient();
   const t = useTheme();
   const [theme, setTheme] = useThemePref();
-  // Unsaved edits; until the first one, the form shows the saved settings.
+  // Edits not yet confirmed by the server; until the first one, the form shows the saved settings.
+  // Settings save themselves a moment after each change (there's no Save button). Nothing here
+  // deletes data: switching a counter, goal or weight off only hides it, and deleting a goal asks first.
   const [draft, setDraft] = useState<Profile | null>(null);
   const p = draft ?? me.data?.profile ?? null;
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const flags = me.data?.navFlags ?? {};
   const earned = Platform.OS === "android" ? OPTIONAL_TABS.filter((x) => x.flag && flags[x.flag]) : [];
+  const autosave = useAutosave(save);
   const edit = (patch: Partial<Profile>) => {
-    setSaved(false);
-    if (p) setDraft({ ...p, ...patch });
+    if (!p) return;
+    const next = { ...p, ...patch };
+    setDraft(next);
+    // A blank name isn't saved (it's required); the rest waits until there is one.
+    if (next.displayName.trim()) autosave.schedule(next);
   };
 
-  async function save() {
-    if (!p) return;
-    const habits = profileHabits(p);
-    setSaving(true);
-    setError(null);
-    try {
-      const r = await api<MeResponse>("/me/profile", {
-        method: "PUT",
-        body: {
-          displayName: p.displayName,
-          units: p.units,
-          weekStartsOn: p.weekStartsOn,
-          clock: p.clock ?? "12h",
-          habits,
-          habitOnCalendar: calendarHabit(p) ?? undefined,
-          goals: (p.goals ?? []).map(({ id, name, emoji, off }) => ({ id, name, emoji, off })),
-          goalOnCalendar: p.goalOnCalendar,
-          share: p.share,
-          shareConsistency: p.share !== "off" && p.shareConsistency === true,
-          trackWeight: p.trackWeight,
-          timeZone: deviceTimeZone(),
-        },
-      });
-      // Turning weight tracking off (or on) drops (or restores) the weigh-in reminder.
-      if (r.profile.trackWeight !== me.data?.profile.trackWeight && Platform.OS !== "web")
-        void loadReminders().then((rp) => saveReminders(rp, r.profile.trackWeight)).catch(() => {});
-      qc.setQueryData(["me"], r);
-      setDraft(null);
-      setSaved(true);
-      await Promise.all([qc.invalidateQueries({ queryKey: ["calendar"] }), qc.invalidateQueries({ queryKey: ["leaderboards"] })]);
-    } catch (e) {
-      setError((e as ApiError).message);
-    } finally {
-      setSaving(false);
-    }
+  async function save(p: Profile, latest: () => boolean) {
+    const r = await api<MeResponse>("/me/profile", {
+      method: "PUT",
+      body: {
+        displayName: p.displayName,
+        units: p.units,
+        weekStartsOn: p.weekStartsOn,
+        clock: p.clock ?? "12h",
+        habits: profileHabits(p),
+        habitOnCalendar: calendarHabit(p) ?? undefined,
+        goals: (p.goals ?? []).map(({ id, name, emoji, off }) => ({ id, name, emoji, off })),
+        goalOnCalendar: p.goalOnCalendar,
+        share: p.share,
+        shareConsistency: p.share !== "off" && p.shareConsistency === true,
+        trackWeight: p.trackWeight,
+        timeZone: deviceTimeZone(),
+      },
+    });
+    // Turning weight tracking off (or on) drops (or restores) the weigh-in reminder.
+    const before = qc.getQueryData<MeResponse>(["me"])?.profile.trackWeight;
+    if (r.profile.trackWeight !== before && Platform.OS !== "web")
+      void loadReminders().then((rp) => saveReminders(rp, r.profile.trackWeight)).catch(() => {});
+    qc.setQueryData(["me"], r);
+    // Show the server's copy (new goals' start dates and so on) unless another change is on its way.
+    if (latest()) setDraft(null);
+    await Promise.all([qc.invalidateQueries({ queryKey: ["calendar"] }), qc.invalidateQueries({ queryKey: ["leaderboards"] })]);
   }
 
   async function deleteAccount() {
@@ -223,9 +219,18 @@ export default function Settings() {
             )}
           </Card>
 
+          <Text style={{ color: !p.displayName.trim() || autosave.state === "error" ? t.danger : t.muted, fontSize: 13, textAlign: "center", marginBottom: 16 }}>
+            {!p.displayName.trim()
+              ? "Enter a display name to save changes."
+              : autosave.state === "saving"
+                ? "Saving…"
+                : autosave.state === "error"
+                  ? `Couldn't save: ${autosave.error}`
+                  : autosave.state === "saved"
+                    ? "Saved"
+                    : "Changes save automatically."}
+          </Text>
           <ErrorText>{error}</ErrorText>
-          <Button title={saved ? "Saved" : "Save settings"} onPress={() => void save()} loading={saving} disabled={!p.displayName.trim()} />
-          <View style={{ height: 20 }} />
 
           <Reminders trackWeight={me.data?.profile.trackWeight ?? false} clock={me.data?.profile.clock} />
           <CalendarFeed />

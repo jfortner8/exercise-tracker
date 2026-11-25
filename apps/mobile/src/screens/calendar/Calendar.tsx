@@ -1,8 +1,9 @@
 import { format, parseISO } from "date-fns";
-import { useMemo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { GestureDetector, usePanGesture } from "react-native-gesture-handler";
 import type { CalendarResponse } from "@et/core/api-types";
-import { blockMetrics, workoutCategory } from "@et/core/activities";
+import { blockMetrics, tileLines, workoutCategory } from "@et/core/activities";
 import {
   chunkWeeks,
   compareWorkouts,
@@ -19,6 +20,7 @@ import { startTimeLabel } from "@et/core/start-time";
 import type { DayLog, DayResult, Profile, Workout } from "@et/core/types";
 import type { CalendarView } from "@/api/calendar";
 import { useTheme, type Theme } from "@/theme";
+import { haptic } from "@/ui/haptics";
 
 /** Everything one day shows, worked out the way the website's calendar does. */
 export interface DayInfo {
@@ -73,6 +75,8 @@ export function CalendarGrid({
   today,
   startDate,
   onOpen,
+  liftable,
+  onDrop,
   onLongPress,
   movingFrom,
 }: {
@@ -84,62 +88,145 @@ export function CalendarGrid({
   today: string;
   startDate: string | null;
   onOpen: (date: string) => void;
-  /** Long press: start moving that day's planned workout. */
+  /** The workout a long press on this day picks up to drag, if there's exactly one to move. */
+  liftable?: (date: string) => Workout | undefined;
+  /** Dropped on another day. */
+  onDrop?: (w: Workout, to: string) => void;
+  /** A long press on a day with nothing to pick up (several planned workouts: open it to choose). */
   onLongPress?: (date: string) => void;
   /** The day a workout is being moved from: it's outlined, and every tap picks where it goes. */
   movingFrom?: string;
 }) {
   const t = useTheme();
   const weeks = chunkWeeks(days);
+
+  // Dragging: a long press lifts the day's planned workout, which then follows the finger; letting
+  // go over another day drops it there. Days are found from the rows' layout (seven equal columns).
+  const [width, setWidth] = useState(0);
+  const rows = useRef<{ y: number; h: number }[]>([]);
+  const [drag, setDragState] = useState<{ w: Workout; over: string | null } | null>(null);
+  const dragRef = useRef(drag);
+  const setDrag = (d: typeof drag) => {
+    dragRef.current = d;
+    setDragState(d);
+  };
+  const [pos] = useState(() => new Animated.ValueXY());
+  const rowAt = (y: number) => rows.current.findIndex((r) => r && y >= r.y && y < r.y + r.h);
+  const dayAt = (x: number, y: number): string | null => {
+    const i = rowAt(y);
+    if (i < 0) return null;
+    if (view === "week") return days[i] ?? null;
+    const col = Math.min(6, Math.max(0, Math.floor(x / (width / 7))));
+    return weeks[i]?.[col] ?? null;
+  };
+  const pan = usePanGesture({
+    activateAfterLongPress: 350,
+    runOnJS: true,
+    enabled: !!onDrop,
+    onActivate: (e) => {
+      const d = dayAt(e.x, e.y);
+      if (!d) return;
+      const w = liftable?.(d);
+      if (!w) return onLongPress?.(d);
+      haptic.pickUp();
+      pos.setValue({ x: e.x, y: e.y });
+      setDrag({ w, over: d });
+    },
+    onUpdate: (e) => {
+      const cur = dragRef.current;
+      if (!cur) return;
+      pos.setValue({ x: e.x, y: e.y });
+      const over = dayAt(e.x, e.y);
+      if (over !== cur.over) {
+        if (over) haptic.tick();
+        setDrag({ ...cur, over });
+      }
+    },
+    onDeactivate: (e) => {
+      const cur = dragRef.current;
+      setDrag(null);
+      if (cur && !e.canceled && cur.over && cur.over !== cur.w.date) onDrop?.(cur.w, cur.over);
+    },
+    onFinalize: () => {
+      if (dragRef.current) setDrag(null);
+    },
+  });
+  const setRow = (i: number) => (e: { nativeEvent: { layout: { y: number; height: number } } }) => {
+    rows.current[i] = { y: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height };
+  };
+  const target = (d: string) => movingFrom === d || (!!drag && drag.over === d && d !== drag.w.date);
+  const ghost = drag ? (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.ghost,
+        { backgroundColor: t.surface, borderColor: t.accent, transform: [{ translateX: Animated.add(pos.x, -50) }, { translateY: Animated.add(pos.y, -56) }] },
+      ]}
+    >
+      <Text style={{ color: t.text, fontWeight: "600", fontSize: 14 }} numberOfLines={1}>
+        {workoutCategory(drag.w).emoji} {drag.w.title || workoutCategory(drag.w).label}
+      </Text>
+    </Animated.View>
+  ) : null;
+
   if (view === "week") {
     return (
-      <View style={[styles.frame, { borderColor: t.border, backgroundColor: t.surface }]}>
-        {days.map((d, i) => (
-          <WeekRow
-            key={d}
-            info={byDay.get(d)}
-            date={d}
-            first={i === 0}
-            profile={profile}
-            today={today}
-            startDate={startDate}
-            onPress={() => onOpen(d)}
-            onLongPress={onLongPress && (() => onLongPress(d))}
-            outlined={movingFrom === d}
-          />
-        ))}
-      </View>
+      <GestureDetector gesture={pan}>
+        <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+          <View style={[styles.frame, { borderColor: t.border, backgroundColor: t.surface }]}>
+            {days.map((d, i) => (
+              <WeekRow
+                onLayout={setRow(i)}
+                key={d}
+                info={byDay.get(d)}
+                date={d}
+                first={i === 0}
+                profile={profile}
+                today={today}
+                startDate={startDate}
+                onPress={() => onOpen(d)}
+                outlined={target(d)}
+              />
+            ))}
+          </View>
+          {ghost}
+        </View>
+      </GestureDetector>
     );
   }
   return (
-    <View style={[styles.frame, { borderColor: t.border, backgroundColor: t.surface }]}>
-      <View style={[styles.weekdays, { borderColor: t.border, backgroundColor: t.surface2 }]}>
-        {days.slice(0, 7).map((d) => (
-          <Text key={d} style={[styles.weekday, { color: t.muted }]}>
-            {format(parseISO(d), "EEEEEE")}
-          </Text>
-        ))}
-      </View>
-      {weeks.map((week, wi) => (
-        <View key={week[0]} style={[styles.week, wi > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: t.border }]}>
-          {week.map((d, di) => (
-            <DayTile
-              key={d}
-              date={d}
-              info={byDay.get(d)}
-              outside={parseISO(d).getMonth() !== monthIndex}
-              last={di === 6}
-              profile={profile}
-              today={today}
-              startDate={startDate}
-              onPress={() => onOpen(d)}
-              onLongPress={onLongPress && (() => onLongPress(d))}
-              outlined={movingFrom === d}
-            />
+    <GestureDetector gesture={pan}>
+      <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+        <View style={[styles.frame, { borderColor: t.border, backgroundColor: t.surface }]}>
+          <View style={[styles.weekdays, { borderColor: t.border, backgroundColor: t.surface2 }]}>
+            {days.slice(0, 7).map((d) => (
+              <Text key={d} style={[styles.weekday, { color: t.muted }]}>
+                {format(parseISO(d), "EEEEEE")}
+              </Text>
+            ))}
+          </View>
+          {weeks.map((week, wi) => (
+            <View key={week[0]} onLayout={setRow(wi)} style={[styles.week, wi > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: t.border }]}>
+              {week.map((d, di) => (
+                <DayTile
+                  key={d}
+                  date={d}
+                  info={byDay.get(d)}
+                  outside={parseISO(d).getMonth() !== monthIndex}
+                  last={di === 6}
+                  profile={profile}
+                  today={today}
+                  startDate={startDate}
+                  onPress={() => onOpen(d)}
+                  outlined={target(d)}
+                />
+              ))}
+            </View>
           ))}
         </View>
-      ))}
-    </View>
+        {ghost}
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -165,7 +252,6 @@ function DayTile({
   today,
   startDate,
   onPress,
-  onLongPress,
   outlined,
 }: {
   date: string;
@@ -176,19 +262,18 @@ function DayTile({
   today: string;
   startDate: string | null;
   onPress: () => void;
-  onLongPress?: () => void;
   outlined?: boolean;
 }) {
   const t = useTheme();
   const workouts = info?.workouts ?? [];
+  // Room under each emoji: two lines with one workout, one with two, none with more.
+  const room = workouts.length === 1 ? 2 : workouts.length === 2 ? 1 : 0;
   const label = `${format(parseISO(date), "EEEE, MMMM d")}${workouts.length ? `, ${workouts.length} workout${workouts.length === 1 ? "" : "s"}` : ""}`;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={350}
       style={({ pressed }) => [
         styles.tile,
         { borderColor: t.border, backgroundColor: outside ? t.surface2 : t.surface, opacity: pressed ? 0.7 : 1 },
@@ -216,6 +301,13 @@ function DayTile({
               >
                 {i === 0 && <DayNumber date={date} today={today} color={c.fg} />}
                 <Text style={styles.emoji}>{workoutCategory(w).emoji}</Text>
+                {tileLines(w, profile.units)
+                  .slice(0, room)
+                  .map((line) => (
+                    <Text key={line} style={[styles.tileLine, { color: c.fg }]} numberOfLines={1}>
+                      {line}
+                    </Text>
+                  ))}
               </View>
             );
           })
@@ -236,7 +328,7 @@ function WeekRow({
   today,
   startDate,
   onPress,
-  onLongPress,
+  onLayout,
   outlined,
 }: {
   date: string;
@@ -246,7 +338,7 @@ function WeekRow({
   today: string;
   startDate: string | null;
   onPress: () => void;
-  onLongPress?: () => void;
+  onLayout?: (e: { nativeEvent: { layout: { y: number; height: number } } }) => void;
   outlined?: boolean;
 }) {
   const t = useTheme();
@@ -255,8 +347,7 @@ function WeekRow({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={350}
+      onLayout={onLayout}
       style={({ pressed }) => [
         !first && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: t.border },
         { opacity: pressed ? 0.7 : 1 },
@@ -394,6 +485,22 @@ const styles = StyleSheet.create({
   dayNum: { alignSelf: "flex-start", width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   dayNumText: { fontSize: 11 },
   emoji: { fontSize: 13, lineHeight: 16 },
+  tileLine: { fontSize: 9, lineHeight: 11, fontWeight: "600" },
+  ghost: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    maxWidth: 170,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
   star: { position: "absolute", top: 1, right: 2, fontSize: 11 },
   footer: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth },
   cell: { flex: 1, alignItems: "center", justifyContent: "center", borderLeftWidth: StyleSheet.hairlineWidth, overflow: "hidden" },

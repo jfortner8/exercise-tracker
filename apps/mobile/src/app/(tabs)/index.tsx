@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ymd } from "@et/core/domain";
+import type { Workout } from "@et/core/types";
 import { calendarDays, stepAnchor, useCalendar, useCalendarWrite, type CalendarView } from "@/api/calendar";
 import { isQueued, write as send } from "@/api/outbox";
 import { useMe } from "@/api/queries";
@@ -34,21 +35,24 @@ export default function CalendarScreen() {
   const [copying, setCopying] = useState(false);
   const planned = (d: string) => (byDay.get(d)?.workouts ?? []).filter((w) => w.status === "planned");
 
-  /** Long press: one planned workout starts moving; with several, the day opens to pick one. */
-  function startMove(d: string) {
+  /** Long press picks up a day's one planned workout to drag; with several, the day opens to pick one. */
+  const liftable = (d: string) => {
     const ws = planned(d);
-    if (ws.length === 1) {
-      haptic.pickUp();
-      setMoving(ws[0]);
-    }
-    else if (ws.length > 1) router.push({ pathname: "/day/[date]", params: { date: d } });
-  }
+    return ws.length === 1 ? ws[0] : undefined;
+  };
+  const openIfSeveral = (d: string) => {
+    if (planned(d).length > 1) router.push({ pathname: "/day/[date]", params: { date: d } });
+  };
 
-  /** While moving, a tap says where it goes. A day with its own plan asks: swap, or add to it. */
+  /** While moving (from the day sheet's "Move…"), a tap says where it goes. */
   async function tapDay(d: string) {
     if (!moving) return router.push({ pathname: "/day/[date]", params: { date: d } });
-    const w = moving;
-    if (d === w.date) return setMoving(null);
+    if (d === moving.date) return setMoving(null);
+    await moveTo(moving, d);
+  }
+
+  /** Moves a planned workout to `d`. A day with its own plan asks: swap, or add to it. */
+  async function moveTo(w: Workout, d: string) {
     const targets = planned(d);
     let swap = false;
     if (targets.length) {
@@ -102,12 +106,14 @@ export default function CalendarScreen() {
           today={today}
           startDate={cal.data?.startDate ?? null}
           onOpen={(date) => void tapDay(date)}
-          onLongPress={startMove}
+          liftable={liftable}
+          onDrop={(w, d) => void moveTo(w, d)}
+          onLongPress={openIfSeveral}
           movingFrom={moving?.date}
         />
       )}
       {profile && range && !moving ? (
-        <Body muted style={{ fontSize: 13, textAlign: "center", marginTop: 8 }}>Long-press a day to move its planned workout.</Body>
+        <Body muted style={{ fontSize: 13, textAlign: "center", marginTop: 8 }}>Hold a planned workout, then drag it to another day.</Body>
       ) : null}
       {view === "week" && range && profile ? (
         copying ? (

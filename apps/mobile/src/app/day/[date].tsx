@@ -184,7 +184,19 @@ function WorkoutCard({
         {[startTimeLabel(w, zone, clock), STATUS[status] ?? status].filter(Boolean).join(" · ")}
       </Body>
       {w.reason ? <Body muted>↳ {w.reason}</Body> : null}
-      {quick && <QuickDone w={w} units={units} run={run} onMore={() => open("completed")} onClose={() => setQuick(false)} />}
+      {/* Only while it still needs an answer: once it's logged (here or in the full form), it's gone. */}
+      {quick && (status === "planned" || status === "needs_review") && (
+        <QuickDone
+          w={w}
+          units={units}
+          run={run}
+          onMore={() => {
+            setQuick(false);
+            open("completed");
+          }}
+          onClose={() => setQuick(false)}
+        />
+      )}
       {(status === "planned" || status === "needs_review") && !quick &&
         (skipping ? (
           <View style={{ marginTop: 8 }}>
@@ -343,7 +355,13 @@ function DayResults({ results, profile }: { results: DayResult[]; profile: Profi
 function RecordResult({ date, today, benchmarks, profile }: { date: string; today: string; benchmarks: BenchmarkDef[]; profile: Profile }) {
   const [id, setId] = useState<string | null>(null);
   const def = benchmarks.find((b) => b.id === id);
-  if (id == null) return <Button title="+ Record a benchmark result" variant="secondary" onPress={() => setId("")} />;
+  if (id == null)
+    return (
+      // Buttons only have space above them; this keeps the Day notes card from touching it.
+      <View style={{ marginBottom: 14 }}>
+        <Button title="+ Record a benchmark result" variant="secondary" onPress={() => setId("")} />
+      </View>
+    );
   return (
     <Card>
       <Chips
