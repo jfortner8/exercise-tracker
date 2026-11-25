@@ -58,14 +58,16 @@ Make the new build first: build 3 can't get the newer features over the air.
 - [ ] **Price:** Free (Pricing and Availability).
 - [ ] **App Privacy labels:** data collected is the email address and the workouts, notes and health-type data you log, all linked to your account, used for app functionality only, no tracking. Claude can walk through the form with you.
 - [ ] **Sign-in for the reviewer:** Apple needs a working account to log in with. Make a demo account with a few workouts and put its email and password in "Sign-in information". (Don't use your own.)
-- [ ] Attach the build (the "Build" section), then **Add for Review** → **Submit**.
+- [ ] Claude: change the version from 0.9.0 (beta) to **1.0.0** in `apps/mobile/app.json`, the same number as this App Store version.
+- [ ] Run **Actions → EAS → `ios-app-store`** (not `ios-testflight`). That build follows the production channel, so store users only get updates you send with `update-production`, while TestFlight builds keep getting every merge. It shows up in TestFlight too, so you can try it before submitting.
+- [ ] Attach **that** build (the "Build" section), then **Add for Review** → **Submit**.
 - [ ] Choose **manual release** if you want to pick the launch moment after approval.
 - Ignore the China mainland compliance notices: they only apply if you distribute in mainland China. You can untick China in Pricing and Availability.
 
 ## 5. After approval
 - [ ] Release it (or it goes live on its own if you chose automatic).
 - [ ] Share the App Store link with friends and clubs.
-- [ ] JavaScript fixes go out with **Actions → EAS → `update-production`** (no review). Native changes need a new build and review.
+- [ ] JavaScript fixes go out with **Actions → EAS → `update-production`** (no review). Native changes need a new `ios-app-store` build, a higher version (1.0.1, 1.1.0…) and review.
 
 ## Google Play (later)
 - [ ] Pay the one-time **$25** fee and create a developer account (personal accounts verify identity).
