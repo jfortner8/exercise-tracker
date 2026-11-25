@@ -123,3 +123,27 @@ export function blockMetrics(w: Workout, units: Units): string | undefined {
   const parts = [dur ? formatDuration(dur) : "", d?.distanceM ? formatDistance(d.distanceM, units) : ""].filter(Boolean);
   return parts.length ? parts.join(" · ") : undefined;
 }
+
+/**
+ * The short lines under a workout's emoji on a month tile, which is only a few letters wide:
+ * distance and/or time ("8.2 mi", "45m", "1h05"), or for a sport the session ("Practice", "Game").
+ * From what was done, or the plan while it's still planned. Empty when there's nothing to say.
+ */
+export function tileLines(w: Workout, units: Units): string[] {
+  if (w.type === "sport") {
+    const s = sportMeta(w.sport)?.sessions.find((x) => x.key === w.sportSession);
+    return s ? [s.label] : [];
+  }
+  const d = DONE_STATUSES.has(w.status) ? (w.actual ?? w.planned) : w.planned;
+  const out: string[] = [];
+  if (d?.distanceM) {
+    const v = Math.round(metersToDisplay(d.distanceM, units) * 10) / 10;
+    out.push(`${v} ${distanceUnit(units)}`);
+  }
+  const sec = detailsDurationSec(d);
+  if (sec) {
+    const m = Math.round(sec / 60);
+    out.push(m < 60 ? `${Math.max(m, 1)}m` : `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, "0") : ""}`);
+  }
+  return out;
+}
