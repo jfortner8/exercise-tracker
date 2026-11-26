@@ -3,10 +3,10 @@ import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
-import type { DeleteAccountResponse, MeResponse } from "@et/core/api-types";
+import type { MeResponse } from "@et/core/api-types";
 import { calendarHabit, HABIT_KINDS, HABITS, profileHabits, type HabitKind } from "@et/core/habits";
 import type { Profile, Share } from "@et/core/types";
-import { api, ApiError, deviceTimeZone } from "@/api/client";
+import { api, deviceTimeZone } from "@/api/client";
 import { useMe } from "@/api/queries";
 import { useSession } from "@/auth/session";
 import { API_URL } from "@/config";
@@ -19,7 +19,6 @@ import { OPTIONAL_TABS } from "@/screens/tabs";
 import { useTheme } from "@/theme";
 import { useThemePref } from "@/theme-pref";
 import { Body, Button, Card, ErrorText, Field, Screen, Title } from "@/ui";
-import { ask } from "@/ui/confirm";
 import { useAutosave } from "@/ui/autosave";
 import { Chips, SectionTitle, SwitchRow } from "@/ui/form";
 
@@ -41,8 +40,6 @@ export default function Settings() {
   // deletes data: switching a counter, goal or weight off only hides it, and deleting a goal asks first.
   const [draft, setDraft] = useState<Profile | null>(null);
   const p = draft ?? me.data?.profile ?? null;
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const flags = me.data?.navFlags ?? {};
   const earned = Platform.OS === "android" ? OPTIONAL_TABS.filter((x) => x.flag && flags[x.flag]) : [];
   const autosave = useAutosave(save);
@@ -80,25 +77,6 @@ export default function Settings() {
     // Show the server's copy (new goals' start dates and so on) unless another change is on its way.
     if (latest()) setDraft(null);
     await Promise.all([qc.invalidateQueries({ queryKey: ["calendar"] }), qc.invalidateQueries({ queryKey: ["leaderboards"] })]);
-  }
-
-  async function deleteAccount() {
-    const sure = await ask(
-      "Delete your account?",
-      "This deletes your account and everything in it: workouts, notes, results, friendships and club memberships. It can't be undone.",
-      "Delete account",
-      true,
-    );
-    if (!sure) return;
-    setDeleting(true);
-    setError(null);
-    try {
-      await api<DeleteAccountResponse>("/me", { method: "DELETE", body: { confirm: true } });
-      await signOut();
-    } catch (e) {
-      setError((e as ApiError).message);
-      setDeleting(false);
-    }
   }
 
   const habits = p ? profileHabits(p) : [];
@@ -230,7 +208,6 @@ export default function Settings() {
                     ? "Saved"
                     : "Changes save automatically."}
           </Text>
-          <ErrorText>{error}</ErrorText>
 
           <Reminders trackWeight={me.data?.profile.trackWeight ?? false} clock={me.data?.profile.clock} />
           <CalendarFeed />
@@ -240,7 +217,7 @@ export default function Settings() {
       <TipJar />
       <Button title="Privacy" variant="link" onPress={() => WebBrowser.openBrowserAsync(`${API_URL}/privacy`)} />
       <Button title="Sign out" variant="secondary" onPress={() => void signOut()} />
-      <Button title="Delete account" variant="danger" onPress={() => void deleteAccount()} loading={deleting} />
+      <Button title="Account" variant="link" onPress={() => router.push("/account")} />
     </Screen>
   );
 }

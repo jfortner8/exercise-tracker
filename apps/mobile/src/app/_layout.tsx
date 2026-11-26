@@ -70,6 +70,7 @@ function Navigator() {
         <Stack.Screen name="workout" options={{ headerShown: true, presentation: "modal" }} />
         <Stack.Screen name="club/[id]" options={{ headerShown: true, headerBackTitle: "Friends" }} />
         <Stack.Screen name="benchmark/[id]" options={{ headerShown: true, headerBackTitle: "PBs" }} />
+        <Stack.Screen name="account" options={{ headerShown: true, headerTitle: "Account", headerBackTitle: "Settings" }} />
         <Stack.Screen name="(auth)" />
       </Stack>
     </>
