@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { CalendarFeed } from "@/components/calendar-feed";
-import { DeleteAccount } from "@/components/delete-account";
 import { SettingsForm } from "@/components/settings-form";
 import { PageHeader } from "@/components/ui";
 import { requireProfile } from "@/lib/dal";
@@ -16,7 +15,6 @@ async function Settings() {
     <>
       <SettingsForm profile={profile} />
       <CalendarFeed profile={profile} />
-      <DeleteAccount />
     </>
   );
 }
@@ -41,6 +39,10 @@ export default function SettingsPage() {
         </a>
       </div>
       <p className="mt-6 text-center text-xs text-muted">
+        <Link href="/settings/account" className="hover:text-text hover:underline">
+          Account
+        </Link>
+        {" · "}
         <Link href="/privacy" className="hover:text-text hover:underline">
           Privacy
         </Link>
